@@ -1,7 +1,11 @@
 ﻿using Discord;
 using Discord.WebSocket;
 using Discord.Interactions;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using System.Text.Json;
 
 /// <summary>
 /// Application entry point for the Discord bot.
@@ -23,14 +27,22 @@ class Program
     /// </summary>
     public async Task RunAsync()
     {
+        _services = ConfigureServices();
+        var apiTask = StartApiAsync();
+
+        if (!IsDiscordEnabled())
+        {
+            Console.WriteLine("ℹ️ Discord host disabled (set HOMEBOT_DISCORD_ENABLED=true to enable).");
+            await apiTask;
+            return;
+        }
+
         _client = new DiscordSocketClient(new DiscordSocketConfig
         {
             GatewayIntents = GatewayIntents.All
         });
 
         _interactions = new InteractionService(_client.Rest);
-
-        _services = ConfigureServices();
 
         _client.Ready += OnReady;
         _client.InteractionCreated += HandleInteraction;
@@ -44,6 +56,8 @@ class Program
             return Task.CompletedTask;
         };
 
+        _ = apiTask;
+
         await Task.Delay(-1);
     }
 
@@ -53,11 +67,10 @@ class Program
     private IServiceProvider ConfigureServices()
     {
         return new ServiceCollection()
-            .AddSingleton(_client)
-            .AddSingleton(_interactions)
+            .AddSingleton(_ => _client)
+            .AddSingleton(_ => _interactions)
             .AddSingleton<DatabaseService>()
             .AddSingleton<ConfigService>()
-            .AddSingleton<ReminderService>()
             .AddSingleton<BuyService>()
             .AddSingleton<ChannelBindingService>()
             .AddSingleton<UndoService>()
@@ -65,6 +78,7 @@ class Program
             .AddSingleton<WishlistService>()
             .AddSingleton<MoneyService>()
             .AddSingleton<CalendarService>()
+            .AddSingleton<ReminderService>()
             .BuildServiceProvider();
     }
 
@@ -420,5 +434,256 @@ class Program
             throw new InvalidOperationException("DISCORD_GUILD_ID environment variable is missing or invalid.");
 
         return guildId;
+    }
+
+    /// <summary>
+    /// Starts the web API host in the same process as the bot.
+    /// </summary>
+    private async Task StartApiAsync()
+    {
+        if (!IsApiEnabled())
+        {
+            Console.WriteLine("ℹ️ API host disabled (set HOMEBOT_API_ENABLED=true to enable).");
+            return;
+        }
+
+        var builder = WebApplication.CreateBuilder();
+        var allowedOrigins = GetAllowedOrigins();
+        var apiToken = Environment.GetEnvironmentVariable("HOMEBOT_API_TOKEN") ?? "";
+
+        builder.Services.AddCors(options =>
+        {
+            options.AddPolicy("WebUiOrigins", policy =>
+            {
+                policy.WithOrigins(allowedOrigins)
+                      .AllowAnyHeader()
+                      .AllowAnyMethod();
+            });
+        });
+
+        var app = builder.Build();
+        app.UseCors("WebUiOrigins");
+
+        app.Use(async (context, next) =>
+        {
+            if (!context.Request.Path.StartsWithSegments("/api"))
+            {
+                await next();
+                return;
+            }
+
+            if (context.Request.Path.StartsWithSegments("/api/health") ||
+                context.Request.Path.StartsWithSegments("/api/meta"))
+            {
+                await next();
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(apiToken))
+            {
+                context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    error = "API token not configured."
+                });
+                return;
+            }
+
+            var authHeader = context.Request.Headers.Authorization.ToString();
+            const string prefix = "Bearer ";
+
+            if (!authHeader.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await context.Response.WriteAsJsonAsync(new { error = "Missing bearer token." });
+                return;
+            }
+
+            var token = authHeader[prefix.Length..].Trim();
+            if (!string.Equals(token, apiToken, StringComparison.Ordinal))
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await context.Response.WriteAsJsonAsync(new { error = "Invalid token." });
+                return;
+            }
+
+            await next();
+        });
+
+        app.MapGet("/api/health", () => Results.Ok(new
+        {
+            status = "ok",
+            service = "homebot-api",
+            timestamp = DateTimeOffset.UtcNow
+        }));
+
+        app.MapGet("/api/meta", () => Results.Ok(new
+        {
+            name = "HomeBot API",
+            version = "phase2-bootstrap",
+            features = new[] { "buy", "wishlist", "money", "calendar", "undo" }
+        }));
+
+        app.MapGet("/api/buy", (HttpRequest request) =>
+        {
+            var buyService = _services.GetRequiredService<BuyService>();
+
+            ulong? assignedTo = null;
+            if (ulong.TryParse(request.Query["assignedTo"], out var assignedParsed))
+                assignedTo = assignedParsed;
+
+            var store = request.Query["store"].ToString();
+            var tag = request.Query["tag"].ToString();
+            var sort = request.Query["sort"].ToString();
+
+            var page = 0;
+            if (int.TryParse(request.Query["page"], out var pageParsed) && pageParsed >= 0)
+                page = pageParsed;
+
+            var result = buyService.GetBuyList(assignedTo, store, tag, sort, page);
+            return Results.Ok(result);
+        });
+
+        app.MapGet("/api/wishlist", (HttpRequest request) =>
+        {
+            var wishlistService = _services.GetRequiredService<WishlistService>();
+
+            ulong? owner = null;
+            if (ulong.TryParse(request.Query["owner"], out var ownerParsed))
+                owner = ownerParsed;
+
+            var tag = request.Query["tag"].ToString();
+            var sort = request.Query["sort"].ToString();
+
+            var page = 0;
+            if (int.TryParse(request.Query["page"], out var pageParsed) && pageParsed >= 0)
+                page = pageParsed;
+
+            var result = wishlistService.GetWishlist(owner, tag, sort, page);
+            return Results.Ok(result);
+        });
+
+        app.MapGet("/api/wishlist/{id:int}", (int id) =>
+        {
+            var wishlistService = _services.GetRequiredService<WishlistService>();
+            var item = wishlistService.GetItem(id);
+            return item is null ? Results.NotFound(new { error = "Wishlist item not found." }) : Results.Ok(item);
+        });
+
+        app.MapGet("/api/money/transactions", (HttpRequest request) =>
+        {
+            var moneyService = _services.GetRequiredService<MoneyService>();
+
+            var page = 0;
+            if (int.TryParse(request.Query["page"], out var pageParsed) && pageParsed >= 0)
+                page = pageParsed;
+
+            var result = moneyService.GetTransactions(page);
+            return Results.Ok(result);
+        });
+
+        app.MapGet("/api/money/summary", (HttpRequest request) =>
+        {
+            var moneyService = _services.GetRequiredService<MoneyService>();
+
+            if (!ulong.TryParse(request.Query["user1"], out var user1) ||
+                !ulong.TryParse(request.Query["user2"], out var user2))
+            {
+                return Results.BadRequest(new { error = "Query params user1 and user2 are required." });
+            }
+
+            var name1 = request.Query["name1"].ToString();
+            var name2 = request.Query["name2"].ToString();
+
+            if (string.IsNullOrWhiteSpace(name1))
+                name1 = $"user-{user1}";
+            if (string.IsNullOrWhiteSpace(name2))
+                name2 = $"user-{user2}";
+
+            var result = moneyService.GetSummary(user1, user2, name1, name2);
+            return Results.Ok(result);
+        });
+
+        app.MapGet("/api/calendar", (HttpRequest request) =>
+        {
+            var calendarService = _services.GetRequiredService<CalendarService>();
+
+            var page = 0;
+            if (int.TryParse(request.Query["page"], out var pageParsed) && pageParsed >= 0)
+                page = pageParsed;
+
+            var result = calendarService.GetList(page);
+            return Results.Ok(result);
+        });
+
+        app.MapGet("/api/calendar/{id:int}", (int id) =>
+        {
+            var calendarService = _services.GetRequiredService<CalendarService>();
+            var item = calendarService.GetItem(id);
+            return item is null ? Results.NotFound(new { error = "Calendar item not found." }) : Results.Ok(item);
+        });
+
+        app.MapGet("/api/calendar/today", (HttpRequest request) =>
+        {
+            var calendarService = _services.GetRequiredService<CalendarService>();
+
+            ulong? userFilter = null;
+            if (ulong.TryParse(request.Query["userFilter"], out var userFilterParsed))
+                userFilter = userFilterParsed;
+
+            var page = 0;
+            if (int.TryParse(request.Query["page"], out var pageParsed) && pageParsed >= 0)
+                page = pageParsed;
+
+            var result = calendarService.GetToday(userFilter, page);
+            return Results.Ok(result);
+        });
+
+        app.MapGet("/api/calendar/upcoming", (HttpRequest request) =>
+        {
+            var calendarService = _services.GetRequiredService<CalendarService>();
+
+            ulong? userFilter = null;
+            if (ulong.TryParse(request.Query["userFilter"], out var userFilterParsed))
+                userFilter = userFilterParsed;
+
+            var page = 0;
+            if (int.TryParse(request.Query["page"], out var pageParsed) && pageParsed >= 0)
+                page = pageParsed;
+
+            var result = calendarService.GetUpcoming(userFilter, page);
+            return Results.Ok(result);
+        });
+
+        var apiUrl = Environment.GetEnvironmentVariable("HOMEBOT_API_URL") ?? "http://0.0.0.0:5050";
+        Console.WriteLine($"🌐 API listening on {apiUrl}");
+        await app.RunAsync(apiUrl);
+    }
+
+    private bool IsApiEnabled()
+    {
+        var raw = Environment.GetEnvironmentVariable("HOMEBOT_API_ENABLED");
+        return string.Equals(raw, "true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool IsDiscordEnabled()
+    {
+        var raw = Environment.GetEnvironmentVariable("HOMEBOT_DISCORD_ENABLED");
+        return !string.Equals(raw, "false", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string[] GetAllowedOrigins()
+    {
+        var raw = Environment.GetEnvironmentVariable("HOMEBOT_ALLOWED_ORIGINS");
+
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return new[]
+            {
+                "http://localhost:5173"
+            };
+        }
+
+        return raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 }

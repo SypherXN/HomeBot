@@ -11,8 +11,7 @@
           "Discord.Net": "3.19.1",
           "Discord.Net.Commands": "3.19.1",
           "Discord.Net.Interactions": "3.19.1",
-          "Microsoft.Data.Sqlite": "10.0.7",
-          "Microsoft.Extensions.DependencyInjection": "10.0.7"
+          "Microsoft.Data.Sqlite": "10.0.7"
         },
         "runtime": {
           "HomeBot.dll": {}
@@ -30,8 +29,7 @@
       },
       "Discord.Net.Commands/3.19.1": {
         "dependencies": {
-          "Discord.Net.Core": "3.19.1",
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.7"
+          "Discord.Net.Core": "3.19.1"
         },
         "runtime": {
           "lib/net10.0/Discord.Net.Commands.dll": {
@@ -62,8 +60,7 @@
       "Discord.Net.Interactions/3.19.1": {
         "dependencies": {
           "Discord.Net.Core": "3.19.1",
-          "Discord.Net.Rest": "3.19.1",
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.7"
+          "Discord.Net.Rest": "3.19.1"
         },
         "runtime": {
           "lib/net10.0/Discord.Net.Interactions.dll": {
@@ -122,25 +119,6 @@
         "runtime": {
           "lib/net8.0/Microsoft.Data.Sqlite.dll": {
             "assemblyVersion": "10.0.7.0",
-            "fileVersion": "10.0.726.21808"
-          }
-        }
-      },
-      "Microsoft.Extensions.DependencyInjection/10.0.7": {
-        "dependencies": {
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.7"
-        },
-        "runtime": {
-          "lib/net10.0/Microsoft.Extensions.DependencyInjection.dll": {
-            "assemblyVersion": "10.0.0.0",
-            "fileVersion": "10.0.726.21808"
-          }
-        }
-      },
-      "Microsoft.Extensions.DependencyInjection.Abstractions/10.0.7": {
-        "runtime": {
-          "lib/net10.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll": {
-            "assemblyVersion": "10.0.0.0",
             "fileVersion": "10.0.726.21808"
           }
         }
@@ -380,20 +358,6 @@
       "sha512": "sha512-xVrtBg3M1wJlBDkoT0dXEYB/wSc8bIHJPYtw/bu1AqpWgF79uPSs87DAhERR/Ilumre6TKZa1cjMg3VUUObVLA==",
       "path": "microsoft.data.sqlite.core/10.0.7",
       "hashPath": "microsoft.data.sqlite.core.10.0.7.nupkg.sha512"
-    },
-    "Microsoft.Extensions.DependencyInjection/10.0.7": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-91F/o3emPV/+xY/ip3s2LqDNF14kjttlVtq0BXgg6p4MnCzeSZxnUJm+t6WRrtD3JdGo88/oX+z7OwK4y8PZuw==",
-      "path": "microsoft.extensions.dependencyinjection/10.0.7",
-      "hashPath": "microsoft.extensions.dependencyinjection.10.0.7.nupkg.sha512"
-    },
-    "Microsoft.Extensions.DependencyInjection.Abstractions/10.0.7": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-Z6mfFEaFcwCfSboxJwOLfu7/31npCY9q70WUamHW/vRQhDvBKOT4Vf9YkZj5J6hLvJpb0oDEYfHunQZj0xxvKw==",
-      "path": "microsoft.extensions.dependencyinjection.abstractions/10.0.7",
-      "hashPath": "microsoft.extensions.dependencyinjection.abstractions.10.0.7.nupkg.sha512"
     },
     "Newtonsoft.Json/13.0.4": {
       "type": "package",
