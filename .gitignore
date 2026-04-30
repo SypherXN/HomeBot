@@ -1,0 +1,18 @@
+# Build outputs
+bin/
+obj/
+
+# User/IDE files
+.vs/
+*.user
+*.suo
+
+# Local environment secrets
+.env
+.env.*
+!.env.example
+
+# Bot runtime data
+homebot.db
+homebot.db-shm
+homebot.db-wal
