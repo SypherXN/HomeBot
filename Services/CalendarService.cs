@@ -186,15 +186,6 @@ public class CalendarService
         using var conn = _db.GetConnection();
         conn.Open();
 
-        int pageSize = 5;
-
-        var configCmd = conn.CreateCommand();
-        configCmd.CommandText = "SELECT Value FROM Settings WHERE Key = 'page_size'";
-        var result = configCmd.ExecuteScalar();
-
-        if (result != null && int.TryParse(result.ToString(), out int parsed))
-            pageSize = parsed;
-
         var getCmd = conn.CreateCommand();
         getCmd.CommandText = @"
             SELECT Status
@@ -205,7 +196,7 @@ public class CalendarService
 
         var previousStatus = getCmd.ExecuteScalar()?.ToString() ?? "active";
 
-        string json = System.Text.Json.JsonSerializer.Serialize(new
+        var json = System.Text.Json.JsonSerializer.Serialize(new CalendarCompleteUndoModel
         {
             Status = previousStatus
         });
@@ -236,7 +227,7 @@ public class CalendarService
         // --- READ FIRST ---
         var getCmd = conn.CreateCommand();
         getCmd.CommandText = @"
-            SELECT Title, Type, StartDateTime, EndDateTime, AllDay, AssignedTo, Description, Notes
+            SELECT Title, Type, StartDateTime, EndDateTime, AllDay, AssignedTo, Description, Notes, Link, ReminderOffset, Recurrence, Timezone, Status
             FROM CalendarItems
             WHERE Id = $id";
 
@@ -247,7 +238,7 @@ public class CalendarService
             if (!reader.Read())
                 return;
 
-            var data = new
+            var data = new CalendarDeleteUndoModel
             {
                 Title = reader.GetString(0),
                 Type = reader.GetString(1),
@@ -256,7 +247,12 @@ public class CalendarService
                 AllDay = reader.GetInt32(4),
                 Assigned = reader.IsDBNull(5) ? (ulong?)null : (ulong?)reader.GetInt64(5),
                 Description = reader.IsDBNull(6) ? "" : reader.GetString(6),
-                Notes = reader.IsDBNull(7) ? "" : reader.GetString(7)
+                Notes = reader.IsDBNull(7) ? "" : reader.GetString(7),
+                Link = reader.IsDBNull(8) ? "" : reader.GetString(8),
+                ReminderOffset = reader.IsDBNull(9) ? "" : reader.GetString(9),
+                Recurrence = reader.IsDBNull(10) ? "" : reader.GetString(10),
+                Timezone = reader.IsDBNull(11) ? "" : reader.GetString(11),
+                Status = reader.IsDBNull(12) ? "active" : reader.GetString(12)
             };
 
             json = System.Text.Json.JsonSerializer.Serialize(data);
@@ -341,7 +337,7 @@ public class CalendarService
     /// <summary>
     /// Returns one calendar item for detail view rendering.
     /// </summary>
-    public dynamic? GetItem(int id)
+    public CalendarItemDetailModel? GetItem(int id)
     {
         using var conn = _db.GetConnection();
         conn.Open();
@@ -359,7 +355,7 @@ public class CalendarService
         if (!reader.Read())
             return null;
 
-        return new
+        return new CalendarItemDetailModel
         {
             Title = reader.GetString(0),
             Description = reader.IsDBNull(1) ? "" : reader.GetString(1),

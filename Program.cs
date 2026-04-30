@@ -9,9 +9,9 @@ using Microsoft.Extensions.DependencyInjection;
 /// </summary>
 class Program
 {
-    private DiscordSocketClient? _client;
-    private InteractionService? _interactions;
-    private IServiceProvider? _services;
+    private DiscordSocketClient _client = null!;
+    private InteractionService _interactions = null!;
+    private IServiceProvider _services = null!;
 
     /// <summary>
     /// Starts the bot process.
@@ -59,14 +59,12 @@ class Program
             .AddSingleton<ConfigService>()
             .AddSingleton<ReminderService>()
             .AddSingleton<BuyService>()
-            .AddSingleton<ConfigService>()
             .AddSingleton<ChannelBindingService>()
             .AddSingleton<UndoService>()
             .AddSingleton<LoggingService>()
             .AddSingleton<WishlistService>()
             .AddSingleton<MoneyService>()
             .AddSingleton<CalendarService>()
-            .AddSingleton<ReminderService>()
             .BuildServiceProvider();
     }
 

@@ -44,13 +44,43 @@ public class UndoCommands : InteractionModuleBase<SocketInteractionContext>
             {
                 if (type == "delete")
                 {
+                    var item = System.Text.Json.JsonSerializer.Deserialize<BuyUndoModel>(data);
+
+                    if (item == null)
+                    {
+                        await RespondAsync("❌ Failed to restore buy item.");
+                        return;
+                    }
+
                     var cmd = conn.CreateCommand();
                     cmd.CommandText = @"
-                        INSERT INTO BuyItems (Id, Name, Status)
-                        VALUES ($id, $name, 'active')";
+                        INSERT INTO BuyItems
+                        (Id, Name, Quantity, Store, AssignedTo, Tags, Notes, CreatedBy, PurchasedBy, Status)
+                        VALUES
+                        ($id, $name, $quantity, $store, $assignedTo, $tags, $notes, $createdBy, $purchasedBy, $status)";
 
                     cmd.Parameters.AddWithValue("$id", id);
-                    cmd.Parameters.AddWithValue("$name", data);
+                    cmd.Parameters.AddWithValue("$name", item.Name);
+                    cmd.Parameters.AddWithValue("$quantity", item.Quantity);
+                    cmd.Parameters.AddWithValue("$store", item.Store);
+                    cmd.Parameters.AddWithValue("$tags", item.Tags);
+                    cmd.Parameters.AddWithValue("$notes", item.Notes);
+                    cmd.Parameters.AddWithValue("$status", item.Status);
+
+                    if (item.AssignedTo.HasValue)
+                        cmd.Parameters.AddWithValue("$assignedTo", (long)item.AssignedTo.Value);
+                    else
+                        cmd.Parameters.AddWithValue("$assignedTo", DBNull.Value);
+
+                    if (item.CreatedBy.HasValue)
+                        cmd.Parameters.AddWithValue("$createdBy", (long)item.CreatedBy.Value);
+                    else
+                        cmd.Parameters.AddWithValue("$createdBy", DBNull.Value);
+
+                    if (item.PurchasedBy.HasValue)
+                        cmd.Parameters.AddWithValue("$purchasedBy", (long)item.PurchasedBy.Value);
+                    else
+                        cmd.Parameters.AddWithValue("$purchasedBy", DBNull.Value);
 
                     cmd.ExecuteNonQuery();
                 }
@@ -83,9 +113,10 @@ public class UndoCommands : InteractionModuleBase<SocketInteractionContext>
                     var cmd = conn.CreateCommand();
                     cmd.CommandText = @"
                         INSERT INTO WishlistItems 
-                        (Name, Owner, Price, Link, Description, Notes, Priority, Tags, Status)
-                        VALUES ($name, $owner, $price, $link, $desc, $notes, $priority, $tags, 'active')";
+                        (Id, Name, Owner, Price, Link, Description, Notes, Priority, Tags, PurchasedBy, Status)
+                        VALUES ($id, $name, $owner, $price, $link, $desc, $notes, $priority, $tags, $purchasedBy, $status)";
 
+                    cmd.Parameters.AddWithValue("$id", id);
                     cmd.Parameters.AddWithValue("$name", item.Name);
                     cmd.Parameters.AddWithValue("$owner", (long)item.Owner);
                     cmd.Parameters.AddWithValue("$price", item.Price);
@@ -94,6 +125,12 @@ public class UndoCommands : InteractionModuleBase<SocketInteractionContext>
                     cmd.Parameters.AddWithValue("$notes", item.Notes);
                     cmd.Parameters.AddWithValue("$priority", item.Priority);
                     cmd.Parameters.AddWithValue("$tags", item.Tags);
+                    cmd.Parameters.AddWithValue("$status", item.Status);
+
+                    if (item.PurchasedBy == null)
+                        cmd.Parameters.AddWithValue("$purchasedBy", DBNull.Value);
+                    else
+                        cmd.Parameters.AddWithValue("$purchasedBy", (long)item.PurchasedBy.Value);
 
                     cmd.ExecuteNonQuery();
                 }
@@ -141,9 +178,10 @@ public class UndoCommands : InteractionModuleBase<SocketInteractionContext>
                     var cmd = conn.CreateCommand();
                     cmd.CommandText = @"
                         INSERT INTO Transactions 
-                        (Name, Description, Notes, Amount, AmountInput, PaidBy, OwedBy, Type, CreatedAt)
-                        VALUES ($name, $desc, $notes, $amount, $input, $paidBy, $owedBy, $type, CURRENT_TIMESTAMP)";
+                        (Id, Name, Description, Notes, Amount, AmountInput, PaidBy, OwedBy, Type, CreatedAt)
+                        VALUES ($id, $name, $desc, $notes, $amount, $input, $paidBy, $owedBy, $type, CURRENT_TIMESTAMP)";
 
+                    cmd.Parameters.AddWithValue("$id", id);
                     cmd.Parameters.AddWithValue("$name", item.Name);
                     cmd.Parameters.AddWithValue("$desc", item.Description);
                     cmd.Parameters.AddWithValue("$notes", item.Notes);
@@ -168,33 +206,49 @@ public class UndoCommands : InteractionModuleBase<SocketInteractionContext>
             {
                 if (type == "delete")
                 {
-                    var item = System.Text.Json.JsonSerializer.Deserialize<dynamic>(data);
+                    var item = System.Text.Json.JsonSerializer.Deserialize<CalendarDeleteUndoModel>(data);
+                    if (item == null)
+                    {
+                        await RespondAsync("❌ Failed to restore calendar item.");
+                        return;
+                    }
 
                     var cmd = conn.CreateCommand();
                     cmd.CommandText = @"
                         INSERT INTO CalendarItems
-                        (Title, Type, StartDateTime, EndDateTime, AllDay, AssignedTo, Description, Notes, Status)
-                        VALUES ($title, $type, $start, $end, $allDay, $assigned, $desc, $notes, 'active')";
+                        (Id, Title, Type, StartDateTime, EndDateTime, AllDay, AssignedTo, Description, Notes, Link, ReminderOffset, Recurrence, Timezone, Status)
+                        VALUES ($id, $title, $type, $start, $end, $allDay, $assigned, $desc, $notes, $link, $reminder, $recurrence, $timezone, $status)";
 
-                    cmd.Parameters.AddWithValue("$title", (string)item.Title);
-                    cmd.Parameters.AddWithValue("$type", (string)item.Type);
-                    cmd.Parameters.AddWithValue("$start", (string)item.Start);
-                    cmd.Parameters.AddWithValue("$end", (string)item.End);
-                    cmd.Parameters.AddWithValue("$allDay", (int)item.AllDay);
+                    cmd.Parameters.AddWithValue("$id", id);
+                    cmd.Parameters.AddWithValue("$title", item.Title);
+                    cmd.Parameters.AddWithValue("$type", item.Type);
+                    cmd.Parameters.AddWithValue("$start", item.Start);
+                    cmd.Parameters.AddWithValue("$end", item.End);
+                    cmd.Parameters.AddWithValue("$allDay", item.AllDay);
 
                     if (item.Assigned == null)
                         cmd.Parameters.AddWithValue("$assigned", DBNull.Value);
                     else
-                        cmd.Parameters.AddWithValue("$assigned", (long)item.Assigned);
+                        cmd.Parameters.AddWithValue("$assigned", (long)item.Assigned.Value);
 
-                    cmd.Parameters.AddWithValue("$desc", (string)item.Description);
-                    cmd.Parameters.AddWithValue("$notes", (string)item.Notes);
+                    cmd.Parameters.AddWithValue("$desc", item.Description);
+                    cmd.Parameters.AddWithValue("$notes", item.Notes);
+                    cmd.Parameters.AddWithValue("$link", item.Link);
+                    cmd.Parameters.AddWithValue("$reminder", item.ReminderOffset);
+                    cmd.Parameters.AddWithValue("$recurrence", item.Recurrence);
+                    cmd.Parameters.AddWithValue("$timezone", item.Timezone);
+                    cmd.Parameters.AddWithValue("$status", item.Status);
 
                     cmd.ExecuteNonQuery();
                 }
                 else if (type == "complete")
                 {
-                    var prev = System.Text.Json.JsonSerializer.Deserialize<dynamic>(data);
+                    var prev = System.Text.Json.JsonSerializer.Deserialize<CalendarCompleteUndoModel>(data);
+                    if (prev == null)
+                    {
+                        await RespondAsync("❌ Failed to undo calendar complete.");
+                        return;
+                    }
 
                     var cmd = conn.CreateCommand();
                     cmd.CommandText = @"
@@ -203,7 +257,7 @@ public class UndoCommands : InteractionModuleBase<SocketInteractionContext>
                         WHERE Id = $id";
 
                     cmd.Parameters.AddWithValue("$id", id);
-                    cmd.Parameters.AddWithValue("$status", (string)prev.Status);
+                    cmd.Parameters.AddWithValue("$status", prev.Status);
 
                     cmd.ExecuteNonQuery();
                 }

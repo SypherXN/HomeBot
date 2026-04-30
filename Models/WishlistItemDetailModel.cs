@@ -1,7 +1,7 @@
 /// <summary>
-/// Serialized payload used to restore a deleted wishlist item.
+/// Transport-agnostic detail payload for a wishlist item.
 /// </summary>
-public class WishlistUndoModel
+public class WishlistItemDetailModel
 {
     public string Name { get; set; } = "";
     public ulong Owner { get; set; }
@@ -10,7 +10,4 @@ public class WishlistUndoModel
     public string Description { get; set; } = "";
     public string Notes { get; set; } = "";
     public string Priority { get; set; } = "";
-    public string Tags { get; set; } = "";
-    public ulong? PurchasedBy { get; set; }
-    public string Status { get; set; } = "active";
 }

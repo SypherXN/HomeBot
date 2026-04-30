@@ -184,7 +184,7 @@ public class WishlistService
     /// <summary>
     /// Returns one wishlist item for detailed view output.
     /// </summary>
-    public dynamic? GetItem(int id)
+    public WishlistItemDetailModel? GetItem(int id)
     {
         using var conn = _db.GetConnection();
         conn.Open();
@@ -202,7 +202,7 @@ public class WishlistService
         if (!reader.Read())
             return null;
 
-        return new
+        return new WishlistItemDetailModel
         {
             Name = reader.GetString(0),
             Owner = (ulong)reader.GetInt64(1),
@@ -292,7 +292,7 @@ public class WishlistService
         getCmd.Transaction = transaction;
 
         getCmd.CommandText = @"
-            SELECT Name, Owner, Price, Link, Description, Notes, Priority, Tags
+            SELECT Name, Owner, Price, Link, Description, Notes, Priority, Tags, PurchasedBy, Status
             FROM WishlistItems
             WHERE Id = $id";
 
@@ -312,7 +312,9 @@ public class WishlistService
             Description = reader.IsDBNull(4) ? "" : reader.GetString(4),
             Notes = reader.IsDBNull(5) ? "" : reader.GetString(5),
             Priority = reader.IsDBNull(6) ? "" : reader.GetString(6),
-            Tags = reader.IsDBNull(7) ? "" : reader.GetString(7)
+            Tags = reader.IsDBNull(7) ? "" : reader.GetString(7),
+            PurchasedBy = reader.IsDBNull(8) ? null : (ulong?)reader.GetInt64(8),
+            Status = reader.IsDBNull(9) ? "active" : reader.GetString(9)
         };
 
         reader.Close();

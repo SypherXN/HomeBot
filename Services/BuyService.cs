@@ -220,13 +220,33 @@ public class BuyService
 
         // Save data before deleting
         var getCmd = conn.CreateCommand();
-        getCmd.CommandText = "SELECT Name FROM BuyItems WHERE Id = $id";
+        getCmd.CommandText = @"
+            SELECT Name, Quantity, Store, AssignedTo, Tags, Notes, CreatedBy, PurchasedBy, Status
+            FROM BuyItems
+            WHERE Id = $id";
         getCmd.Parameters.AddWithValue("$id", id);
 
-        var name = getCmd.ExecuteScalar()?.ToString() ?? "";
+        using var reader = getCmd.ExecuteReader();
+        if (!reader.Read())
+            return;
+
+        var payload = new BuyUndoModel
+        {
+            Name = reader.IsDBNull(0) ? "" : reader.GetString(0),
+            Quantity = reader.IsDBNull(1) ? "1" : reader.GetString(1),
+            Store = reader.IsDBNull(2) ? "" : reader.GetString(2),
+            AssignedTo = reader.IsDBNull(3) ? null : (ulong?)reader.GetInt64(3),
+            Tags = reader.IsDBNull(4) ? "" : reader.GetString(4),
+            Notes = reader.IsDBNull(5) ? "" : reader.GetString(5),
+            CreatedBy = reader.IsDBNull(6) ? null : (ulong?)reader.GetInt64(6),
+            PurchasedBy = reader.IsDBNull(7) ? null : (ulong?)reader.GetInt64(7),
+            Status = reader.IsDBNull(8) ? "active" : reader.GetString(8)
+        };
+
+        var json = System.Text.Json.JsonSerializer.Serialize(payload);
 
         // Log action
-        _undo.LogAction(userId, "delete", "buy", id, name);
+        _undo.LogAction(userId, "delete", "buy", id, json);
 
         var cmd = conn.CreateCommand();
         cmd.CommandText = "DELETE FROM BuyItems WHERE Id = $id";
