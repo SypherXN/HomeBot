@@ -1,23 +1,68 @@
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || "http://localhost:5050";
 
-export type ApiClientOptions = {
+/** Coerce digit string to JSON number when safe for C# ulong binding; otherwise omit (caller should validate). */
+function jsonUlong(value: string | undefined): number | undefined {
+  if (value == null || value.trim() === "") return undefined;
+  const n = Number(value.trim());
+  if (!Number.isFinite(n) || !Number.isSafeInteger(n) || n <= 0) return undefined;
+  return n;
+}
+
+export type ApiJsonOptions = {
   token?: string;
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  body?: unknown;
+  signal?: AbortSignal;
 };
 
-async function request<T>(path: string, options: ApiClientOptions = {}): Promise<T> {
-  const headers: Record<string, string> = {};
+function mergeQuery(path: string, query: Record<string, string>): string {
+  const qm = path.indexOf("?");
+  const base = qm >= 0 ? path.slice(0, qm) : path;
+  const existing = qm >= 0 ? path.slice(qm + 1) : "";
+  const sp = new URLSearchParams(existing);
+  for (const [k, v] of Object.entries(query)) {
+    sp.set(k, v);
+  }
+  const s = sp.toString();
+  return s ? `${base}?${s}` : base;
+}
 
+/**
+ * All JSON calls to the HomeBot API. Pass Discord snowflakes as strings to avoid precision loss.
+ */
+export async function apiJson<T>(path: string, options: ApiJsonOptions = {}): Promise<T> {
+  const headers: Record<string, string> = {};
   if (options.token) {
     headers.Authorization = `Bearer ${options.token}`;
   }
+  const method = options.method ?? "GET";
+  if (options.body !== undefined) {
+    headers["Content-Type"] = "application/json";
+  }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, { headers });
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method,
+    headers,
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    signal: options.signal,
+  });
+
   if (!response.ok) {
     const body = await response.text();
     throw new Error(`${response.status} ${response.statusText}: ${body}`);
   }
 
-  return response.json() as Promise<T>;
+  const ct = response.headers.get("content-type") ?? "";
+  if (!ct.includes("application/json")) {
+    return undefined as T;
+  }
+
+  const text = await response.text();
+  if (!text) {
+    return undefined as T;
+  }
+
+  return JSON.parse(text) as T;
 }
 
 export function getApiBaseUrl(): string {
@@ -25,25 +70,328 @@ export function getApiBaseUrl(): string {
 }
 
 export function getHealth() {
-  return request("/api/health");
+  return apiJson<unknown>("/api/health");
 }
 
 export function getMeta() {
-  return request("/api/meta");
+  return apiJson<unknown>("/api/meta");
 }
 
+/** List buy items (REST path). */
+export function getBuyItems(token: string, page = 0) {
+  return apiJson<unknown>(`/api/buy/items?page=${page}`, { token });
+}
+
+/** @deprecated alias — same as {@link getBuyItems} */
 export function getBuy(token: string, page = 0) {
-  return request(`/api/buy?page=${page}`, { token });
+  return getBuyItems(token, page);
+}
+
+export function getWishlistItems(token: string, page = 0) {
+  return apiJson<unknown>(`/api/wishlist/items?page=${page}`, { token });
 }
 
 export function getWishlist(token: string, page = 0) {
-  return request(`/api/wishlist?page=${page}`, { token });
+  return getWishlistItems(token, page);
+}
+
+export function getWishlistItem(token: string, id: number) {
+  return apiJson<unknown>(`/api/wishlist/items/${id}`, { token });
 }
 
 export function getMoneyTransactions(token: string, page = 0) {
-  return request(`/api/money/transactions?page=${page}`, { token });
+  return apiJson<unknown>(`/api/money/transactions?page=${page}`, { token });
+}
+
+export function getMoneySummary(token: string, user1: string, user2: string, name1 = "", name2 = "") {
+  const q = new URLSearchParams({ user1, user2 });
+  if (name1) q.set("name1", name1);
+  if (name2) q.set("name2", name2);
+  return apiJson<unknown>(`/api/money/summary?${q.toString()}`, { token });
+}
+
+export function getCalendarItems(token: string, page = 0) {
+  return apiJson<unknown>(`/api/calendar/items?page=${page}`, { token });
 }
 
 export function getCalendar(token: string, page = 0) {
-  return request(`/api/calendar?page=${page}`, { token });
+  return getCalendarItems(token, page);
+}
+
+export function getCalendarToday(token: string, page = 0, userFilter?: string) {
+  const q = new URLSearchParams({ page: String(page) });
+  if (userFilter) q.set("userFilter", userFilter);
+  return apiJson<unknown>(`/api/calendar/today?${q.toString()}`, { token });
+}
+
+export function getCalendarUpcoming(token: string, page = 0, userFilter?: string) {
+  const q = new URLSearchParams({ page: String(page) });
+  if (userFilter) q.set("userFilter", userFilter);
+  return apiJson<unknown>(`/api/calendar/upcoming?${q.toString()}`, { token });
+}
+
+// ——— Mutations (require bearer token; most need actorUserId query) ———
+
+export function postBuyItem(
+  token: string,
+  actorUserId: string,
+  body: {
+    name: string;
+    quantity?: string;
+    store?: string;
+    assignedTo?: string;
+    tags?: string;
+    notes?: string;
+  }
+) {
+  const path = mergeQuery("/api/buy/items", { actorUserId });
+  const payload: Record<string, unknown> = { name: body.name };
+  if (body.quantity != null) payload.quantity = body.quantity;
+  if (body.store != null) payload.store = body.store;
+  const assigned = jsonUlong(body.assignedTo);
+  if (assigned !== undefined) payload.assignedTo = assigned;
+  if (body.tags != null) payload.tags = body.tags;
+  if (body.notes != null) payload.notes = body.notes;
+  return apiJson<unknown>(path, { token, method: "POST", body: payload });
+}
+
+export function putBuyItem(
+  token: string,
+  id: number,
+  body: {
+    name?: string;
+    quantity?: string;
+    store?: string;
+    assignedTo?: string | null;
+    tags?: string;
+    notes?: string;
+  }
+) {
+  const payload: Record<string, unknown> = {};
+  if (body.name != null) payload.name = body.name;
+  if (body.quantity != null) payload.quantity = body.quantity;
+  if (body.store != null) payload.store = body.store;
+  if (body.tags != null) payload.tags = body.tags;
+  if (body.notes != null) payload.notes = body.notes;
+  if (body.assignedTo === null) payload.assignedTo = null;
+  else {
+    const a = jsonUlong(body.assignedTo ?? undefined);
+    if (a !== undefined) payload.assignedTo = a;
+  }
+  return apiJson<unknown>(`/api/buy/items/${id}`, { token, method: "PUT", body: payload });
+}
+
+export function postBuyItemComplete(token: string, actorUserId: string, id: number) {
+  const path = mergeQuery(`/api/buy/items/${id}/complete`, { actorUserId });
+  return apiJson<unknown>(path, { token, method: "POST" });
+}
+
+export function deleteBuyItem(token: string, actorUserId: string, id: number) {
+  const path = mergeQuery(`/api/buy/items/${id}`, { actorUserId });
+  return apiJson<unknown>(path, { token, method: "DELETE" });
+}
+
+export function deleteBuyCompleted(token: string) {
+  return apiJson<unknown>("/api/buy/items/completed", { token, method: "DELETE" });
+}
+
+export function postWishlistItem(
+  token: string,
+  actorUserId: string,
+  body: {
+    name: string;
+    ownerUserId?: string;
+    price?: string;
+    link?: string;
+    description?: string;
+    notes?: string;
+    priority?: string;
+    tags?: string;
+  }
+) {
+  const path = mergeQuery("/api/wishlist/items", { actorUserId });
+  const payload: Record<string, unknown> = { name: body.name };
+  if (body.price != null) payload.price = body.price;
+  if (body.link != null) payload.link = body.link;
+  if (body.description != null) payload.description = body.description;
+  if (body.notes != null) payload.notes = body.notes;
+  if (body.priority != null) payload.priority = body.priority;
+  if (body.tags != null) payload.tags = body.tags;
+  const owner = jsonUlong(body.ownerUserId);
+  if (owner !== undefined) payload.ownerUserId = owner;
+  return apiJson<unknown>(path, { token, method: "POST", body: payload });
+}
+
+export function putWishlistItem(
+  token: string,
+  id: number,
+  body: {
+    name?: string;
+    ownerUserId?: string | null;
+    price?: string;
+    link?: string;
+    description?: string;
+    notes?: string;
+    priority?: string;
+    tags?: string;
+  }
+) {
+  const payload: Record<string, unknown> = {};
+  if (body.name != null) payload.name = body.name;
+  if (body.price != null) payload.price = body.price;
+  if (body.link != null) payload.link = body.link;
+  if (body.description != null) payload.description = body.description;
+  if (body.notes != null) payload.notes = body.notes;
+  if (body.priority != null) payload.priority = body.priority;
+  if (body.tags != null) payload.tags = body.tags;
+  if (body.ownerUserId === null) payload.ownerUserId = null;
+  else {
+    const o = jsonUlong(body.ownerUserId ?? undefined);
+    if (o !== undefined) payload.ownerUserId = o;
+  }
+  return apiJson<unknown>(`/api/wishlist/items/${id}`, { token, method: "PUT", body: payload });
+}
+
+export function postWishlistItemComplete(token: string, actorUserId: string, id: number) {
+  const path = mergeQuery(`/api/wishlist/items/${id}/complete`, { actorUserId });
+  return apiJson<unknown>(path, { token, method: "POST" });
+}
+
+export function deleteWishlistItem(token: string, actorUserId: string, id: number) {
+  const path = mergeQuery(`/api/wishlist/items/${id}`, { actorUserId });
+  return apiJson<unknown>(path, { token, method: "DELETE" });
+}
+
+export function deleteWishlistCompleted(token: string) {
+  return apiJson<unknown>("/api/wishlist/items/completed", { token, method: "DELETE" });
+}
+
+export function postMoneyExpense(
+  token: string,
+  body: { name: string; amountInput: string; paidBy: string; owedBy: string }
+) {
+  const paidBy = jsonUlong(body.paidBy);
+  const owedBy = jsonUlong(body.owedBy);
+  if (paidBy === undefined || owedBy === undefined) {
+    throw new Error("paidBy and owedBy must be non-zero integers (≤ 2^53−1 for this UI).");
+  }
+  return apiJson<unknown>("/api/money/expenses", {
+    token,
+    method: "POST",
+    body: { name: body.name, amountInput: body.amountInput, paidBy, owedBy },
+  });
+}
+
+export function postMoneyExpenseSplit(
+  token: string,
+  body: {
+    name: string;
+    amountInput: string;
+    paidBy: string;
+    owedBy: string;
+    percent: number;
+    description?: string;
+    notes?: string;
+  }
+) {
+  const paidBy = jsonUlong(body.paidBy);
+  const owedBy = jsonUlong(body.owedBy);
+  if (paidBy === undefined || owedBy === undefined) {
+    throw new Error("paidBy and owedBy must be non-zero integers (≤ 2^53−1 for this UI).");
+  }
+  return apiJson<unknown>("/api/money/expenses/split", {
+    token,
+    method: "POST",
+    body: {
+      name: body.name,
+      amountInput: body.amountInput,
+      paidBy,
+      owedBy,
+      percent: body.percent,
+      description: body.description,
+      notes: body.notes,
+    },
+  });
+}
+
+export function postMoneyPayment(token: string, body: { amountInput: string; paidBy: string; receivedBy: string }) {
+  const paidBy = jsonUlong(body.paidBy);
+  const receivedBy = jsonUlong(body.receivedBy);
+  if (paidBy === undefined || receivedBy === undefined) {
+    throw new Error("paidBy and receivedBy must be non-zero integers (≤ 2^53−1 for this UI).");
+  }
+  return apiJson<unknown>("/api/money/payments", {
+    token,
+    method: "POST",
+    body: { amountInput: body.amountInput, paidBy, receivedBy },
+  });
+}
+
+export function patchMoneyTransaction(
+  token: string,
+  id: number,
+  body: { name?: string; description?: string; notes?: string; amountInput?: string }
+) {
+  return apiJson<unknown>(`/api/money/transactions/${id}`, { token, method: "PATCH", body });
+}
+
+export function deleteMoneyTransaction(token: string, actorUserId: string, id: number) {
+  const path = mergeQuery(`/api/money/transactions/${id}`, { actorUserId });
+  return apiJson<unknown>(path, { token, method: "DELETE" });
+}
+
+export function postCalendarItem(
+  token: string,
+  body: {
+    title: string;
+    start?: string;
+    end?: string;
+    allDay?: boolean;
+    reminder?: string;
+    assignedToUserId?: string;
+    assignToEveryone?: boolean;
+    description?: string;
+    notes?: string;
+    link?: string;
+    recurrence?: string;
+  }
+) {
+  const payload: Record<string, unknown> = {
+    title: body.title,
+    allDay: body.allDay ?? false,
+    assignToEveryone: body.assignToEveryone ?? false,
+  };
+  if (body.start != null) payload.start = body.start;
+  if (body.end != null) payload.end = body.end;
+  if (body.reminder != null) payload.reminder = body.reminder;
+  if (body.description != null) payload.description = body.description;
+  if (body.notes != null) payload.notes = body.notes;
+  if (body.link != null) payload.link = body.link;
+  if (body.recurrence != null) payload.recurrence = body.recurrence;
+  const assignee = jsonUlong(body.assignedToUserId);
+  if (assignee !== undefined) payload.assignedToUserId = assignee;
+  return apiJson<unknown>("/api/calendar/items", { token, method: "POST", body: payload });
+}
+
+export function patchCalendarItem(
+  token: string,
+  id: number,
+  body: { title?: string; start?: string; end?: string; description?: string; notes?: string; link?: string }
+) {
+  return apiJson<unknown>(`/api/calendar/items/${id}`, { token, method: "PATCH", body });
+}
+
+export function postCalendarItemComplete(token: string, actorUserId: string, id: number) {
+  const path = mergeQuery(`/api/calendar/items/${id}/complete`, { actorUserId });
+  return apiJson<unknown>(path, { token, method: "POST" });
+}
+
+export function deleteCalendarItem(token: string, actorUserId: string, id: number) {
+  const path = mergeQuery(`/api/calendar/items/${id}`, { actorUserId });
+  return apiJson<unknown>(path, { token, method: "DELETE" });
+}
+
+export function postUndo(token: string, actorUserId: string) {
+  const path = mergeQuery("/api/undo", { actorUserId });
+  return apiJson<unknown>(path, { token, method: "POST" });
 }

@@ -183,7 +183,9 @@ public class MoneyService
             User1Id = user1,
             User2Id = user2,
             User1Name = name1,
+            User1MemberLabel = HouseholdIdentity.MemberLabel(user1),
             User2Name = name2,
+            User2MemberLabel = HouseholdIdentity.MemberLabel(user2),
             Balance = GetNetBalance(user1, user2)
         };
     }
@@ -332,13 +334,18 @@ public class MoneyService
 
         while (reader.Read())
         {
+            var paidBy = (ulong)reader.GetInt64(3);
+            var owedBy = (ulong)reader.GetInt64(4);
+
             allItems.Add(new MoneyTransactionListItemModel
             {
                 Id = reader.GetInt32(0),
                 Name = reader.GetString(1),
                 Amount = reader.GetDouble(2),
-                PaidBy = (ulong)reader.GetInt64(3),
-                OwedBy = (ulong)reader.GetInt64(4),
+                PaidBy = paidBy,
+                PaidByMemberLabel = HouseholdIdentity.MemberLabel(paidBy),
+                OwedBy = owedBy,
+                OwedByMemberLabel = HouseholdIdentity.MemberLabel(owedBy),
                 Type = reader.GetString(5)
             });
         }

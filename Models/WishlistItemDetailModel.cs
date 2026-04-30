@@ -5,6 +5,7 @@ public class WishlistItemDetailModel
 {
     public string Name { get; set; } = "";
     public ulong Owner { get; set; }
+    public string OwnerMemberLabel { get; set; } = "";
     public string Price { get; set; } = "";
     public string Link { get; set; } = "";
     public string Description { get; set; } = "";

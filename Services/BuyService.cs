@@ -156,16 +156,21 @@ public class BuyService
                 .Where(t => !string.IsNullOrWhiteSpace(t))
                 .ToList();
 
+            var rowAssignedTo = reader.IsDBNull(4) ? null : (ulong?)reader.GetInt64(4);
+            var rowPurchasedBy = reader.IsDBNull(7) ? null : (ulong?)reader.GetInt64(7);
+
             allItems.Add(new BuyListItemModel
             {
                 Id = reader.GetInt32(0),
                 Name = reader.IsDBNull(1) ? "(no name)" : reader.GetString(1),
                 Quantity = reader.IsDBNull(2) ? "1" : reader.GetString(2),
                 Store = reader.IsDBNull(3) ? "" : reader.GetString(3),
-                AssignedTo = reader.IsDBNull(4) ? null : (ulong?)reader.GetInt64(4),
+                AssignedTo = rowAssignedTo,
+                AssignedToMemberLabel = HouseholdIdentity.MemberLabel(rowAssignedTo),
                 Tags = tagsList,
                 Notes = reader.IsDBNull(6) ? "" : reader.GetString(6),
-                PurchasedBy = reader.IsDBNull(7) ? null : (ulong?)reader.GetInt64(7)
+                PurchasedBy = rowPurchasedBy,
+                PurchasedByMemberLabel = HouseholdIdentity.MemberLabel(rowPurchasedBy)
             });
         }
 

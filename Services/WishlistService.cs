@@ -106,17 +106,22 @@ public class WishlistService
                 .Where(t => !string.IsNullOrWhiteSpace(t))
                 .ToList();
 
+            var itemOwner = (ulong)reader.GetInt64(2);
+            var purchasedBy = reader.IsDBNull(8) ? null : (ulong?)reader.GetInt64(8);
+
             allItems.Add(new WishlistListItemModel
             {
                 Id = reader.GetInt32(0),
                 Name = reader.GetString(1),
-                Owner = (ulong)reader.GetInt64(2),
+                Owner = itemOwner,
+                OwnerMemberLabel = HouseholdIdentity.MemberLabel(itemOwner),
                 Price = reader.IsDBNull(3) ? "" : reader.GetString(3),
                 Link = reader.IsDBNull(4) ? "" : reader.GetString(4),
                 Notes = reader.IsDBNull(5) ? "" : reader.GetString(5),
                 Priority = reader.IsDBNull(6) ? "" : reader.GetString(6),
                 Tags = tagsList,
-                PurchasedBy = reader.IsDBNull(8) ? null : (ulong?)reader.GetInt64(8)
+                PurchasedBy = purchasedBy,
+                PurchasedByMemberLabel = HouseholdIdentity.MemberLabel(purchasedBy)
             });
         }
 
@@ -202,10 +207,13 @@ public class WishlistService
         if (!reader.Read())
             return null;
 
+        var owner = (ulong)reader.GetInt64(1);
+
         return new WishlistItemDetailModel
         {
             Name = reader.GetString(0),
-            Owner = (ulong)reader.GetInt64(1),
+            Owner = owner,
+            OwnerMemberLabel = HouseholdIdentity.MemberLabel(owner),
             Price = reader.IsDBNull(2) ? "" : reader.GetString(2),
             Link = reader.IsDBNull(3) ? "" : reader.GetString(3),
             Description = reader.IsDBNull(4) ? "" : reader.GetString(4),

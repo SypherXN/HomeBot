@@ -151,6 +151,8 @@ public class CalendarService
 
             var reminderRaw = reader.IsDBNull(7) ? "" : reader.GetString(7);
 
+            var assignedTo = reader.IsDBNull(5) ? null : (ulong?)reader.GetInt64(5);
+
             allItems.Add(new CalendarListItemModel
             {
                 Id = reader.GetInt32(0),
@@ -158,7 +160,8 @@ public class CalendarService
                 Type = reader.GetString(2),
                 DateText = dateText,
                 AllDay = reader.GetInt32(4) == 1,
-                AssignedTo = reader.IsDBNull(5) ? null : (ulong?)reader.GetInt64(5),
+                AssignedTo = assignedTo,
+                AssignedToMemberLabel = HouseholdIdentity.MemberLabel(assignedTo),
                 HasLink = !reader.IsDBNull(6) && !string.IsNullOrWhiteSpace(reader.GetString(6)),
                 ReminderText = ReminderFormatter.Format(reminderRaw),
                 RecurrenceText = recurrenceText,
@@ -427,7 +430,8 @@ public class CalendarService
                 Id = reader.GetInt32(0),
                 Title = reader.GetString(1),
                 Type = type,
-                AssignedTo = assigned
+                AssignedTo = assigned,
+                AssignedToMemberLabel = HouseholdIdentity.MemberLabel(assigned)
             });
         }
 
@@ -504,6 +508,7 @@ public class CalendarService
                 Title = reader.GetString(1),
                 Type = type,
                 AssignedTo = assigned,
+                AssignedToMemberLabel = HouseholdIdentity.MemberLabel(assigned),
                 DateText = dt.ToString(),
                 SortDate = dt
             });

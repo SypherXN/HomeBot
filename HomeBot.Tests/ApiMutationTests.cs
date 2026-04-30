@@ -1,0 +1,286 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace HomeBot.Tests;
+
+/// <summary>
+/// End-to-end HTTP tests against the real minimal API + SQLite (isolated temp file per run).
+/// </summary>
+public sealed class ApiMutationTests : IAsyncDisposable
+{
+    private readonly string _dbPath;
+    private readonly ServiceProvider _services;
+    private readonly WebApplication _app;
+    private readonly HttpClient _client;
+    private const string TestToken = "integration-test-token";
+    private const ulong Actor = 100000000000000001UL; // safe JSON integer; distinct test actor
+
+    public ApiMutationTests()
+    {
+        _dbPath = Path.Combine(Path.GetTempPath(), $"homebot_api_test_{Guid.NewGuid():N}.db");
+        if (File.Exists(_dbPath))
+            File.Delete(_dbPath);
+
+        Environment.SetEnvironmentVariable("HOMEBOT_DATABASE_PATH", _dbPath);
+
+        var sc = new ServiceCollection();
+        sc.AddHomeBotDataServices();
+        _services = sc.BuildServiceProvider();
+
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = Environments.Development
+        });
+
+        HomeBotApiHost.AddApiCors(builder);
+        builder.WebHost.UseTestServer();
+
+        _app = builder.Build();
+        HomeBotApiHost.Configure(_app, _services, TestToken);
+
+        _app.StartAsync().GetAwaiter().GetResult();
+        _client = _app.GetTestClient();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestToken);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _app.StopAsync();
+        await _app.DisposeAsync();
+        await _services.DisposeAsync();
+
+        Environment.SetEnvironmentVariable("HOMEBOT_DATABASE_PATH", null);
+
+        try
+        {
+            if (File.Exists(_dbPath))
+                File.Delete(_dbPath);
+        }
+        catch
+        {
+            // best-effort cleanup on Windows file locks
+        }
+    }
+
+    [Fact]
+    public async Task Health_and_meta_skip_auth()
+    {
+        var naked = _app.GetTestClient();
+        var h = await naked.GetAsync("/api/health");
+        Assert.Equal(HttpStatusCode.OK, h.StatusCode);
+
+        var m = await naked.GetAsync("/api/meta");
+        Assert.Equal(HttpStatusCode.OK, m.StatusCode);
+    }
+
+    [Fact]
+    public async Task Buy_list_requires_auth()
+    {
+        var naked = _app.GetTestClient();
+        var r = await naked.GetAsync("/api/buy/items");
+        Assert.Equal(HttpStatusCode.Unauthorized, r.StatusCode);
+    }
+
+    [Fact]
+    public async Task Buy_crud_flow_via_http()
+    {
+        const string name = "ApiTestBuyItem";
+
+        var post = await _client.PostAsJsonAsync(
+            $"/api/buy/items?actorUserId={Actor}",
+            new { name, quantity = "2", store = "TestMart", tags = "a,b", notes = "via api" });
+
+        Assert.True(
+            post.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created,
+            await post.Content.ReadAsStringAsync());
+
+        var list = await _client.GetFromJsonAsync<JsonElement>("/api/buy/items?page=0");
+        Assert.Equal(JsonValueKind.Object, list.ValueKind);
+        var items = list.GetProperty("items");
+        Assert.Equal(JsonValueKind.Array, items.ValueKind);
+
+        int id = 0;
+        foreach (var el in items.EnumerateArray())
+        {
+            if (el.GetProperty("name").GetString() == name)
+            {
+                id = el.GetProperty("id").GetInt32();
+                break;
+            }
+        }
+
+        Assert.NotEqual(0, id);
+
+        var put = await _client.PutAsJsonAsync(
+            $"/api/buy/items/{id}",
+            new { name = name + "Updated", notes = "patched" });
+
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+
+        var complete = await _client.PostAsync($"/api/buy/items/{id}/complete?actorUserId={Actor}", null);
+        Assert.Equal(HttpStatusCode.OK, complete.StatusCode);
+
+        var clear = await _client.DeleteAsync("/api/buy/items/completed");
+        Assert.Equal(HttpStatusCode.OK, clear.StatusCode);
+    }
+
+    [Fact]
+    public async Task Wishlist_add_complete_delete()
+    {
+        const string name = "ApiTestWish";
+
+        var post = await _client.PostAsJsonAsync(
+            $"/api/wishlist/items?actorUserId={Actor}",
+            new { name, price = "$10" });
+
+        Assert.True(
+            post.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created,
+            await post.Content.ReadAsStringAsync());
+
+        var list = await _client.GetFromJsonAsync<JsonElement>("/api/wishlist/items?page=0");
+        var items = list.GetProperty("items");
+        int id = 0;
+        foreach (var el in items.EnumerateArray())
+        {
+            if (el.GetProperty("name").GetString() == name)
+            {
+                id = el.GetProperty("id").GetInt32();
+                break;
+            }
+        }
+
+        Assert.NotEqual(0, id);
+
+        var complete = await _client.PostAsync($"/api/wishlist/items/{id}/complete?actorUserId={Actor}", null);
+        Assert.Equal(HttpStatusCode.OK, complete.StatusCode);
+
+        var del = await _client.DeleteAsync($"/api/wishlist/items/{id}?actorUserId={Actor}");
+        Assert.Equal(HttpStatusCode.OK, del.StatusCode);
+    }
+
+    [Fact]
+    public async Task Money_expense_patch_delete()
+    {
+        ulong u1 = Actor;
+        ulong u2 = Actor + 1;
+
+        var post = await _client.PostAsJsonAsync(
+            "/api/money/expenses",
+            new { name = "ApiTestExp", amountInput = "20", paidBy = u1, owedBy = u2 });
+
+        Assert.True(
+            post.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created,
+            await post.Content.ReadAsStringAsync());
+
+        var list = await _client.GetFromJsonAsync<JsonElement>("/api/money/transactions?page=0");
+        var items = list.GetProperty("items");
+        int id = 0;
+        foreach (var el in items.EnumerateArray())
+        {
+            if (el.GetProperty("name").GetString() == "ApiTestExp")
+            {
+                id = el.GetProperty("id").GetInt32();
+                break;
+            }
+        }
+
+        Assert.NotEqual(0, id);
+
+        var patch = await _client.PatchAsJsonAsync(
+            $"/api/money/transactions/{id}",
+            new { name = "ApiTestExpRenamed", amountInput = "25" });
+
+        Assert.Equal(HttpStatusCode.OK, patch.StatusCode);
+
+        var del = await _client.DeleteAsync($"/api/money/transactions/{id}?actorUserId={Actor}");
+        Assert.Equal(HttpStatusCode.OK, del.StatusCode);
+    }
+
+    [Fact]
+    public async Task Calendar_task_create_patch_complete_delete()
+    {
+        var post = await _client.PostAsJsonAsync(
+            "/api/calendar/items",
+            new { title = "ApiTestTask", start = "", allDay = false, assignToEveryone = false });
+
+        Assert.True(
+            post.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created,
+            await post.Content.ReadAsStringAsync());
+
+        var list = await _client.GetFromJsonAsync<JsonElement>("/api/calendar/items?page=0");
+        var items = list.GetProperty("items");
+        int id = 0;
+        foreach (var el in items.EnumerateArray())
+        {
+            if (el.GetProperty("title").GetString() == "ApiTestTask")
+            {
+                id = el.GetProperty("id").GetInt32();
+                break;
+            }
+        }
+
+        Assert.NotEqual(0, id);
+
+        var patch = await _client.PatchAsJsonAsync(
+            $"/api/calendar/items/{id}",
+            new { title = "ApiTestTaskRenamed" });
+
+        Assert.Equal(HttpStatusCode.OK, patch.StatusCode);
+
+        var complete = await _client.PostAsync($"/api/calendar/items/{id}/complete?actorUserId={Actor}", null);
+        Assert.Equal(HttpStatusCode.OK, complete.StatusCode);
+
+        var del = await _client.DeleteAsync($"/api/calendar/items/{id}?actorUserId={Actor}");
+        Assert.Equal(HttpStatusCode.OK, del.StatusCode);
+    }
+
+    [Fact]
+    public async Task Undo_after_buy_delete_restores()
+    {
+        const string name = "UndoRestoreBuy";
+
+        var post = await _client.PostAsJsonAsync(
+            $"/api/buy/items?actorUserId={Actor}",
+            new { name, quantity = "1" });
+        post.EnsureSuccessStatusCode();
+
+        var list1 = await _client.GetFromJsonAsync<JsonElement>("/api/buy/items?page=0");
+        int id = 0;
+        foreach (var el in list1.GetProperty("items").EnumerateArray())
+        {
+            if (el.GetProperty("name").GetString() == name)
+            {
+                id = el.GetProperty("id").GetInt32();
+                break;
+            }
+        }
+
+        Assert.NotEqual(0, id);
+
+        var del = await _client.DeleteAsync($"/api/buy/items/{id}?actorUserId={Actor}");
+        del.EnsureSuccessStatusCode();
+
+        var undo = await _client.PostAsync($"/api/undo?actorUserId={Actor}", null);
+        undo.EnsureSuccessStatusCode();
+        var body = await undo.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.GetProperty("undone").GetBoolean());
+
+        var list2 = await _client.GetFromJsonAsync<JsonElement>("/api/buy/items?page=0");
+        var found = false;
+        foreach (var el in list2.GetProperty("items").EnumerateArray())
+        {
+            if (el.GetProperty("id").GetInt32() == id && el.GetProperty("name").GetString() == name)
+            {
+                found = true;
+                break;
+            }
+        }
+
+        Assert.True(found, "Undo should restore deleted buy row.");
+    }
+}

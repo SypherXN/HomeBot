@@ -90,7 +90,77 @@ pre {
   border-radius: 10px;
   background: #0b1220;
   padding: 14px;
-  max-height: 480px;
+  max-height: min(70vh, 640px);
   overflow: auto;
   white-space: pre-wrap;
+}
+
+.stack {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.stack label {
+  min-width: 0;
+}
+
+.hint {
+  margin: 0;
+  font-size: 13px;
+  color: #9ca3af;
+  line-height: 1.4;
+}
+
+.section {
+  margin-bottom: 20px;
+}
+
+.section h2 {
+  margin: 16px 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.section h2:first-child {
+  margin-top: 0;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: minmax(100px, 140px) 1fr;
+  gap: 8px 12px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.btnRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+button.primary {
+  border-color: #2563eb;
+  background: #1d4ed8;
+}
+
+label.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+label.check input {
+  width: auto;
 }

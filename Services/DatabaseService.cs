@@ -5,10 +5,17 @@ using Microsoft.Data.Sqlite;
 /// </summary>
 public class DatabaseService
 {
-    private readonly string _connectionString = "Data Source=homebot.db";
+    private readonly string _connectionString;
 
     public DatabaseService()
     {
+        var path = Environment.GetEnvironmentVariable("HOMEBOT_DATABASE_PATH");
+        _connectionString = string.IsNullOrWhiteSpace(path)
+            ? "Data Source=homebot.db"
+            : path.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase)
+                ? path
+                : $"Data Source={path}";
+
         Initialize();
     }
 
