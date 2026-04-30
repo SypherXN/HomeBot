@@ -71,17 +71,37 @@ public class CalendarService
     /// </summary>
     public async Task<(Embed embed, MessageComponent components)> BuildList(int page = 0)
     {
+        var result = GetList(page);
+        var rows = result.Items.Select(FormatCalendarListRow).ToList();
+        var ids = result.Items.Select(x => x.Id).ToList();
+        var embed = ListUIBuilder.BuildEmbed("📅 Calendar", rows);
+        var components = new ComponentBuilder();
+        foreach (var id in ids)
+        {
+            components.WithButton($"✔ {id}", $"calendar_complete_{id}", ButtonStyle.Success);
+            components.WithButton($"❌ {id}", $"calendar_delete_{id}", ButtonStyle.Danger);
+        }
+        if (result.HasPrev)
+        {
+            components.WithButton("⬅ Prev", $"calendar_page_{page - 1}", ButtonStyle.Secondary);
+        }
+        if (result.HasNext)
+        {
+            components.WithButton("Next ➡", $"calendar_page_{page + 1}", ButtonStyle.Secondary);
+        }
+        return (embed, components.Build());
+    }
+
+    /// <summary>
+    /// Returns paginated calendar data for API and UI adapters.
+    /// </summary>
+    public PagedResult<CalendarListItemModel> GetList(int page = 0)
+    {
         using var conn = _db.GetConnection();
         conn.Open();
 
-        int pageSize = 5;
-
-        var configCmd = conn.CreateCommand();
-        configCmd.CommandText = "SELECT Value FROM Settings WHERE Key = 'page_size'";
-        var result = configCmd.ExecuteScalar();
-
-        if (result != null && int.TryParse(result.ToString(), out int parsed))
-            pageSize = parsed;
+        int pageSize = GetPageSize(conn);
+        var tz = GetTimezone();
 
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
@@ -105,156 +125,57 @@ public class CalendarService
             StartDateTime ASC";
 
         using var reader = cmd.ExecuteReader();
-
-        var rows = new List<string>();
-        var ids = new List<int>();
+        var allItems = new List<CalendarListItemModel>();
 
         while (reader.Read())
         {
-            int id = reader.GetInt32(0);
-            string title = reader.GetString(1);
-            string type = reader.GetString(2);
+            var startRaw = reader.IsDBNull(3) ? "" : reader.GetString(3);
+            var dateText = "";
+            var sortDate = DateTime.MaxValue;
 
-            string date = "";
-
-            if (!reader.IsDBNull(3))
+            if (!string.IsNullOrWhiteSpace(startRaw) && DateTime.TryParse(startRaw, out var parsedUtc))
             {
-                DateTime? utc = null;
-
-                if (!reader.IsDBNull(3))
-                {
-                    var raw = reader.GetString(3);
-
-                    if (!string.IsNullOrWhiteSpace(raw) && DateTime.TryParse(raw, out var parsedDate))
-                    {
-                        utc = parsedDate;
-                    }
-                }
-
-                var timezone = _config.Get("timezone") ?? "Pacific Standard Time";
-
-                TimeZoneInfo tz;
-
-                try
-                {
-                    tz = TimeZoneInfo.FindSystemTimeZoneById(timezone);
-                }
-                catch
-                {
-                    tz = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
-                }
-
-                if (utc.HasValue)
-                {
-                    var local = TimeZoneInfo.ConvertTimeFromUtc(utc.Value, tz);
-                    date = local.ToString("yyyy-MM-dd HH:mm");
-                }
-                else
-                {
-                    date = ""; // task or invalid date
-                }
-            }
-            bool allDay = reader.GetInt32(4) == 1;
-
-            ulong? assigned = reader.IsDBNull(5) ? null : (ulong?)reader.GetInt64(5);
-
-            string assignedText;
-
-            if (!assigned.HasValue)
-            {
-                assignedText = "anyone";
-            }
-            else if (assigned.Value == 0)
-            {
-                assignedText = "@everyone";
-            }
-            else
-            {
-                assignedText = $"<@{assigned.Value}>";
+                var local = TimeZoneInfo.ConvertTimeFromUtc(parsedUtc, tz);
+                dateText = local.ToString("yyyy-MM-dd HH:mm");
+                sortDate = local;
             }
 
-            string reminderRaw = reader.IsDBNull(7) ? "" : reader.GetString(7);
-            string reminderText = ReminderFormatter.Format(reminderRaw);
-
-            string link = reader.IsDBNull(6) ? "" : reader.GetString(6);
-
-            string recurrence = reader.IsDBNull(8) ? "" : reader.GetString(8);
-
-            string recurrenceText = "";
-
-            if (!string.IsNullOrWhiteSpace(recurrence))
+            var recurrence = reader.IsDBNull(8) ? "" : reader.GetString(8);
+            var recurrenceText = recurrence switch
             {
-                recurrenceText = recurrence switch
-                {
-                    "daily" => "🔁 daily",
-                    "weekly" => "🔁 weekly",
-                    _ => $"🔁 {recurrence}"
-                };
-            }
+                "daily" => "🔁 daily",
+                "weekly" => "🔁 weekly",
+                "" => "",
+                _ => $"🔁 {recurrence}"
+            };
 
-            string icon = type == "task" ? "📝" : "📅";
+            var reminderRaw = reader.IsDBNull(7) ? "" : reader.GetString(7);
 
-            var line = $"{icon} **#{id} {title}**";
-
-            if (type != "task")
+            allItems.Add(new CalendarListItemModel
             {
-                if (!string.IsNullOrWhiteSpace(date))
-                    line += $" | {date}";
-
-                if (allDay)
-                    line += " | All-day";
-            }
-
-            line += $" | 👤 {assignedText}";
-
-            if (!string.IsNullOrWhiteSpace(recurrenceText))
-                line += $" | {recurrenceText}";
-
-            if (!string.IsNullOrWhiteSpace(reminderText))
-                line += $" | ⏰ {reminderText}";
-
-            if (!string.IsNullOrWhiteSpace(link))
-                line += " | 🔗";
-
-            rows.Add(line);
-            ids.Add(id);
+                Id = reader.GetInt32(0),
+                Title = reader.GetString(1),
+                Type = reader.GetString(2),
+                DateText = dateText,
+                AllDay = reader.GetInt32(4) == 1,
+                AssignedTo = reader.IsDBNull(5) ? null : (ulong?)reader.GetInt64(5),
+                HasLink = !reader.IsDBNull(6) && !string.IsNullOrWhiteSpace(reader.GetString(6)),
+                ReminderText = ReminderFormatter.Format(reminderRaw),
+                RecurrenceText = recurrenceText,
+                SortDate = sortDate
+            });
         }
 
-        var allRows = rows.Select((line, index) => (id: ids[index], line)).ToList();
-
-        var paged = allRows
-            .Skip(page * pageSize)
-            .Take(pageSize)
-            .ToList();
-
-        var pagedRows = paged.Select(x => x.line).ToList();
-        var pagedIds = paged.Select(x => x.id).ToList();
-
-        bool hasNext = allRows.Count > (page + 1) * pageSize;
-        bool hasPrev = page > 0;
-
-        var embed = ListUIBuilder.BuildEmbed("📅 Calendar", pagedRows);
-        var components = new ComponentBuilder();
-
-        // action buttons
-        foreach (var id in pagedIds)
+        var paged = allItems.Skip(page * pageSize).Take(pageSize).ToList();
+        return new PagedResult<CalendarListItemModel>
         {
-            components.WithButton($"✔ {id}", $"calendar_complete_{id}", ButtonStyle.Success);
-            components.WithButton($"❌ {id}", $"calendar_delete_{id}", ButtonStyle.Danger);
-        }
-
-        // pagination buttons
-        if (hasPrev)
-        {
-            components.WithButton("⬅ Prev", $"calendar_page_{page - 1}", ButtonStyle.Secondary);
-        }
-
-        if (hasNext)
-        {
-            components.WithButton("Next ➡", $"calendar_page_{page + 1}", ButtonStyle.Secondary);
-        }
-
-        return (embed, components.Build());
+            Items = paged,
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = allItems.Count,
+            HasNext = allItems.Count > (page + 1) * pageSize,
+            HasPrev = page > 0
+        };
     }
 
     /// <summary>
@@ -455,23 +376,31 @@ public class CalendarService
     /// </summary>
     public async Task<(Embed embed, MessageComponent components)> BuildToday(ulong? userFilter = null, int page = 0)
     {
+        var result = GetToday(userFilter, page);
+        var rows = result.Items.Select(FormatSimpleCalendarRow).ToList();
+        var embed = ListUIBuilder.BuildEmbed("📅 Today", rows);
+
+        var components = new ComponentBuilder();
+        if (result.HasPrev)
+            components.WithButton("⬅ Prev", $"calendar_today_page_{page - 1}", ButtonStyle.Secondary);
+        if (result.HasNext)
+            components.WithButton("Next ➡", $"calendar_today_page_{page + 1}", ButtonStyle.Secondary);
+
+        return (embed, components.Build());
+    }
+
+    /// <summary>
+    /// Returns today's calendar items with optional assignee filter.
+    /// </summary>
+    public PagedResult<CalendarListItemModel> GetToday(ulong? userFilter = null, int page = 0)
+    {
         using var conn = _db.GetConnection();
         conn.Open();
-
-        int pageSize = 5;
-
-        var configCmd = conn.CreateCommand();
-        configCmd.CommandText = "SELECT Value FROM Settings WHERE Key = 'page_size'";
-        var result = configCmd.ExecuteScalar();
-
-        if (result != null && int.TryParse(result.ToString(), out int parsed))
-            pageSize = parsed;
-
+        int pageSize = GetPageSize(conn);
         var todayStart = DateTime.Today;
         var todayEnd = todayStart.AddDays(1);
 
         var cmd = conn.CreateCommand();
-
         cmd.CommandText = @"
             SELECT Id, Title, Type, StartDateTime, AllDay, AssignedTo
             FROM CalendarItems
@@ -479,76 +408,43 @@ public class CalendarService
         ";
 
         using var reader = cmd.ExecuteReader();
-
-        var allRows = new List<string>();
-
+        var allItems = new List<CalendarListItemModel>();
         while (reader.Read())
         {
-            int id = reader.GetInt32(0);
-            string title = reader.GetString(1);
-            string type = reader.GetString(2);
+            var type = reader.GetString(2);
+            var dateStr = reader.IsDBNull(3) ? "" : reader.GetString(3);
+            var assigned = reader.IsDBNull(5) ? null : (ulong?)reader.GetInt64(5);
 
-            string dateStr = reader.IsDBNull(3) ? "" : reader.GetString(3);
-            bool allDay = reader.GetInt32(4) == 1;
+            if (userFilter.HasValue && assigned.HasValue && assigned.Value != userFilter.Value && assigned.Value != 0)
+                continue;
 
-            ulong? assigned = reader.IsDBNull(5) ? null : (ulong?)reader.GetInt64(5);
-
-            // --- FILTER ---
-            if (userFilter.HasValue)
-            {
-                if (assigned.HasValue)
-                {
-                    if (assigned.Value != userFilter.Value && assigned.Value != 0)
-                        continue;
-                }
-            }
-
-            // --- TIME FILTER ---
             if (type != "task")
             {
-                if (string.IsNullOrWhiteSpace(dateStr))
+                if (string.IsNullOrWhiteSpace(dateStr) || !DateTime.TryParse(dateStr, out var dt))
                     continue;
-
-                if (!DateTime.TryParse(dateStr, out var dt))
-                    continue;
-
                 if (dt < todayStart || dt >= todayEnd)
                     continue;
             }
 
-            string assignedText = assigned switch
+            allItems.Add(new CalendarListItemModel
             {
-                null => "anyone",
-                0 => "@everyone",
-                _ => $"<@{assigned.Value}>"
-            };
-
-            string icon = type == "task" ? "📝" : "📅";
-
-            var line = $"{icon} **#{id} {title}** | 👤 {assignedText}";
-
-            allRows.Add(line);
+                Id = reader.GetInt32(0),
+                Title = reader.GetString(1),
+                Type = type,
+                AssignedTo = assigned
+            });
         }
 
-        var paged = allRows
-            .Skip(page * pageSize)
-            .Take(pageSize)
-            .ToList();
-
-        bool hasNext = allRows.Count > (page + 1) * pageSize;
-        bool hasPrev = page > 0;
-
-        var embed = ListUIBuilder.BuildEmbed("📅 Today", paged);
-
-        var components = new ComponentBuilder();
-
-        if (hasPrev)
-            components.WithButton("⬅ Prev", $"calendar_today_page_{page - 1}", ButtonStyle.Secondary);
-
-        if (hasNext)
-            components.WithButton("Next ➡", $"calendar_today_page_{page + 1}", ButtonStyle.Secondary);
-
-        return (embed, components.Build());
+        var paged = allItems.Skip(page * pageSize).Take(pageSize).ToList();
+        return new PagedResult<CalendarListItemModel>
+        {
+            Items = paged,
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = allItems.Count,
+            HasNext = allItems.Count > (page + 1) * pageSize,
+            HasPrev = page > 0
+        };
     }
 
     /// <summary>
@@ -556,98 +452,141 @@ public class CalendarService
     /// </summary>
     public async Task<(Embed embed, MessageComponent components)> BuildUpcoming(ulong? userFilter = null, int page = 0)
     {
+        var result = GetUpcoming(userFilter, page);
+        var rows = result.Items.Select(FormatUpcomingCalendarRow).ToList();
+        var embed = ListUIBuilder.BuildEmbed("📅 Upcoming", rows);
+
+        var components = new ComponentBuilder();
+        if (result.HasPrev)
+            components.WithButton("⬅ Prev", $"calendar_upcoming_page_{page - 1}", ButtonStyle.Secondary);
+        if (result.HasNext)
+            components.WithButton("Next ➡", $"calendar_upcoming_page_{page + 1}", ButtonStyle.Secondary);
+
+        return (embed, components.Build());
+    }
+
+    /// <summary>
+    /// Returns upcoming calendar items with optional assignee filter.
+    /// </summary>
+    public PagedResult<CalendarListItemModel> GetUpcoming(ulong? userFilter = null, int page = 0)
+    {
         using var conn = _db.GetConnection();
         conn.Open();
-
-        int pageSize = 5;
-
-        var configCmd = conn.CreateCommand();
-        configCmd.CommandText = "SELECT Value FROM Settings WHERE Key = 'page_size'";
-        var result = configCmd.ExecuteScalar();
-
-        if (result != null && int.TryParse(result.ToString(), out int parsed))
-            pageSize = parsed;
-
+        int pageSize = GetPageSize(conn);
         var now = DateTime.Now;
 
         var cmd = conn.CreateCommand();
-
         cmd.CommandText = @"
-            SELECT Id, Title, Type, StartDateTime, AllDay, AssignedTo
+            SELECT Id, Title, Type, StartDateTime, AssignedTo
             FROM CalendarItems
             WHERE Status = 'active'
         ";
 
         using var reader = cmd.ExecuteReader();
-
-        var rows = new List<(DateTime dt, string line)>();
-
+        var allItems = new List<CalendarListItemModel>();
         while (reader.Read())
         {
-            int id = reader.GetInt32(0);
-            string title = reader.GetString(1);
-            string type = reader.GetString(2);
+            var type = reader.GetString(2);
+            var dateStr = reader.IsDBNull(3) ? "" : reader.GetString(3);
+            var assigned = reader.IsDBNull(4) ? null : (ulong?)reader.GetInt64(4);
 
-            string dateStr = reader.IsDBNull(3) ? "" : reader.GetString(3);
-            bool allDay = reader.GetInt32(4) == 1;
+            if (userFilter.HasValue && assigned.HasValue && assigned.Value != userFilter.Value && assigned.Value != 0)
+                continue;
 
-            ulong? assigned = reader.IsDBNull(5) ? null : (ulong?)reader.GetInt64(5);
-
-            // --- FILTER ---
-            if (userFilter.HasValue)
-            {
-                if (assigned.HasValue)
-                {
-                    if (assigned.Value != userFilter.Value && assigned.Value != 0)
-                        continue;
-                }
-            }
-
-            DateTime dt = DateTime.MaxValue;
-
+            var dt = DateTime.MaxValue;
             if (type != "task")
             {
                 if (!DateTime.TryParse(dateStr, out dt))
                     continue;
-
                 if (dt < now)
                     continue;
             }
 
-            string assignedText = assigned switch
+            allItems.Add(new CalendarListItemModel
             {
-                null => "anyone",
-                0 => "@everyone",
-                _ => $"<@{assigned.Value}>"
-            };
-
-            string icon = type == "task" ? "📝" : "📅";
-
-            var line = $"{icon} **#{id} {title}** | {dt} | 👤 {assignedText}";
-
-            rows.Add((dt, line));
+                Id = reader.GetInt32(0),
+                Title = reader.GetString(1),
+                Type = type,
+                AssignedTo = assigned,
+                DateText = dt.ToString(),
+                SortDate = dt
+            });
         }
 
-        var sorted = rows.OrderBy(x => x.dt).Select(x => x.line).ToList();
+        var sorted = allItems.OrderBy(x => x.SortDate).ToList();
+        var paged = sorted.Skip(page * pageSize).Take(pageSize).ToList();
+        return new PagedResult<CalendarListItemModel>
+        {
+            Items = paged,
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = sorted.Count,
+            HasNext = sorted.Count > (page + 1) * pageSize,
+            HasPrev = page > 0
+        };
+    }
 
-        var paged = sorted
-            .Skip(page * pageSize)
-            .Take(pageSize)
-            .ToList();
+    private int GetPageSize(SqliteConnection conn)
+    {
+        int pageSize = 5;
+        var configCmd = conn.CreateCommand();
+        configCmd.CommandText = "SELECT Value FROM Settings WHERE Key = 'page_size'";
+        var result = configCmd.ExecuteScalar();
+        if (result != null && int.TryParse(result.ToString(), out int parsed))
+            pageSize = parsed;
+        return pageSize;
+    }
 
-        bool hasNext = sorted.Count > (page + 1) * pageSize;
-        bool hasPrev = page > 0;
+    private TimeZoneInfo GetTimezone()
+    {
+        var timezone = _config.Get("timezone") ?? "Pacific Standard Time";
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById(timezone);
+        }
+        catch
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+        }
+    }
 
-        var embed = ListUIBuilder.BuildEmbed("📅 Upcoming", paged);
+    private static string GetAssignedDisplay(ulong? assigned)
+    {
+        if (!assigned.HasValue) return "anyone";
+        if (assigned.Value == 0) return "@everyone";
+        return $"<@{assigned.Value}>";
+    }
 
-        var components = new ComponentBuilder();
+    private static string FormatCalendarListRow(CalendarListItemModel item)
+    {
+        string icon = item.Type == "task" ? "📝" : "📅";
+        var line = $"{icon} **#{item.Id} {item.Title}**";
+        if (item.Type != "task")
+        {
+            if (!string.IsNullOrWhiteSpace(item.DateText))
+                line += $" | {item.DateText}";
+            if (item.AllDay)
+                line += " | All-day";
+        }
+        line += $" | 👤 {GetAssignedDisplay(item.AssignedTo)}";
+        if (!string.IsNullOrWhiteSpace(item.RecurrenceText))
+            line += $" | {item.RecurrenceText}";
+        if (!string.IsNullOrWhiteSpace(item.ReminderText))
+            line += $" | ⏰ {item.ReminderText}";
+        if (item.HasLink)
+            line += " | 🔗";
+        return line;
+    }
 
-        if (hasPrev)
-            components.WithButton("⬅ Prev", $"calendar_upcoming_page_{page - 1}", ButtonStyle.Secondary);
+    private static string FormatSimpleCalendarRow(CalendarListItemModel item)
+    {
+        string icon = item.Type == "task" ? "📝" : "📅";
+        return $"{icon} **#{item.Id} {item.Title}** | 👤 {GetAssignedDisplay(item.AssignedTo)}";
+    }
 
-        if (hasNext)
-            components.WithButton("Next ➡", $"calendar_upcoming_page_{page + 1}", ButtonStyle.Secondary);
-
-        return (embed, components.Build());
+    private static string FormatUpcomingCalendarRow(CalendarListItemModel item)
+    {
+        string icon = item.Type == "task" ? "📝" : "📅";
+        return $"{icon} **#{item.Id} {item.Title}** | {item.DateText} | 👤 {GetAssignedDisplay(item.AssignedTo)}";
     }
 }

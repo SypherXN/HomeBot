@@ -147,26 +147,45 @@ public class MoneyService
         string name1,
         string name2)
     {
-        double balance = GetNetBalance(user1, user2);
+        var summary = GetSummary(user1, user2, name1, name2);
 
         var embed = new EmbedBuilder()
             .WithTitle("💰 Money Summary")
             .WithColor(Color.Gold);
 
-        if (balance > 0)
+        if (summary.Balance > 0)
         {
-            embed.Description = $"👉 {name2} owes {name1} **${balance:F2}**";
+            embed.Description = $"👉 {summary.User2Name} owes {summary.User1Name} **${summary.Balance:F2}**";
         }
-        else if (balance < 0)
+        else if (summary.Balance < 0)
         {
-            embed.Description = $"👉 {name1} owes {name2} **${Math.Abs(balance):F2}**";
+            embed.Description = $"👉 {summary.User1Name} owes {summary.User2Name} **${Math.Abs(summary.Balance):F2}**";
         }
         else
         {
-            embed.Description = $"✅ {name1} and {name2} are settled up";
+            embed.Description = $"✅ {summary.User1Name} and {summary.User2Name} are settled up";
         }
 
         return embed.Build();
+    }
+
+    /// <summary>
+    /// Returns pairwise summary data for API and UI adapters.
+    /// </summary>
+    public MoneySummaryModel GetSummary(
+        ulong user1,
+        ulong user2,
+        string name1,
+        string name2)
+    {
+        return new MoneySummaryModel
+        {
+            User1Id = user1,
+            User2Id = user2,
+            User1Name = name1,
+            User2Name = name2,
+            Balance = GetNetBalance(user1, user2)
+        };
     }
 
     /// <summary>
@@ -254,6 +273,41 @@ public class MoneyService
     public async Task<(Embed embed, MessageComponent components)> BuildTransactions(
         int page = 0)
     {
+        var result = GetTransactions(page);
+        var rows = result.Items.Select(FormatTransactionRow).ToList();
+        var ids = result.Items.Select(x => x.Id).ToList();
+
+        var embed = ListUIBuilder.BuildEmbed("📜 Transactions", rows);
+
+        var components = new ComponentBuilder();
+
+        foreach (var id in ids)
+        {
+            components.WithButton(
+                $"❌ {id}",
+                $"money_delete_{id}",
+                ButtonStyle.Danger
+            );
+        }
+
+        if (result.HasPrev)
+        {
+            components.WithButton("⬅ Prev", $"money_page_{page - 1}", ButtonStyle.Secondary);
+        }
+
+        if (result.HasNext)
+        {
+            components.WithButton("Next ➡", $"money_page_{page + 1}", ButtonStyle.Secondary);
+        }
+
+        return (embed, components.Build());
+    }
+
+    /// <summary>
+    /// Returns paginated transaction data for API and UI adapters.
+    /// </summary>
+    public PagedResult<MoneyTransactionListItemModel> GetTransactions(int page = 0)
+    {
         using var conn = _db.GetConnection();
         conn.Open();
 
@@ -274,69 +328,38 @@ public class MoneyService
 
         using var reader = cmd.ExecuteReader();
 
-        var allRows = new List<(int id, string line)>();
+        var allItems = new List<MoneyTransactionListItemModel>();
 
         while (reader.Read())
         {
-            int id = reader.GetInt32(0);
-            string name = reader.GetString(1);
-            double amount = reader.GetDouble(2);
-
-            ulong paidBy = (ulong)reader.GetInt64(3);
-            ulong owedBy = (ulong)reader.GetInt64(4);
-            string type = reader.GetString(5);
-
-            string line;
-
-            if (type == "expense")
+            allItems.Add(new MoneyTransactionListItemModel
             {
-                line = $"💸 **#{id} {name}** | ${amount:F2} | <@{paidBy}> → <@{owedBy}>";
-            }
-            else
-            {
-                line = $"💰 **#{id} Payment** | ${amount:F2} | <@{paidBy}> → <@{owedBy}>";
-            }
-
-            allRows.Add((id, line));
+                Id = reader.GetInt32(0),
+                Name = reader.GetString(1),
+                Amount = reader.GetDouble(2),
+                PaidBy = (ulong)reader.GetInt64(3),
+                OwedBy = (ulong)reader.GetInt64(4),
+                Type = reader.GetString(5)
+            });
         }
 
-        var paged = allRows
+        var paged = allItems
             .Skip(page * pageSize)
             .Take(pageSize)
             .ToList();
 
-        var rows = paged.Select(x => x.line).ToList();
-        var ids = paged.Select(x => x.id).ToList();
-
-        bool hasNext = allRows.Count > (page + 1) * pageSize;
+        bool hasNext = allItems.Count > (page + 1) * pageSize;
         bool hasPrev = page > 0;
 
-        var embed = ListUIBuilder.BuildEmbed("📜 Transactions", rows);
-
-        var components = new ComponentBuilder();
-
-        // --- Delete buttons per transaction ---
-        foreach (var id in ids)
+        return new PagedResult<MoneyTransactionListItemModel>
         {
-            components.WithButton(
-                $"❌ {id}",
-                $"money_delete_{id}",
-                ButtonStyle.Danger
-            );
-        }
-
-        // --- Pagination ---
-        if (hasPrev)
-        {
-            components.WithButton("⬅ Prev", $"money_page_{page - 1}", ButtonStyle.Secondary);
-        }
-
-        if (hasNext)
-        {
-            components.WithButton("Next ➡", $"money_page_{page + 1}", ButtonStyle.Secondary);
-        }
-
-        return (embed, components.Build());
+            Items = paged,
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = allItems.Count,
+            HasNext = hasNext,
+            HasPrev = hasPrev
+        };
     }
 
     /// <summary>
@@ -482,5 +505,15 @@ public class MoneyService
         deleteCmd.Parameters.AddWithValue("$id", id);
 
         deleteCmd.ExecuteNonQuery();
+    }
+
+    private static string FormatTransactionRow(MoneyTransactionListItemModel item)
+    {
+        if (item.Type == "expense")
+        {
+            return $"💸 **#{item.Id} {item.Name}** | ${item.Amount:F2} | <@{item.PaidBy}> → <@{item.OwedBy}>";
+        }
+
+        return $"💰 **#{item.Id} Payment** | ${item.Amount:F2} | <@{item.PaidBy}> → <@{item.OwedBy}>";
     }
 }

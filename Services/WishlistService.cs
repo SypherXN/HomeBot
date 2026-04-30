@@ -24,6 +24,32 @@ public class WishlistService
         string sort = "",
         int page = 0)
     {
+        var result = GetWishlist(owner, tag, sort, page);
+        var rows = result.Items.Select(FormatDiscordRow).ToList();
+        var ids = result.Items.Select(x => x.Id).ToList();
+
+        var embed = ListUIBuilder.BuildEmbed("🎁 Wishlist", rows);
+
+        var components = ListUIBuilder.BuildButtons(
+            ids,
+            "wishlist",
+            page,
+            result.HasNext,
+            result.HasPrev
+        );
+
+        return (embed, components);
+    }
+
+    /// <summary>
+    /// Returns filtered wishlist data for API and UI adapters.
+    /// </summary>
+    public PagedResult<WishlistListItemModel> GetWishlist(
+        ulong? owner = null,
+        string tag = "",
+        string sort = "",
+        int page = 0)
+    {
         using var conn = _db.GetConnection();
         conn.Open();
 
@@ -69,70 +95,49 @@ public class WishlistService
 
         using var reader = cmd.ExecuteReader();
 
-        var allRows = new List<(int id, string line)>();
+        var allItems = new List<WishlistListItemModel>();
 
         while (reader.Read())
         {
-            int id = reader.GetInt32(0);
-            string name = reader.GetString(1);
+            var rawTags = reader.IsDBNull(7) ? "" : reader.GetString(7);
+            var tagsList = rawTags
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(t => t.Trim().ToLower())
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .ToList();
 
-            ulong ownerId = (ulong)reader.GetInt64(2);
-            string ownerDisplay = $"<@{ownerId}>";
-
-            string price = reader.IsDBNull(3) ? "-" : reader.GetString(3);
-            string link = reader.IsDBNull(4) ? "" : reader.GetString(4);
-            string notes = reader.IsDBNull(5) ? "" : reader.GetString(5);
-            string priority = reader.IsDBNull(6) ? "" : reader.GetString(6);
-            string tags = reader.IsDBNull(7) ? "" : reader.GetString(7);
-
-            ulong? purchasedBy = reader.IsDBNull(8) ? null : (ulong?)reader.GetInt64(8);
-
-            var line = $"**#{id} {name}** | 👤 {ownerDisplay}";
-
-            if (!string.IsNullOrWhiteSpace(price))
-                line += $" | 💲 {price}";
-
-            if (!string.IsNullOrWhiteSpace(priority))
-                line += $" | ⭐ {priority}";
-
-            if (!string.IsNullOrWhiteSpace(tags))
+            allItems.Add(new WishlistListItemModel
             {
-                var formattedTags = string.Join(" ",
-                    tags.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                        .Select(t => $"#{t}")
-                );
-                line += $" | 🏷 {formattedTags}";
-            }
-
-            if (purchasedBy.HasValue)
-                line += $" | ✔ <@{purchasedBy.Value}>";
-
-            allRows.Add((id, line));
+                Id = reader.GetInt32(0),
+                Name = reader.GetString(1),
+                Owner = (ulong)reader.GetInt64(2),
+                Price = reader.IsDBNull(3) ? "" : reader.GetString(3),
+                Link = reader.IsDBNull(4) ? "" : reader.GetString(4),
+                Notes = reader.IsDBNull(5) ? "" : reader.GetString(5),
+                Priority = reader.IsDBNull(6) ? "" : reader.GetString(6),
+                Tags = tagsList,
+                PurchasedBy = reader.IsDBNull(8) ? null : (ulong?)reader.GetInt64(8)
+            });
         }
 
         // --- PAGINATION ---
-        var paged = allRows
+        var paged = allItems
             .Skip(page * pageSize)
             .Take(pageSize)
             .ToList();
 
-        var rows = paged.Select(x => x.line).ToList();
-        var ids = paged.Select(x => x.id).ToList();
-
-        bool hasNext = allRows.Count > (page + 1) * pageSize;
+        bool hasNext = allItems.Count > (page + 1) * pageSize;
         bool hasPrev = page > 0;
 
-        var embed = ListUIBuilder.BuildEmbed("🎁 Wishlist", rows);
-
-        var components = ListUIBuilder.BuildButtons(
-            ids,
-            "wishlist",
-            page,
-            hasNext,
-            hasPrev
-        );
-
-        return (embed, components);
+        return new PagedResult<WishlistListItemModel>
+        {
+            Items = paged,
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = allItems.Count,
+            HasNext = hasNext,
+            HasPrev = hasPrev
+        };
     }
 
     /// <summary>
@@ -436,5 +441,27 @@ public class WishlistService
         cmd.Parameters.AddWithValue("$id", id);
 
         cmd.ExecuteNonQuery();
+    }
+
+    private static string FormatDiscordRow(WishlistListItemModel item)
+    {
+        var line = $"**#{item.Id} {item.Name}** | 👤 <@{item.Owner}>";
+
+        if (!string.IsNullOrWhiteSpace(item.Price))
+            line += $" | 💲 {item.Price}";
+
+        if (!string.IsNullOrWhiteSpace(item.Priority))
+            line += $" | ⭐ {item.Priority}";
+
+        if (item.Tags.Count > 0)
+        {
+            var formattedTags = string.Join(" ", item.Tags.Select(t => $"#{t}"));
+            line += $" | 🏷 {formattedTags}";
+        }
+
+        if (item.PurchasedBy.HasValue)
+            line += $" | ✔ <@{item.PurchasedBy.Value}>";
+
+        return line;
     }
 }

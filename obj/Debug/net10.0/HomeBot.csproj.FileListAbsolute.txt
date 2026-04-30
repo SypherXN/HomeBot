@@ -51,3 +51,4 @@ C:\Users\mattg\Desktop\HomeBot\obj\Debug\net10.0\refint\HomeBot.dll
 C:\Users\mattg\Desktop\HomeBot\obj\Debug\net10.0\HomeBot.pdb
 C:\Users\mattg\Desktop\HomeBot\obj\Debug\net10.0\HomeBot.genruntimeconfig.cache
 C:\Users\mattg\Desktop\HomeBot\obj\Debug\net10.0\ref\HomeBot.dll
+C:\Users\mattg\Desktop\HomeBot\obj\Debug\net10.0\HomeBot.sourcelink.json
