@@ -104,11 +104,14 @@ public class UndoService
         var entity = entityRaw.Trim().ToLower();
         var applied = false;
 
-        using var conn = _db.GetConnection();
-        conn.Open();
-
-        try
+        // Do not call DeleteLastAction while this connection is open — a second
+        // connection to the same SQLite file can deadlock under default locking.
+        using (var conn = _db.GetConnection())
         {
+            conn.Open();
+
+            try
+            {
             if (entity == "buy")
             {
                 if (type == "delete")
@@ -318,15 +321,16 @@ public class UndoService
                 }
             }
 
-            if (!applied)
-                return UndoApplyResult.Fail("❌ Nothing to undo for that action.");
+                if (!applied)
+                    return UndoApplyResult.Fail("❌ Nothing to undo for that action.");
+            }
+            catch (Exception)
+            {
+                return UndoApplyResult.Fail("❌ Undo failed.");
+            }
+        }
 
-            DeleteLastAction(userId);
-            return UndoApplyResult.Ok();
-        }
-        catch (Exception)
-        {
-            return UndoApplyResult.Fail("❌ Undo failed.");
-        }
+        DeleteLastAction(userId);
+        return UndoApplyResult.Ok();
     }
 }

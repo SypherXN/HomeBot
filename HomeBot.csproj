@@ -19,4 +19,8 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="HomeBot.Tests/**" />
+  </ItemGroup>
+
 </Project>

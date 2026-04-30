@@ -7,14 +7,37 @@ public class DatabaseService
 {
     private readonly string _connectionString;
 
+    /// <summary>
+    /// Opens or creates the default <c>homebot.db</c>, or uses <c>HOMEBOT_DATABASE_PATH</c> when set.
+    /// </summary>
     public DatabaseService()
+        : this(null)
     {
-        var path = Environment.GetEnvironmentVariable("HOMEBOT_DATABASE_PATH");
-        _connectionString = string.IsNullOrWhiteSpace(path)
-            ? "Data Source=homebot.db"
-            : path.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase)
-                ? path
-                : $"Data Source={path}";
+    }
+
+    /// <summary>
+    /// Uses an explicit SQLite file path or connection string (integration tests; avoids env var races when tests run in parallel).
+    /// Pass a full file path, or a string already starting with <c>Data Source=</c>.
+    /// </summary>
+    /// <param name="sqliteFileOrConnectionString">When null, same behavior as the parameterless constructor.</param>
+    public DatabaseService(string? sqliteFileOrConnectionString)
+    {
+        if (!string.IsNullOrWhiteSpace(sqliteFileOrConnectionString))
+        {
+            var raw = sqliteFileOrConnectionString.Trim();
+            _connectionString = raw.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase)
+                ? raw
+                : $"Data Source={raw}";
+        }
+        else
+        {
+            var path = Environment.GetEnvironmentVariable("HOMEBOT_DATABASE_PATH");
+            _connectionString = string.IsNullOrWhiteSpace(path)
+                ? "Data Source=homebot.db"
+                : path.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase)
+                    ? path
+                    : $"Data Source={path}";
+        }
 
         Initialize();
     }

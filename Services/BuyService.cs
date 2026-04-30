@@ -231,26 +231,29 @@ public class BuyService
             WHERE Id = $id";
         getCmd.Parameters.AddWithValue("$id", id);
 
-        using var reader = getCmd.ExecuteReader();
-        if (!reader.Read())
-            return;
-
-        var payload = new BuyUndoModel
+        BuyUndoModel? payload = null;
+        using (var reader = getCmd.ExecuteReader())
         {
-            Name = reader.IsDBNull(0) ? "" : reader.GetString(0),
-            Quantity = reader.IsDBNull(1) ? "1" : reader.GetString(1),
-            Store = reader.IsDBNull(2) ? "" : reader.GetString(2),
-            AssignedTo = reader.IsDBNull(3) ? null : (ulong?)reader.GetInt64(3),
-            Tags = reader.IsDBNull(4) ? "" : reader.GetString(4),
-            Notes = reader.IsDBNull(5) ? "" : reader.GetString(5),
-            CreatedBy = reader.IsDBNull(6) ? null : (ulong?)reader.GetInt64(6),
-            PurchasedBy = reader.IsDBNull(7) ? null : (ulong?)reader.GetInt64(7),
-            Status = reader.IsDBNull(8) ? "active" : reader.GetString(8)
-        };
+            if (!reader.Read())
+                return;
+
+            payload = new BuyUndoModel
+            {
+                Name = reader.IsDBNull(0) ? "" : reader.GetString(0),
+                Quantity = reader.IsDBNull(1) ? "1" : reader.GetString(1),
+                Store = reader.IsDBNull(2) ? "" : reader.GetString(2),
+                AssignedTo = reader.IsDBNull(3) ? null : (ulong?)reader.GetInt64(3),
+                Tags = reader.IsDBNull(4) ? "" : reader.GetString(4),
+                Notes = reader.IsDBNull(5) ? "" : reader.GetString(5),
+                CreatedBy = reader.IsDBNull(6) ? null : (ulong?)reader.GetInt64(6),
+                PurchasedBy = reader.IsDBNull(7) ? null : (ulong?)reader.GetInt64(7),
+                Status = reader.IsDBNull(8) ? "active" : reader.GetString(8)
+            };
+        }
 
         var json = System.Text.Json.JsonSerializer.Serialize(payload);
 
-        // Log action
+        // Log after the reader is disposed so LogAction can open its own connection without SQLite blocking.
         _undo.LogAction(userId, "delete", "buy", id, json);
 
         var cmd = conn.CreateCommand();

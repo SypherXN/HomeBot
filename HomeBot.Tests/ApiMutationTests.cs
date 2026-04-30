@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -11,14 +12,15 @@ namespace HomeBot.Tests;
 /// <summary>
 /// End-to-end HTTP tests against the real minimal API + SQLite (isolated temp file per run).
 /// </summary>
-public sealed class ApiMutationTests : IAsyncDisposable
+public sealed class ApiMutationTests : IDisposable
 {
     private readonly string _dbPath;
     private readonly ServiceProvider _services;
     private readonly WebApplication _app;
     private readonly HttpClient _client;
     private const string TestToken = "integration-test-token";
-    private const ulong Actor = 100000000000000001UL; // safe JSON integer; distinct test actor
+    /// <summary>Stays within JSON safe integer range for <see cref="HttpClientJsonExtensions.PostAsJsonAsync"/>.</summary>
+    private const ulong Actor = 100_001;
 
     public ApiMutationTests()
     {
@@ -26,15 +28,21 @@ public sealed class ApiMutationTests : IAsyncDisposable
         if (File.Exists(_dbPath))
             File.Delete(_dbPath);
 
-        Environment.SetEnvironmentVariable("HOMEBOT_DATABASE_PATH", _dbPath);
-
         var sc = new ServiceCollection();
-        sc.AddHomeBotDataServices();
+        sc.AddSingleton(_ => new DatabaseService(_dbPath));
+        sc.AddSingleton<ConfigService>();
+        sc.AddSingleton<ChannelBindingService>();
+        sc.AddSingleton<UndoService>();
+        sc.AddSingleton<LoggingService>();
+        sc.AddSingleton<BuyService>();
+        sc.AddSingleton<WishlistService>();
+        sc.AddSingleton<MoneyService>();
+        sc.AddSingleton<CalendarService>();
         _services = sc.BuildServiceProvider();
 
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
-            EnvironmentName = Environments.Development
+            EnvironmentName = "Development"
         });
 
         HomeBotApiHost.AddApiCors(builder);
@@ -48,13 +56,27 @@ public sealed class ApiMutationTests : IAsyncDisposable
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TestToken);
     }
 
-    public async ValueTask DisposeAsync()
+    public void Dispose()
     {
-        await _app.StopAsync();
-        await _app.DisposeAsync();
-        await _services.DisposeAsync();
+        try
+        {
+            _app.StopAsync().GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // ignore shutdown races
+        }
 
-        Environment.SetEnvironmentVariable("HOMEBOT_DATABASE_PATH", null);
+        try
+        {
+            _app.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // ignore
+        }
+
+        _services.Dispose();
 
         try
         {
