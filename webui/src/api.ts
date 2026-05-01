@@ -227,19 +227,114 @@ export function getWishlistItem(token: string, id: number) {
   return apiJson<unknown>(`/api/wishlist/items/${id}`, { token });
 }
 
+export type MoneyTransactionListItem = {
+  id: number;
+  name: string;
+  amount: number;
+  paidBy: number;
+  paidByMemberLabel: string;
+  owedBy: number;
+  owedByMemberLabel: string;
+  type: string;
+};
+
+export type PagedMoneyTransactions = {
+  items: MoneyTransactionListItem[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+};
+
+/** `user1Id` / `user2Id` may round in JSON for large snowflakes; use `user*MemberLabel` or query strings for exact ids. */
+export type MoneySummary = {
+  user1Id: number;
+  user2Id: number;
+  user1Name: string;
+  user1MemberLabel: string;
+  user2Name: string;
+  user2MemberLabel: string;
+  balance: number;
+};
+
 export function getMoneyTransactions(token: string, page = 0) {
-  return apiJson<unknown>(`/api/money/transactions?page=${page}`, { token });
+  return apiJson<PagedMoneyTransactions>(`/api/money/transactions?page=${page}`, { token });
 }
 
 export function getMoneySummary(token: string, user1: string, user2: string, name1 = "", name2 = "") {
   const q = new URLSearchParams({ user1, user2 });
   if (name1) q.set("name1", name1);
   if (name2) q.set("name2", name2);
-  return apiJson<unknown>(`/api/money/summary?${q.toString()}`, { token });
+  return apiJson<MoneySummary>(`/api/money/summary?${q.toString()}`, { token });
 }
 
-export function getCalendarItems(token: string, page = 0) {
-  return apiJson<unknown>(`/api/calendar/items?page=${page}`, { token });
+/**
+ * One row from `GET /api/calendar/items` (paged) and `/today` / `/upcoming`. `assignedTo` may
+ * round in JSON for large Discord snowflakes — prefer `assignedToMemberLabel` for display.
+ */
+export type CalendarListItem = {
+  id: number;
+  title: string;
+  type: string;
+  dateText: string;
+  allDay: boolean;
+  assignedTo?: number | null;
+  assignedToMemberLabel?: string | null;
+  reminderText: string;
+  recurrenceText: string;
+  hasLink: boolean;
+};
+
+export type PagedCalendarList = {
+  items: CalendarListItem[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+};
+
+/**
+ * One occurrence from `GET /api/calendar/range`. Recurring rows produce one entry per occurrence
+ * sharing the parent `id`; build React keys as `${id}@${instanceStartUtc}` to disambiguate.
+ */
+export type CalendarRangeItem = {
+  id: number;
+  title: string;
+  type: string;
+  allDay: boolean;
+  assignedTo?: number | null;
+  assignedToMemberLabel?: string | null;
+  reminderText: string;
+  recurrenceText: string;
+  recurrence: string;
+  hasLink: boolean;
+  instanceStartUtc: string;
+  instanceEndUtc?: string | null;
+  isRecurringInstance: boolean;
+};
+
+export type CalendarItemDetail = {
+  title: string;
+  description: string;
+  notes: string;
+  link: string;
+  start: string;
+  allDay: boolean;
+  reminder: string;
+};
+
+export type CalendarItemTypeFilter = "task" | "event";
+
+export function getCalendarItems(
+  token: string,
+  page = 0,
+  opts?: { type?: CalendarItemTypeFilter }
+) {
+  const q = new URLSearchParams({ page: String(page) });
+  if (opts?.type) q.set("type", opts.type);
+  return apiJson<PagedCalendarList>(`/api/calendar/items?${q.toString()}`, { token });
 }
 
 export function getCalendar(token: string, page = 0) {
@@ -249,13 +344,29 @@ export function getCalendar(token: string, page = 0) {
 export function getCalendarToday(token: string, page = 0, userFilter?: string) {
   const q = new URLSearchParams({ page: String(page) });
   if (userFilter) q.set("userFilter", userFilter);
-  return apiJson<unknown>(`/api/calendar/today?${q.toString()}`, { token });
+  return apiJson<PagedCalendarList>(`/api/calendar/today?${q.toString()}`, { token });
 }
 
 export function getCalendarUpcoming(token: string, page = 0, userFilter?: string) {
   const q = new URLSearchParams({ page: String(page) });
   if (userFilter) q.set("userFilter", userFilter);
-  return apiJson<unknown>(`/api/calendar/upcoming?${q.toString()}`, { token });
+  return apiJson<PagedCalendarList>(`/api/calendar/upcoming?${q.toString()}`, { token });
+}
+
+/** Fetch events overlapping a local-day window. Server caps the window at 92 days. */
+export function getCalendarRange(
+  token: string,
+  fromYmd: string,
+  toYmd: string,
+  userFilter?: string
+) {
+  const q = new URLSearchParams({ from: fromYmd, to: toYmd });
+  if (userFilter) q.set("userFilter", userFilter);
+  return apiJson<CalendarRangeItem[]>(`/api/calendar/range?${q.toString()}`, { token });
+}
+
+export function getCalendarItemDetail(token: string, id: number) {
+  return apiJson<CalendarItemDetail>(`/api/calendar/items/${id}`, { token });
 }
 
 // ——— Mutations (require bearer token; most need actorUserId query) ———
@@ -394,15 +505,21 @@ export function deleteWishlistCompleted(token: string) {
   return apiJson<unknown>("/api/wishlist/items/completed", { token, method: "DELETE" });
 }
 
+/** Digit-only Discord snowflakes as JSON strings (full 64-bit; avoids JS number rounding). */
+function moneySnowflake(s: string, field: string): string {
+  const t = s.trim();
+  if (!/^\d+$/.test(t) || t === "0") {
+    throw new Error(`${field} must be a non-zero numeric Discord user id.`);
+  }
+  return t;
+}
+
 export function postMoneyExpense(
   token: string,
   body: { name: string; amountInput: string; paidBy: string; owedBy: string }
 ) {
-  const paidBy = jsonUlong(body.paidBy);
-  const owedBy = jsonUlong(body.owedBy);
-  if (paidBy === undefined || owedBy === undefined) {
-    throw new Error("paidBy and owedBy must be non-zero integers (≤ 2^53−1 for this UI).");
-  }
+  const paidBy = moneySnowflake(body.paidBy, "paidBy");
+  const owedBy = moneySnowflake(body.owedBy, "owedBy");
   return apiJson<unknown>("/api/money/expenses", {
     token,
     method: "POST",
@@ -422,11 +539,8 @@ export function postMoneyExpenseSplit(
     notes?: string;
   }
 ) {
-  const paidBy = jsonUlong(body.paidBy);
-  const owedBy = jsonUlong(body.owedBy);
-  if (paidBy === undefined || owedBy === undefined) {
-    throw new Error("paidBy and owedBy must be non-zero integers (≤ 2^53−1 for this UI).");
-  }
+  const paidBy = moneySnowflake(body.paidBy, "paidBy");
+  const owedBy = moneySnowflake(body.owedBy, "owedBy");
   return apiJson<unknown>("/api/money/expenses/split", {
     token,
     method: "POST",
@@ -443,11 +557,8 @@ export function postMoneyExpenseSplit(
 }
 
 export function postMoneyPayment(token: string, body: { amountInput: string; paidBy: string; receivedBy: string }) {
-  const paidBy = jsonUlong(body.paidBy);
-  const receivedBy = jsonUlong(body.receivedBy);
-  if (paidBy === undefined || receivedBy === undefined) {
-    throw new Error("paidBy and receivedBy must be non-zero integers (≤ 2^53−1 for this UI).");
-  }
+  const paidBy = moneySnowflake(body.paidBy, "paidBy");
+  const receivedBy = moneySnowflake(body.receivedBy, "receivedBy");
   return apiJson<unknown>("/api/money/payments", {
     token,
     method: "POST",
@@ -476,6 +587,7 @@ export function postCalendarItem(
     end?: string;
     allDay?: boolean;
     reminder?: string;
+    /** Digit-only Discord snowflake; sent as a JSON string so 64-bit ids round-trip safely. */
     assignedToUserId?: string;
     assignToEveryone?: boolean;
     description?: string;
@@ -496,8 +608,10 @@ export function postCalendarItem(
   if (body.notes != null) payload.notes = body.notes;
   if (body.link != null) payload.link = body.link;
   if (body.recurrence != null) payload.recurrence = body.recurrence;
-  const assignee = jsonUlong(body.assignedToUserId);
-  if (assignee !== undefined) payload.assignedToUserId = assignee;
+  const trimmedAssignee = body.assignedToUserId?.trim();
+  if (trimmedAssignee && /^\d+$/.test(trimmedAssignee) && trimmedAssignee !== "0") {
+    payload.assignedToUserId = trimmedAssignee;
+  }
   return apiJson<unknown>("/api/calendar/items", { token, method: "POST", body: payload });
 }
 
@@ -519,7 +633,12 @@ export function deleteCalendarItem(token: string, actorUserId: string, id: numbe
   return apiJson<unknown>(path, { token, method: "DELETE" });
 }
 
+export type UndoResponse = {
+  undone: boolean;
+  message?: string;
+};
+
 export function postUndo(token: string, actorUserId: string) {
   const path = mergeQuery("/api/undo", { actorUserId });
-  return apiJson<unknown>(path, { token, method: "POST" });
+  return apiJson<UndoResponse>(path, { token, method: "POST" });
 }

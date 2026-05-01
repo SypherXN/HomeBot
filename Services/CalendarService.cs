@@ -95,7 +95,9 @@ public class CalendarService
     /// <summary>
     /// Returns paginated calendar data for API and UI adapters.
     /// </summary>
-    public PagedResult<CalendarListItemModel> GetList(int page = 0)
+    /// <param name="page">Zero-based page index.</param>
+    /// <param name="typeFilter">Optional <c>"task"</c> or <c>"event"</c> filter (other values ignored).</param>
+    public PagedResult<CalendarListItemModel> GetList(int page = 0, string? typeFilter = null)
     {
         using var conn = _db.GetConnection();
         conn.Open();
@@ -104,7 +106,8 @@ public class CalendarService
         var tz = GetTimezone();
 
         var cmd = conn.CreateCommand();
-        cmd.CommandText = @"
+        var whereType = typeFilter is "task" or "event" ? " AND Type = $type" : "";
+        cmd.CommandText = $@"
         SELECT 
             Id,
             Title,
@@ -116,13 +119,16 @@ public class CalendarService
             ReminderOffset,
             Recurrence
         FROM CalendarItems
-        WHERE Status = 'active'
+        WHERE Status = 'active'{whereType}
         ORDER BY 
             CASE 
                 WHEN StartDateTime IS NULL OR StartDateTime = '' THEN 1 
                 ELSE 0 
             END,
             StartDateTime ASC";
+
+        if (whereType.Length > 0)
+            cmd.Parameters.AddWithValue("$type", typeFilter!);
 
         using var reader = cmd.ExecuteReader();
         var allItems = new List<CalendarListItemModel>();
@@ -525,6 +531,193 @@ public class CalendarService
             HasNext = sorted.Count > (page + 1) * pageSize,
             HasPrev = page > 0
         };
+    }
+
+    /// <summary>
+    /// Maximum window size accepted by <see cref="GetRange"/> to keep response sizes bounded.
+    /// </summary>
+    public const int RangeMaxDays = 92;
+
+    /// <summary>
+    /// Returns events overlapping the local-day window <c>[fromLocal, toLocal)</c>, expanding
+    /// daily/weekly recurring rows into one entry per occurrence. Tasks (rows with empty
+    /// <c>StartDateTime</c>) are excluded; fetch them via <see cref="GetList"/> with a
+    /// <c>typeFilter</c> instead.
+    /// </summary>
+    /// <param name="fromLocal">Inclusive start of the window (local date midnight).</param>
+    /// <param name="toLocal">Exclusive end of the window (local date midnight).</param>
+    /// <param name="userFilter">Optional Discord user id; rows assigned to this user or to everyone (0) match.</param>
+    public List<CalendarRangeItemModel> GetRange(DateTime fromLocal, DateTime toLocal, ulong? userFilter = null)
+    {
+        var output = new List<CalendarRangeItemModel>();
+        if (toLocal <= fromLocal)
+            return output;
+        if ((toLocal - fromLocal).TotalDays > RangeMaxDays)
+            return output;
+
+        using var conn = _db.GetConnection();
+        conn.Open();
+        var tz = GetTimezone();
+
+        var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT Id, Title, Type, StartDateTime, EndDateTime, AllDay, AssignedTo, Link, ReminderOffset, Recurrence
+            FROM CalendarItems
+            WHERE Status = 'active' AND StartDateTime IS NOT NULL AND StartDateTime != ''";
+
+        using var reader = cmd.ExecuteReader();
+
+        while (reader.Read())
+        {
+            var startRaw = reader.GetString(3);
+            if (!DateTime.TryParse(startRaw, out var startUtc))
+                continue;
+
+            DateTime startLocal;
+            try
+            {
+                startLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(startUtc, DateTimeKind.Utc), tz);
+            }
+            catch
+            {
+                continue;
+            }
+
+            TimeSpan? duration = null;
+            var endRaw = reader.IsDBNull(4) ? "" : reader.GetString(4);
+            if (!string.IsNullOrWhiteSpace(endRaw) && DateTime.TryParse(endRaw, out var endUtc))
+            {
+                try
+                {
+                    var endLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(endUtc, DateTimeKind.Utc), tz);
+                    if (endLocal > startLocal)
+                        duration = endLocal - startLocal;
+                }
+                catch
+                {
+                    // ignore unparseable end; treat as no end
+                }
+            }
+
+            var assigned = reader.IsDBNull(6) ? null : (ulong?)reader.GetInt64(6);
+
+            if (userFilter.HasValue && assigned.HasValue && assigned.Value != 0 && assigned.Value != userFilter.Value)
+                continue;
+
+            var meta = new RangeRowMeta
+            {
+                Id = reader.GetInt32(0),
+                Title = reader.GetString(1),
+                Type = reader.GetString(2),
+                AllDay = reader.GetInt32(5) == 1,
+                Assigned = assigned,
+                Link = reader.IsDBNull(7) ? "" : reader.GetString(7),
+                ReminderRaw = reader.IsDBNull(8) ? "" : reader.GetString(8),
+                Recurrence = reader.IsDBNull(9) ? "" : reader.GetString(9),
+            };
+
+            switch (meta.Recurrence)
+            {
+                case "daily":
+                    {
+                        var first = startLocal.Date > fromLocal.Date ? startLocal.Date : fromLocal.Date;
+                        for (var d = first; d < toLocal; d = d.AddDays(1))
+                            EmitInstance(output, meta, d.Add(startLocal.TimeOfDay), duration, tz, isRecurring: true);
+                        break;
+                    }
+                case "weekly":
+                    {
+                        var first = startLocal.Date > fromLocal.Date ? startLocal.Date : fromLocal.Date;
+                        var dayDiff = ((int)startLocal.DayOfWeek - (int)first.DayOfWeek + 7) % 7;
+                        first = first.AddDays(dayDiff);
+                        for (var d = first; d < toLocal; d = d.AddDays(7))
+                            EmitInstance(output, meta, d.Add(startLocal.TimeOfDay), duration, tz, isRecurring: true);
+                        break;
+                    }
+                default:
+                    {
+                        var occurrenceEnd = duration.HasValue ? startLocal + duration.Value : startLocal;
+                        if (startLocal < toLocal && occurrenceEnd >= fromLocal)
+                            EmitInstance(output, meta, startLocal, duration, tz, isRecurring: false);
+                        break;
+                    }
+            }
+        }
+
+        output.Sort((a, b) => string.CompareOrdinal(a.InstanceStartUtc, b.InstanceStartUtc));
+        return output;
+    }
+
+    private struct RangeRowMeta
+    {
+        public int Id;
+        public string Title;
+        public string Type;
+        public bool AllDay;
+        public ulong? Assigned;
+        public string Link;
+        public string ReminderRaw;
+        public string Recurrence;
+    }
+
+    private static void EmitInstance(
+        List<CalendarRangeItemModel> output,
+        RangeRowMeta meta,
+        DateTime instanceLocal,
+        TimeSpan? duration,
+        TimeZoneInfo tz,
+        bool isRecurring)
+    {
+        DateTime instanceUtc;
+        try
+        {
+            instanceUtc = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(instanceLocal, DateTimeKind.Unspecified), tz);
+        }
+        catch
+        {
+            // Local time is invalid (DST spring-forward gap) — skip this occurrence.
+            return;
+        }
+
+        string? endIso = null;
+        if (duration.HasValue)
+        {
+            try
+            {
+                var endLocal = instanceLocal + duration.Value;
+                var endUtc = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(endLocal, DateTimeKind.Unspecified), tz);
+                endIso = endUtc.ToString("yyyy-MM-ddTHH:mm:ssZ");
+            }
+            catch
+            {
+                endIso = null;
+            }
+        }
+
+        var recurrenceText = meta.Recurrence switch
+        {
+            "daily" => "🔁 daily",
+            "weekly" => "🔁 weekly",
+            "" => "",
+            _ => $"🔁 {meta.Recurrence}",
+        };
+
+        output.Add(new CalendarRangeItemModel
+        {
+            Id = meta.Id,
+            Title = meta.Title,
+            Type = meta.Type,
+            AllDay = meta.AllDay,
+            AssignedTo = meta.Assigned,
+            AssignedToMemberLabel = HouseholdIdentity.MemberLabel(meta.Assigned),
+            HasLink = !string.IsNullOrWhiteSpace(meta.Link),
+            ReminderText = ReminderFormatter.Format(meta.ReminderRaw),
+            RecurrenceText = recurrenceText,
+            Recurrence = meta.Recurrence,
+            InstanceStartUtc = instanceUtc.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+            InstanceEndUtc = endIso,
+            IsRecurringInstance = isRecurring,
+        });
     }
 
     private int GetPageSize(SqliteConnection conn)

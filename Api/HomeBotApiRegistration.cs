@@ -172,7 +172,8 @@ public static class HomeBotApiRegistration
             if (int.TryParse(request.Query["page"], out var pageParsed) && pageParsed >= 0)
                 page = pageParsed;
 
-            return Results.Ok(calendarService.GetList(page));
+            var typeFilter = request.Query["type"].ToString();
+            return Results.Ok(calendarService.GetList(page, string.IsNullOrWhiteSpace(typeFilter) ? null : typeFilter));
         });
 
         app.MapGet("/api/calendar/items", (HttpRequest request) =>
@@ -182,7 +183,8 @@ public static class HomeBotApiRegistration
             if (int.TryParse(request.Query["page"], out var pageParsed) && pageParsed >= 0)
                 page = pageParsed;
 
-            return Results.Ok(calendarService.GetList(page));
+            var typeFilter = request.Query["type"].ToString();
+            return Results.Ok(calendarService.GetList(page, string.IsNullOrWhiteSpace(typeFilter) ? null : typeFilter));
         });
 
         app.MapGet("/api/calendar/{id:int}", (int id) =>
@@ -225,6 +227,46 @@ public static class HomeBotApiRegistration
                 page = pageParsed;
 
             return Results.Ok(calendarService.GetUpcoming(userFilter, page));
+        });
+
+        app.MapGet("/api/calendar/range", (HttpRequest request) =>
+        {
+            var calendarService = root.GetRequiredService<CalendarService>();
+
+            var fromStr = request.Query["from"].ToString();
+            var toStr = request.Query["to"].ToString();
+
+            if (!DateTime.TryParseExact(
+                    fromStr,
+                    "yyyy-MM-dd",
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None,
+                    out var fromLocal))
+            {
+                return ApiResults.BadRequest("Query 'from' must be YYYY-MM-DD.", "invalid_from");
+            }
+
+            if (!DateTime.TryParseExact(
+                    toStr,
+                    "yyyy-MM-dd",
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None,
+                    out var toLocal))
+            {
+                return ApiResults.BadRequest("Query 'to' must be YYYY-MM-DD.", "invalid_to");
+            }
+
+            if (toLocal <= fromLocal)
+                return ApiResults.BadRequest("Query 'to' must be after 'from'.", "invalid_range");
+
+            if ((toLocal - fromLocal).TotalDays > CalendarService.RangeMaxDays)
+                return ApiResults.BadRequest($"Range too wide (max {CalendarService.RangeMaxDays} days).", "range_too_wide");
+
+            ulong? userFilter = null;
+            if (ulong.TryParse(request.Query["userFilter"], out var userFilterParsed))
+                userFilter = userFilterParsed;
+
+            return Results.Ok(calendarService.GetRange(fromLocal, toLocal, userFilter));
         });
 
         app.MapGet("/api/discord/guild/members", async () =>

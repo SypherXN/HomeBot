@@ -11,6 +11,7 @@ import {
   getWishlistTagCatalog,
   postWishlistItem,
   postWishlistItemComplete,
+  postUndo,
   putWishlistTagCatalog,
   type PagedWishlistList,
   type WishlistListItem,
@@ -68,6 +69,7 @@ export default function WishlistPage() {
 
   const [actionBusyId, setActionBusyId] = useState<number | null>(null);
   const [clearBusy, setClearBusy] = useState(false);
+  const [undoBusy, setUndoBusy] = useState(false);
   const [banner, setBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
   const ownerPickerOptions = useMemo(() => {
@@ -286,6 +288,28 @@ export default function WishlistPage() {
       showBanner("err", err instanceof Error ? err.message : String(err));
     } finally {
       setActionBusyId(null);
+    }
+  }
+
+  async function handleUndo() {
+    if (!canActor) {
+      showBanner("err", "Set actorUserId in Settings to use undo.");
+      return;
+    }
+    setUndoBusy(true);
+    try {
+      const r = await postUndo(tok, actor);
+      if (!r.undone) {
+        showBanner("err", (r.message && r.message.trim()) || "Nothing to undo for this actor.");
+        return;
+      }
+      showBanner("ok", "Last action was undone.");
+      await refreshDbOwners();
+      await loadList();
+    } catch (err) {
+      showBanner("err", err instanceof Error ? err.message : String(err));
+    } finally {
+      setUndoBusy(false);
     }
   }
 
@@ -831,6 +855,20 @@ export default function WishlistPage() {
                 className="min-h-[44px] min-w-[100px] rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Next
+              </button>
+            </div>
+            <div className="flex flex-col gap-2 border-t border-slate-800/80 pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-center text-xs text-slate-500 sm:text-left sm:max-w-md">
+                Undo reverts the latest logged action for your actor (wishlist, buy, money, calendar, etc.), not only
+                this page.
+              </p>
+              <button
+                type="button"
+                disabled={!canActor || undoBusy || listLoading}
+                onClick={() => void handleUndo()}
+                className="min-h-[44px] shrink-0 rounded-lg border border-amber-700/80 bg-amber-950/40 px-4 py-2.5 text-sm font-medium text-amber-100 hover:bg-amber-950/70 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {undoBusy ? "Undoing…" : "Undo last action"}
               </button>
             </div>
           </nav>
