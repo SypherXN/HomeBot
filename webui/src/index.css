@@ -1,166 +1,62 @@
-:root {
-  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  color: #e5e7eb;
-  background-color: #111827;
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply m-0 min-h-screen bg-slate-950 text-slate-100 antialiased;
+  }
+  #root {
+    @apply min-h-screen;
+  }
 }
 
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-}
-
-#root {
-  min-height: 100vh;
-}
-
-.app {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 24px;
-}
-
-h1 {
-  margin: 0 0 8px;
-  font-size: 28px;
-}
-
-.sub {
-  margin: 0 0 20px;
-  color: #9ca3af;
-}
-
-.panel,
-.controls {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-label {
-  min-width: 90px;
-  color: #d1d5db;
-}
-
-input {
-  border: 1px solid #374151;
-  background: #1f2937;
-  color: #f9fafb;
-  border-radius: 8px;
-  padding: 8px 10px;
-}
-
-.tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-button {
-  border: 1px solid #4b5563;
-  background: #1f2937;
-  color: #f3f4f6;
-  border-radius: 8px;
-  padding: 8px 12px;
-  cursor: pointer;
-}
-
-button.active {
-  border-color: #2563eb;
-  background: #1d4ed8;
-}
-
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.warn {
-  color: #fca5a5;
-  margin-bottom: 8px;
-}
-
-pre {
-  margin: 0;
-  border: 1px solid #374151;
-  border-radius: 10px;
-  background: #0b1220;
-  padding: 14px;
-  max-height: min(70vh, 640px);
-  overflow: auto;
-  white-space: pre-wrap;
-}
-
-.stack {
-  flex-direction: column;
-  align-items: stretch;
-}
-
-.stack label {
-  min-width: 0;
-}
-
-.hint {
-  margin: 0;
-  font-size: 13px;
-  color: #9ca3af;
-  line-height: 1.4;
-}
-
-.section {
-  margin-bottom: 20px;
-}
-
-.section h2 {
-  margin: 16px 0 8px;
-  font-size: 16px;
-  font-weight: 600;
-  color: #e5e7eb;
-}
-
-.section h2:first-child {
-  margin-top: 0;
-}
-
-.grid2 {
-  display: grid;
-  grid-template-columns: minmax(100px, 140px) 1fr;
-  gap: 8px 12px;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.btnRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-button.primary {
-  border-color: #2563eb;
-  background: #1d4ed8;
-}
-
-label.check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-label.check input {
-  width: auto;
+/* Legacy console layout — migrated incrementally to Tailwind utilities */
+@layer components {
+  .hb-grid2 {
+    @apply grid items-center gap-x-3 gap-y-2;
+    grid-template-columns: minmax(100px, 140px) 1fr;
+    @apply mb-2.5;
+  }
+  .hb-row {
+    @apply mb-2.5 flex flex-wrap items-center gap-2.5;
+  }
+  .hb-btn-row {
+    @apply mb-2.5 flex flex-wrap gap-2;
+  }
+  .hb-section h2 {
+    @apply mt-4 mb-2 text-base font-semibold text-slate-200 first:mt-0;
+  }
+  .hb-field {
+    @apply rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500;
+  }
+  .hb-btn {
+    @apply cursor-pointer rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .hb-btn-primary {
+    @apply border-blue-600 bg-blue-700 hover:bg-blue-600;
+  }
+  .hb-hint {
+    @apply text-sm leading-snug text-slate-400;
+  }
+  .hb-warn {
+    @apply mb-2 text-red-300;
+  }
+  .hb-json {
+    @apply mt-4 max-h-[min(70vh,40rem)] overflow-auto whitespace-pre-wrap rounded-lg border border-slate-700 bg-slate-950 p-4 text-sm text-slate-200;
+  }
+  .hb-workspace button {
+    @apply cursor-pointer rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .hb-workspace button.hb-btn-primary {
+    @apply border-blue-600 bg-blue-700 hover:bg-blue-600;
+  }
+  .hb-workspace .hb-grid2 label,
+  .hb-workspace .hb-row > label {
+    @apply text-slate-300;
+  }
+  .hb-workspace .hb-section input:not([type="checkbox"]),
+  .hb-workspace .hb-section select,
+  .hb-workspace .hb-section textarea {
+    @apply rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500;
+    @apply max-w-xl;
+  }
 }

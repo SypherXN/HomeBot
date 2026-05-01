@@ -1,6 +1,18 @@
 /// <summary>
 /// JSON bodies for HomeBot REST API (Phase 2). Use query <c>actorUserId</c> (non-zero Discord snowflake) where the API docs require it.
 /// </summary>
+/// <summary>PUT /api/buy/tags — replaces the allowed buy-tag vocabulary (comma list in Settings).</summary>
+public sealed class BuyTagCatalogPutRequest
+{
+    public List<string>? Tags { get; set; }
+}
+
+/// <summary>PUT /api/wishlist/tags — replaces allowed wishlist tag tokens.</summary>
+public sealed class WishlistTagCatalogPutRequest
+{
+    public List<string>? Tags { get; set; }
+}
+
 public sealed class BuyItemCreateRequest
 {
     public string Name { get; set; } = "";

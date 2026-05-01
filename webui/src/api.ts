@@ -77,9 +77,78 @@ export function getMeta() {
   return apiJson<unknown>("/api/meta");
 }
 
-/** List buy items (REST path). */
-export function getBuyItems(token: string, page = 0) {
-  return apiJson<unknown>(`/api/buy/items?page=${page}`, { token });
+export type DiscordGuildMember = {
+  userId: string;
+  displayName: string;
+  username: string;
+};
+
+export type DiscordGuildMembersResponse = {
+  available: boolean;
+  reason: string | null;
+  guildId: string | null;
+  members: DiscordGuildMember[];
+};
+
+/** Guild members for the configured DISCORD_GUILD_ID (requires Discord gateway connected). */
+export function getDiscordGuildMembers(token: string, signal?: AbortSignal) {
+  return apiJson<DiscordGuildMembersResponse>("/api/discord/guild/members", { token, signal });
+}
+
+/** One active buy row from GET /api/buy/items (camelCase from ASP.NET JSON). */
+export type BuyListItem = {
+  id: number;
+  name: string;
+  quantity: string;
+  store: string;
+  assignedTo?: number | null;
+  assignedToMemberLabel?: string | null;
+  tags: string[];
+  notes: string;
+  purchasedBy?: number | null;
+  purchasedByMemberLabel?: string | null;
+};
+
+export type PagedBuyList = {
+  items: BuyListItem[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+};
+
+export type BuyListSort = "id" | "name" | "store" | "assigned" | "created" | "tags";
+
+export type BuyTagCatalogResponse = {
+  tags: string[];
+  catalogEnforced: boolean;
+};
+
+/** Allowed buy tags (empty = free-form tags still accepted on writes). */
+export function getBuyTagCatalog(token: string) {
+  return apiJson<BuyTagCatalogResponse>("/api/buy/tags", { token });
+}
+
+/** Replace allowed buy tags (letters, digits, hyphen, underscore; max 48 tags). */
+export function putBuyTagCatalog(token: string, tags: string[]) {
+  return apiJson<{ ok: boolean; tags: string[] }>("/api/buy/tags", {
+    token,
+    method: "PUT",
+    body: { tags },
+  });
+}
+
+/** Active items only (`Status = active`); paginated by server page size. */
+export function getBuyItems(
+  token: string,
+  page = 0,
+  opts?: { tag?: string; sort?: BuyListSort }
+) {
+  const q = new URLSearchParams({ page: String(page) });
+  if (opts?.tag) q.set("tag", opts.tag);
+  if (opts?.sort && opts.sort !== "id") q.set("sort", opts.sort);
+  return apiJson<PagedBuyList>(`/api/buy/items?${q.toString()}`, { token });
 }
 
 /** @deprecated alias — same as {@link getBuyItems} */
@@ -87,8 +156,67 @@ export function getBuy(token: string, page = 0) {
   return getBuyItems(token, page);
 }
 
-export function getWishlistItems(token: string, page = 0) {
-  return apiJson<unknown>(`/api/wishlist/items?page=${page}`, { token });
+export type WishlistListItem = {
+  id: number;
+  name: string;
+  owner: number;
+  ownerMemberLabel: string;
+  price: string;
+  link: string;
+  notes: string;
+  priority: string;
+  tags: string[];
+  purchasedBy?: number | null;
+  purchasedByMemberLabel?: string | null;
+};
+
+export type PagedWishlistList = {
+  items: WishlistListItem[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+};
+
+export type WishlistListSort = "id" | "name" | "owner" | "tags" | "priority" | "price";
+
+export type WishlistTagCatalogResponse = {
+  tags: string[];
+  catalogEnforced: boolean;
+};
+
+export type WishlistOwnerRow = {
+  userId: string;
+  label: string;
+};
+
+export function getWishlistTagCatalog(token: string) {
+  return apiJson<WishlistTagCatalogResponse>("/api/wishlist/tags", { token });
+}
+
+export function putWishlistTagCatalog(token: string, tags: string[]) {
+  return apiJson<{ ok: boolean; tags: string[] }>("/api/wishlist/tags", {
+    token,
+    method: "PUT",
+    body: { tags },
+  });
+}
+
+export function getWishlistOwners(token: string) {
+  return apiJson<{ owners: WishlistOwnerRow[] }>("/api/wishlist/owners", { token });
+}
+
+export function getWishlistItems(
+  token: string,
+  page = 0,
+  opts?: { owner?: string; tag?: string; sort?: WishlistListSort }
+) {
+  const q = new URLSearchParams({ page: String(page) });
+  if (opts?.owner) q.set("owner", opts.owner);
+  if (opts?.tag) q.set("tag", opts.tag);
+  if (opts?.sort && opts.sort !== "id") q.set("sort", opts.sort);
+  return apiJson<PagedWishlistList>(`/api/wishlist/items?${q.toString()}`, { token });
 }
 
 export function getWishlist(token: string, page = 0) {

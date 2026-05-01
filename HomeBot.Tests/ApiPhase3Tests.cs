@@ -46,6 +46,7 @@ internal sealed class ApiTestHarness : IAsyncDisposable
         sc.AddSingleton<MoneyService>();
         sc.AddSingleton<CalendarService>();
         sc.AddSingleton<DiscordSocketHolder>();
+        sc.AddSingleton<DiscordGuildDirectoryService>();
         sc.AddSingleton<IDiscordChannelNotifier, DiscordChannelNotifier>();
         var services = sc.BuildServiceProvider();
 

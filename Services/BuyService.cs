@@ -6,13 +6,19 @@ using Microsoft.Data.Sqlite;
 /// </summary>
 public class BuyService
 {
+    private const string BuyTagsCatalogKey = "buy_allowed_tags";
+    private const int MaxCatalogTags = 48;
+    private const int MaxTagTokenLength = 48;
+
     private readonly DatabaseService _db;
     private readonly UndoService _undo;
+    private readonly ConfigService _config;
 
-    public BuyService(DatabaseService db, UndoService undo)
+    public BuyService(DatabaseService db, UndoService undo, ConfigService config)
     {
         _db = db;
         _undo = undo;
+        _config = config;
     }
 
     /// <summary>
@@ -32,12 +38,7 @@ public class BuyService
 
         var finalQuantity = string.IsNullOrWhiteSpace(quantity) ? "1" : quantity;
 
-        var normalizedTags = string.Join(",",
-            tags.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(t => t.Trim().ToLower().Replace("#", ""))
-                .Where(t => !string.IsNullOrWhiteSpace(t))
-                .Distinct()
-        );
+        var normalizedTags = NormalizeTagsForPersistence(tags);
 
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
@@ -122,18 +123,27 @@ public class BuyService
             cmd.Parameters.AddWithValue("$store", $"%{store}%");
         }
 
+        var catalog = GetBuyTagCatalog();
         if (!string.IsNullOrWhiteSpace(tag))
         {
-            var cleanTag = tag.Replace("#", "").ToLower();
-            conditions.Add("(',' || Tags || ',') LIKE $tag");
-            cmd.Parameters.AddWithValue("$tag", $"%,{cleanTag},%");
+            var cleanTag = tag.Replace("#", "", StringComparison.Ordinal).Trim().ToLowerInvariant();
+            if (catalog.Count == 0 ||
+                catalog.Any(c => string.Equals(c, cleanTag, StringComparison.OrdinalIgnoreCase)))
+            {
+                conditions.Add("(',' || Tags || ',') LIKE $tag");
+                cmd.Parameters.AddWithValue("$tag", $"%,{cleanTag},%");
+            }
         }
 
-        var orderBy = sort switch
+        var sortKey = string.IsNullOrWhiteSpace(sort) ? "" : sort.Trim().ToLowerInvariant();
+        var orderBy = sortKey switch
         {
+            "id" => "Id",
             "store" => "Store",
             "assigned" => "AssignedTo",
             "created" => "CreatedAt",
+            "name" => "Name",
+            "tags" => "Tags",
             _ => "Id"
         };
 
@@ -320,11 +330,7 @@ public class BuyService
 
         if (!string.IsNullOrWhiteSpace(tags))
         {
-            var normalizedTags = string.Join(",",
-                tags.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                    .Select(t => t.Trim().ToLower().Replace("#", ""))
-                    .Where(t => !string.IsNullOrWhiteSpace(t))
-            );
+            var normalizedTags = NormalizeTagsForPersistence(tags);
 
             updates.Add("Tags = $tags");
             cmd.Parameters.AddWithValue("$tags", normalizedTags);
@@ -348,6 +354,68 @@ public class BuyService
         cmd.ExecuteNonQuery();
 
         return true;
+    }
+
+    /// <summary>
+    /// Allowed buy tags for the household (stored as CSV in Settings). When empty, any normalized tag is accepted.
+    /// </summary>
+    public IReadOnlyList<string> GetBuyTagCatalog()
+    {
+        var raw = _config.Get(BuyTagsCatalogKey);
+        if (string.IsNullOrWhiteSpace(raw))
+            return Array.Empty<string>();
+
+        return raw
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(t => t.Trim().ToLowerInvariant().Replace("#", "", StringComparison.Ordinal))
+            .Where(t => t.Length > 0 && t.Length <= MaxTagTokenLength)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(t => t, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Replaces the buy tag catalog (lowercase tokens, letters/digits/hyphen/underscore only).
+    /// </summary>
+    public void SetBuyTagCatalog(IReadOnlyList<string> tags)
+    {
+        var normalized = new List<string>();
+        foreach (var t in tags)
+        {
+            var s = t.Trim().ToLowerInvariant().Replace("#", "", StringComparison.Ordinal);
+            if (s.Length == 0 || s.Length > MaxTagTokenLength)
+                continue;
+            if (!s.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_'))
+                continue;
+            if (!normalized.Contains(s, StringComparer.Ordinal))
+                normalized.Add(s);
+            if (normalized.Count >= MaxCatalogTags)
+                break;
+        }
+
+        normalized.Sort(StringComparer.Ordinal);
+        var value = string.Join(",", normalized);
+        _config.Set(BuyTagsCatalogKey, value);
+    }
+
+    /// <summary>
+    /// When the catalog is non-empty, only those tags are kept. Otherwise all normalized tokens are kept.
+    /// </summary>
+    private string NormalizeTagsForPersistence(string tags)
+    {
+        var parts = tags
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(t => t.Trim().ToLowerInvariant().Replace("#", "", StringComparison.Ordinal))
+            .Where(t => !string.IsNullOrWhiteSpace(t) && t.Length <= MaxTagTokenLength)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        var catalog = GetBuyTagCatalog();
+        if (catalog.Count == 0)
+            return string.Join(",", parts);
+
+        var allowed = new HashSet<string>(catalog, StringComparer.Ordinal);
+        return string.Join(",", parts.Where(p => allowed.Contains(p)));
     }
 
     private static string FormatDiscordRow(BuyListItemModel item)

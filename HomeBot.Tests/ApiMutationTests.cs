@@ -39,6 +39,7 @@ public sealed class ApiMutationTests : IDisposable
         sc.AddSingleton<MoneyService>();
         sc.AddSingleton<CalendarService>();
         sc.AddSingleton<DiscordSocketHolder>();
+        sc.AddSingleton<DiscordGuildDirectoryService>();
         sc.AddSingleton<IDiscordChannelNotifier, DiscordChannelNotifier>();
         _services = sc.BuildServiceProvider();
 
@@ -109,6 +110,44 @@ public sealed class ApiMutationTests : IDisposable
         var naked = _app.GetTestClient();
         var r = await naked.GetAsync("/api/buy/items");
         Assert.Equal(HttpStatusCode.Unauthorized, r.StatusCode);
+    }
+
+    [Fact]
+    public async Task Discord_guild_members_requires_auth()
+    {
+        var naked = _app.GetTestClient();
+        var r = await naked.GetAsync("/api/discord/guild/members");
+        Assert.Equal(HttpStatusCode.Unauthorized, r.StatusCode);
+    }
+
+    [Fact]
+    public async Task Discord_guild_members_unavailable_without_live_socket()
+    {
+        var doc = await _client.GetFromJsonAsync<JsonElement>("/api/discord/guild/members");
+        Assert.False(doc.GetProperty("available").GetBoolean());
+        Assert.Equal(JsonValueKind.Array, doc.GetProperty("members").ValueKind);
+        Assert.Equal(0, doc.GetProperty("members").GetArrayLength());
+        Assert.True(doc.TryGetProperty("reason", out var reason));
+        Assert.Equal(JsonValueKind.String, reason.ValueKind);
+    }
+
+    [Fact]
+    public async Task Buy_tags_catalog_get_and_put()
+    {
+        var tags = await _client.GetFromJsonAsync<JsonElement>("/api/buy/tags");
+        Assert.True(tags.TryGetProperty("tags", out var arr));
+        Assert.Equal(JsonValueKind.Array, arr.ValueKind);
+        Assert.False(tags.GetProperty("catalogEnforced").GetBoolean());
+
+        var put = await _client.PutAsJsonAsync("/api/buy/tags", new { tags = new[] { "alpha", "beta" } });
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+        var body = await put.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.GetProperty("ok").GetBoolean());
+        var saved = body.GetProperty("tags");
+        Assert.Equal(2, saved.GetArrayLength());
+
+        var tags2 = await _client.GetFromJsonAsync<JsonElement>("/api/buy/tags");
+        Assert.True(tags2.GetProperty("catalogEnforced").GetBoolean());
     }
 
     [Fact]

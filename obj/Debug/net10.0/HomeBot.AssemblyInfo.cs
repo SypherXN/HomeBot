@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("HomeBot")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+235e81fc254b0d52cbf1c5d3bf537430093f421d")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+503137c442f2ffa947d086f4b3f0e8c0c2d4c2f4")]
 [assembly: System.Reflection.AssemblyProductAttribute("HomeBot")]
 [assembly: System.Reflection.AssemblyTitleAttribute("HomeBot")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

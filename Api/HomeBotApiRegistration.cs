@@ -66,6 +66,13 @@ public static class HomeBotApiRegistration
             return Results.Ok(buyService.GetBuyList(assignedTo, store, tag, sort, page));
         });
 
+        app.MapGet("/api/buy/tags", () =>
+        {
+            var buy = root.GetRequiredService<BuyService>();
+            var tags = buy.GetBuyTagCatalog();
+            return Results.Ok(new { tags, catalogEnforced = tags.Count > 0 });
+        });
+
         app.MapGet("/api/wishlist", (HttpRequest request) =>
         {
             var wishlistService = root.GetRequiredService<WishlistService>();
@@ -98,6 +105,19 @@ public static class HomeBotApiRegistration
                 page = pageParsed;
 
             return Results.Ok(wishlistService.GetWishlist(owner, tag, sort, page));
+        });
+
+        app.MapGet("/api/wishlist/tags", () =>
+        {
+            var wl = root.GetRequiredService<WishlistService>();
+            var tags = wl.GetWishlistTagCatalog();
+            return Results.Ok(new { tags, catalogEnforced = tags.Count > 0 });
+        });
+
+        app.MapGet("/api/wishlist/owners", () =>
+        {
+            var wl = root.GetRequiredService<WishlistService>();
+            return Results.Ok(new { owners = wl.GetDistinctActiveOwners() });
         });
 
         app.MapGet("/api/wishlist/{id:int}", (int id) =>
@@ -206,6 +226,12 @@ public static class HomeBotApiRegistration
 
             return Results.Ok(calendarService.GetUpcoming(userFilter, page));
         });
+
+        app.MapGet("/api/discord/guild/members", async () =>
+        {
+            var directory = root.GetRequiredService<DiscordGuildDirectoryService>();
+            return Results.Ok(await directory.GetMembersAsync().ConfigureAwait(false));
+        });
     }
 
     private static void MapWrites(WebApplication app, IServiceProvider root)
@@ -313,6 +339,26 @@ public static class HomeBotApiRegistration
 
             root.GetRequiredService<BuyService>().DeleteItem(id, actor);
             return Results.Ok(new { ok = true });
+        });
+
+        w.MapPut("/buy/tags", (BuyTagCatalogPutRequest? body) =>
+        {
+            if (body?.Tags is null)
+                return ApiResults.BadRequest("Request body with 'tags' array is required.", "missing_body");
+
+            var buy = root.GetRequiredService<BuyService>();
+            buy.SetBuyTagCatalog(body.Tags);
+            return Results.Ok(new { ok = true, tags = buy.GetBuyTagCatalog() });
+        });
+
+        w.MapPut("/wishlist/tags", (WishlistTagCatalogPutRequest? body) =>
+        {
+            if (body?.Tags is null)
+                return ApiResults.BadRequest("Request body with 'tags' array is required.", "missing_body");
+
+            var wl = root.GetRequiredService<WishlistService>();
+            wl.SetWishlistTagCatalog(body.Tags);
+            return Results.Ok(new { ok = true, tags = wl.GetWishlistTagCatalog() });
         });
 
         w.MapPost("/wishlist/items", async (HttpRequest http, WishlistItemCreateRequest? body) =>
