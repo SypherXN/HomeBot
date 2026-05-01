@@ -16,6 +16,8 @@ public static class HomeBotDataServices
         services.AddSingleton<WishlistService>();
         services.AddSingleton<MoneyService>();
         services.AddSingleton<CalendarService>();
+        services.AddSingleton<DiscordSocketHolder>();
+        services.AddSingleton<IDiscordChannelNotifier, DiscordChannelNotifier>();
         return services;
     }
 }

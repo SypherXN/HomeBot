@@ -19,7 +19,9 @@ public static class HomeBotApiRegistration
         error = null;
         if (!ulong.TryParse(query["actorUserId"], out actor) || actor == 0)
         {
-            error = Results.BadRequest(new { error = "Non-zero query parameter 'actorUserId' (Discord user id) is required." });
+            error = ApiResults.BadRequest(
+                "Non-zero query parameter 'actorUserId' (Discord user id) is required.",
+                "actor_required");
             return false;
         }
 
@@ -102,14 +104,14 @@ public static class HomeBotApiRegistration
         {
             var wishlistService = root.GetRequiredService<WishlistService>();
             var item = wishlistService.GetItem(id);
-            return item is null ? Results.NotFound(new { error = "Wishlist item not found." }) : Results.Ok(item);
+            return item is null ? ApiResults.NotFound("Wishlist item not found.") : Results.Ok(item);
         });
 
         app.MapGet("/api/wishlist/items/{id:int}", (int id) =>
         {
             var wishlistService = root.GetRequiredService<WishlistService>();
             var item = wishlistService.GetItem(id);
-            return item is null ? Results.NotFound(new { error = "Wishlist item not found." }) : Results.Ok(item);
+            return item is null ? ApiResults.NotFound("Wishlist item not found.") : Results.Ok(item);
         });
 
         app.MapGet("/api/money/transactions", (HttpRequest request) =>
@@ -129,7 +131,7 @@ public static class HomeBotApiRegistration
             if (!ulong.TryParse(request.Query["user1"], out var user1) ||
                 !ulong.TryParse(request.Query["user2"], out var user2))
             {
-                return Results.BadRequest(new { error = "Query params user1 and user2 are required." });
+                return ApiResults.BadRequest("Query params user1 and user2 are required.", "missing_query_params");
             }
 
             var name1 = request.Query["name1"].ToString();
@@ -167,14 +169,14 @@ public static class HomeBotApiRegistration
         {
             var calendarService = root.GetRequiredService<CalendarService>();
             var item = calendarService.GetItem(id);
-            return item is null ? Results.NotFound(new { error = "Calendar item not found." }) : Results.Ok(item);
+            return item is null ? ApiResults.NotFound("Calendar item not found.") : Results.Ok(item);
         });
 
         app.MapGet("/api/calendar/items/{id:int}", (int id) =>
         {
             var calendarService = root.GetRequiredService<CalendarService>();
             var item = calendarService.GetItem(id);
-            return item is null ? Results.NotFound(new { error = "Calendar item not found." }) : Results.Ok(item);
+            return item is null ? ApiResults.NotFound("Calendar item not found.") : Results.Ok(item);
         });
 
         app.MapGet("/api/calendar/today", (HttpRequest request) =>
@@ -208,10 +210,12 @@ public static class HomeBotApiRegistration
 
     private static void MapWrites(WebApplication app, IServiceProvider root)
     {
-        app.MapPost("/api/buy/items", (HttpRequest http, BuyItemCreateRequest? body) =>
+        var w = app.MapGroup("/api").RequireRateLimiting("mutation");
+
+        w.MapPost("/buy/items", async (HttpRequest http, BuyItemCreateRequest? body) =>
         {
             if (body is null)
-                return Results.BadRequest(new { error = "Request body is required." });
+                return ApiResults.BadRequest("Request body is required.", "missing_body");
 
             if (!TryActor(http.Query, out var actor, out var err))
                 return err!;
@@ -225,7 +229,7 @@ public static class HomeBotApiRegistration
                 Validation.ValidateNotes(body.Notes ?? "");
 
             if (errMsg != null)
-                return Results.BadRequest(new { error = errMsg });
+                return ApiResults.Validation(errMsg);
 
             var buy = root.GetRequiredService<BuyService>();
             buy.AddItem(
@@ -237,17 +241,21 @@ public static class HomeBotApiRegistration
                 body.Notes ?? "",
                 actor);
 
+            await root.GetRequiredService<IDiscordChannelNotifier>().NotifyFeatureChannelAsync(
+                "buy",
+                $"🛒 **Buy list** (via web): added **{DiscordNotifyText.SanitizeInline(name)}**");
+
             return Results.Created($"/api/buy/items", new { ok = true });
         });
 
-        app.MapPut("/api/buy/items/{id:int}", (int id, BuyItemUpdateRequest? body) =>
+        w.MapPut("/buy/items/{id:int}", (int id, BuyItemUpdateRequest? body) =>
         {
             if (body is null)
-                return Results.BadRequest(new { error = "Request body is required." });
+                return ApiResults.BadRequest("Request body is required.", "missing_body");
 
             var idErr = Validation.ValidateId(id);
             if (idErr != null)
-                return Results.BadRequest(new { error = idErr });
+                return ApiResults.Validation(idErr);
 
             var errMsg =
                 (string.IsNullOrWhiteSpace(body.Name) ? null : Validation.ValidateName(body.Name)) ??
@@ -257,7 +265,7 @@ public static class HomeBotApiRegistration
                 (string.IsNullOrWhiteSpace(body.Notes) ? null : Validation.ValidateNotes(body.Notes));
 
             if (errMsg != null)
-                return Results.BadRequest(new { error = errMsg });
+                return ApiResults.Validation(errMsg);
 
             var buy = root.GetRequiredService<BuyService>();
             if (!buy.EditItem(
@@ -269,48 +277,48 @@ public static class HomeBotApiRegistration
                     body.Tags ?? "",
                     body.Notes ?? ""))
             {
-                return Results.BadRequest(new { error = "Nothing to update." });
+                return ApiResults.BadRequest("Nothing to update.", "no_changes");
             }
 
             return Results.Ok(new { ok = true });
         });
 
-        app.MapDelete("/api/buy/items/completed", () =>
+        w.MapDelete("/buy/items/completed", () =>
         {
             root.GetRequiredService<BuyService>().ClearCompleted();
             return Results.Ok(new { ok = true });
         });
 
-        app.MapPost("/api/buy/items/{id:int}/complete", (HttpRequest http, int id) =>
+        w.MapPost("/buy/items/{id:int}/complete", (HttpRequest http, int id) =>
         {
             if (!TryActor(http.Query, out var actor, out var err))
                 return err!;
 
             var idErr = Validation.ValidateId(id);
             if (idErr != null)
-                return Results.BadRequest(new { error = idErr });
+                return ApiResults.Validation(idErr);
 
             root.GetRequiredService<BuyService>().CompleteItem(id, actor);
             return Results.Ok(new { ok = true });
         });
 
-        app.MapDelete("/api/buy/items/{id:int}", (HttpRequest http, int id) =>
+        w.MapDelete("/buy/items/{id:int}", (HttpRequest http, int id) =>
         {
             if (!TryActor(http.Query, out var actor, out var err))
                 return err!;
 
             var idErr = Validation.ValidateId(id);
             if (idErr != null)
-                return Results.BadRequest(new { error = idErr });
+                return ApiResults.Validation(idErr);
 
             root.GetRequiredService<BuyService>().DeleteItem(id, actor);
             return Results.Ok(new { ok = true });
         });
 
-        app.MapPost("/api/wishlist/items", (HttpRequest http, WishlistItemCreateRequest? body) =>
+        w.MapPost("/wishlist/items", async (HttpRequest http, WishlistItemCreateRequest? body) =>
         {
             if (body is null)
-                return Results.BadRequest(new { error = "Request body is required." });
+                return ApiResults.BadRequest("Request body is required.", "missing_body");
 
             if (!TryActor(http.Query, out var actor, out var err))
                 return err!;
@@ -318,15 +326,15 @@ public static class HomeBotApiRegistration
             var name = body.Name ?? "";
             var nameErr = Validation.ValidateName(name);
             if (nameErr != null)
-                return Results.BadRequest(new { error = nameErr });
+                return ApiResults.Validation(nameErr);
 
             var tagErr = Validation.ValidateTags(body.Tags ?? "");
             if (tagErr != null)
-                return Results.BadRequest(new { error = tagErr });
+                return ApiResults.Validation(tagErr);
 
             var noteErr = Validation.ValidateNotes(body.Notes ?? "");
             if (noteErr != null)
-                return Results.BadRequest(new { error = noteErr });
+                return ApiResults.Validation(noteErr);
 
             var owner = body.OwnerUserId ?? actor;
             var normalizedPriority = "";
@@ -346,32 +354,36 @@ public static class HomeBotApiRegistration
                 normalizedPriority,
                 body.Tags ?? "");
 
+            await root.GetRequiredService<IDiscordChannelNotifier>().NotifyFeatureChannelAsync(
+                "wishlist",
+                $"💝 **Wishlist** (via web): added **{DiscordNotifyText.SanitizeInline(name)}**");
+
             return Results.Created("/api/wishlist/items", new { ok = true });
         });
 
-        app.MapPut("/api/wishlist/items/{id:int}", (int id, WishlistItemUpdateRequest? body) =>
+        w.MapPut("/wishlist/items/{id:int}", (int id, WishlistItemUpdateRequest? body) =>
         {
             if (body is null)
-                return Results.BadRequest(new { error = "Request body is required." });
+                return ApiResults.BadRequest("Request body is required.", "missing_body");
 
             var idErr = Validation.ValidateId(id);
             if (idErr != null)
-                return Results.BadRequest(new { error = idErr });
+                return ApiResults.Validation(idErr);
 
             if (!string.IsNullOrWhiteSpace(body.Name))
             {
                 var e = Validation.ValidateName(body.Name);
                 if (e != null)
-                    return Results.BadRequest(new { error = e });
+                    return ApiResults.Validation(e);
             }
 
             var tagErr = string.IsNullOrWhiteSpace(body.Tags) ? null : Validation.ValidateTags(body.Tags);
             if (tagErr != null)
-                return Results.BadRequest(new { error = tagErr });
+                return ApiResults.Validation(tagErr);
 
             var noteErr = string.IsNullOrWhiteSpace(body.Notes) ? null : Validation.ValidateNotes(body.Notes);
             if (noteErr != null)
-                return Results.BadRequest(new { error = noteErr });
+                return ApiResults.Validation(noteErr);
 
             root.GetRequiredService<WishlistService>().EditItem(
                 id,
@@ -387,73 +399,80 @@ public static class HomeBotApiRegistration
             return Results.Ok(new { ok = true });
         });
 
-        app.MapDelete("/api/wishlist/items/completed", () =>
+        w.MapDelete("/wishlist/items/completed", () =>
         {
             root.GetRequiredService<WishlistService>().ClearCompleted();
             return Results.Ok(new { ok = true });
         });
 
-        app.MapPost("/api/wishlist/items/{id:int}/complete", (HttpRequest http, int id) =>
+        w.MapPost("/wishlist/items/{id:int}/complete", (HttpRequest http, int id) =>
         {
             if (!TryActor(http.Query, out var actor, out var err))
                 return err!;
 
             var idErr = Validation.ValidateId(id);
             if (idErr != null)
-                return Results.BadRequest(new { error = idErr });
+                return ApiResults.Validation(idErr);
 
             root.GetRequiredService<WishlistService>().MarkComplete(id, actor);
             return Results.Ok(new { ok = true });
         });
 
-        app.MapDelete("/api/wishlist/items/{id:int}", (HttpRequest http, int id) =>
+        w.MapDelete("/wishlist/items/{id:int}", (HttpRequest http, int id) =>
         {
             if (!TryActor(http.Query, out var actor, out var err))
                 return err!;
 
             var idErr = Validation.ValidateId(id);
             if (idErr != null)
-                return Results.BadRequest(new { error = idErr });
+                return ApiResults.Validation(idErr);
 
             root.GetRequiredService<WishlistService>().DeleteItem(id, actor);
             return Results.Ok(new { ok = true });
         });
 
-        app.MapPost("/api/money/expenses", (MoneyExpenseCreateRequest? body) =>
+        w.MapPost("/money/expenses", async (MoneyExpenseCreateRequest? body) =>
         {
             if (body is null)
-                return Results.BadRequest(new { error = "Request body is required." });
+                return ApiResults.BadRequest("Request body is required.", "missing_body");
 
             var name = body.Name ?? "";
             var nameErr = Validation.ValidateName(name);
             if (nameErr != null)
-                return Results.BadRequest(new { error = nameErr });
+                return ApiResults.Validation(nameErr);
 
             if (body.PaidBy == 0 || body.OwedBy == 0)
-                return Results.BadRequest(new { error = "paidBy and owedBy must be non-zero." });
+                return ApiResults.BadRequest("paidBy and owedBy must be non-zero.", "invalid_participants");
 
             if (string.IsNullOrWhiteSpace(body.AmountInput))
-                return Results.BadRequest(new { error = "amountInput is required." });
+                return ApiResults.BadRequest("amountInput is required.", "missing_amount");
 
             root.GetRequiredService<MoneyService>().AddExpense(name, body.AmountInput, body.PaidBy, body.OwedBy);
+
+            var sName = DiscordNotifyText.SanitizeInline(name);
+            var sAmt = DiscordNotifyText.SanitizeInline(body.AmountInput, 40);
+            await root.GetRequiredService<IDiscordChannelNotifier>().NotifyFeatureChannelAsync(
+                "money",
+                $"💰 **Money** (via web): logged expense **{sName}** — `{sAmt}`");
+
             return Results.Created("/api/money/transactions", new { ok = true });
         });
 
-        app.MapPost("/api/money/expenses/split", (MoneyExpenseSplitCreateRequest? body) =>
+        w.MapPost("/money/expenses/split", async (MoneyExpenseSplitCreateRequest? body) =>
         {
             if (body is null)
-                return Results.BadRequest(new { error = "Request body is required." });
+                return ApiResults.BadRequest("Request body is required.", "missing_body");
 
             var name = body.Name ?? "";
             var nameErr = Validation.ValidateName(name);
             if (nameErr != null)
-                return Results.BadRequest(new { error = nameErr });
+                return ApiResults.Validation(nameErr);
 
             if (body.PaidBy == 0 || body.OwedBy == 0)
-                return Results.BadRequest(new { error = "paidBy and owedBy must be non-zero." });
+                return ApiResults.BadRequest("paidBy and owedBy must be non-zero.", "invalid_participants");
 
             if (string.IsNullOrWhiteSpace(body.AmountInput))
-                return Results.BadRequest(new { error = "amountInput is required." });
+                return ApiResults.BadRequest("amountInput is required.", "missing_amount");
 
             var percent = Math.Clamp(body.Percent, 1, 100);
             root.GetRequiredService<MoneyService>().AddPercentageExpense(
@@ -465,32 +484,44 @@ public static class HomeBotApiRegistration
                 body.OwedBy,
                 percent);
 
+            var sName = DiscordNotifyText.SanitizeInline(name);
+            var sAmt = DiscordNotifyText.SanitizeInline(body.AmountInput, 40);
+            await root.GetRequiredService<IDiscordChannelNotifier>().NotifyFeatureChannelAsync(
+                "money",
+                $"💰 **Money** (via web): logged split expense **{sName}** ({percent}%, `{sAmt}`)");
+
             return Results.Created("/api/money/transactions", new { ok = true });
         });
 
-        app.MapPost("/api/money/payments", (MoneyPaymentCreateRequest? body) =>
+        w.MapPost("/money/payments", async (MoneyPaymentCreateRequest? body) =>
         {
             if (body is null)
-                return Results.BadRequest(new { error = "Request body is required." });
+                return ApiResults.BadRequest("Request body is required.", "missing_body");
 
             if (body.PaidBy == 0 || body.ReceivedBy == 0)
-                return Results.BadRequest(new { error = "paidBy and receivedBy must be non-zero." });
+                return ApiResults.BadRequest("paidBy and receivedBy must be non-zero.", "invalid_participants");
 
             if (string.IsNullOrWhiteSpace(body.AmountInput))
-                return Results.BadRequest(new { error = "amountInput is required." });
+                return ApiResults.BadRequest("amountInput is required.", "missing_amount");
 
             root.GetRequiredService<MoneyService>().AddPayment(body.AmountInput, body.PaidBy, body.ReceivedBy);
+
+            var sAmt = DiscordNotifyText.SanitizeInline(body.AmountInput, 40);
+            await root.GetRequiredService<IDiscordChannelNotifier>().NotifyFeatureChannelAsync(
+                "money",
+                $"💰 **Money** (via web): recorded a payment — `{sAmt}`");
+
             return Results.Created("/api/money/transactions", new { ok = true });
         });
 
-        app.MapPatch("/api/money/transactions/{id:int}", (int id, MoneyTransactionPatchRequest? body) =>
+        w.MapPatch("/money/transactions/{id:int}", (int id, MoneyTransactionPatchRequest? body) =>
         {
             if (body is null)
-                return Results.BadRequest(new { error = "Request body is required." });
+                return ApiResults.BadRequest("Request body is required.", "missing_body");
 
             var idErr = Validation.ValidateId(id);
             if (idErr != null)
-                return Results.BadRequest(new { error = idErr });
+                return ApiResults.Validation(idErr);
 
             root.GetRequiredService<MoneyService>().EditTransaction(
                 id,
@@ -502,38 +533,38 @@ public static class HomeBotApiRegistration
             return Results.Ok(new { ok = true });
         });
 
-        app.MapDelete("/api/money/transactions/{id:int}", (HttpRequest http, int id) =>
+        w.MapDelete("/money/transactions/{id:int}", (HttpRequest http, int id) =>
         {
             if (!TryActor(http.Query, out var actor, out var err))
                 return err!;
 
             var idErr = Validation.ValidateId(id);
             if (idErr != null)
-                return Results.BadRequest(new { error = idErr });
+                return ApiResults.Validation(idErr);
 
             root.GetRequiredService<MoneyService>().DeleteTransaction(id, actor);
             return Results.Ok(new { ok = true });
         });
 
-        app.MapPost("/api/calendar/items", (CalendarItemCreateRequest? body) =>
+        w.MapPost("/calendar/items", async (CalendarItemCreateRequest? body) =>
         {
             if (body is null)
-                return Results.BadRequest(new { error = "Request body is required." });
+                return ApiResults.BadRequest("Request body is required.", "missing_body");
 
             var title = body.Title ?? "";
             var titleErr = Validation.ValidateName(title);
             if (titleErr != null)
-                return Results.BadRequest(new { error = titleErr });
+                return ApiResults.Validation(titleErr);
 
             var start = body.Start ?? "";
             if (!ValidationHelper.ValidateDate(start, out var dateError))
-                return Results.BadRequest(new { error = dateError });
+                return ApiResults.Validation(dateError);
 
             if (!ValidationHelper.ValidateReminder(body.Reminder ?? "", out var reminderError))
-                return Results.BadRequest(new { error = reminderError });
+                return ApiResults.Validation(reminderError);
 
             if (!ValidationHelper.ValidateRecurrence(body.Recurrence ?? "", out var recurError))
-                return Results.BadRequest(new { error = recurError });
+                return ApiResults.Validation(recurError);
 
             var config = root.GetRequiredService<ConfigService>();
             var tzValue = config.Get("timezone") ?? "Pacific Standard Time";
@@ -586,26 +617,31 @@ public static class HomeBotApiRegistration
             }
             catch
             {
-                return Results.BadRequest(new { error = "Could not add calendar item." });
+                return ApiResults.BadRequest("Could not add calendar item.", "calendar_invalid");
             }
+
+            var sTitle = DiscordNotifyText.SanitizeInline(title);
+            await root.GetRequiredService<IDiscordChannelNotifier>().NotifyFeatureChannelAsync(
+                "calendar",
+                $"📅 **Calendar** (via web): added **{sTitle}** ({type})");
 
             return Results.Created("/api/calendar/items", new { ok = true });
         });
 
-        app.MapPatch("/api/calendar/items/{id:int}", (int id, CalendarItemPatchRequest? body) =>
+        w.MapPatch("/calendar/items/{id:int}", (int id, CalendarItemPatchRequest? body) =>
         {
             if (body is null)
-                return Results.BadRequest(new { error = "Request body is required." });
+                return ApiResults.BadRequest("Request body is required.", "missing_body");
 
             var idErr = Validation.ValidateId(id);
             if (idErr != null)
-                return Results.BadRequest(new { error = idErr });
+                return ApiResults.Validation(idErr);
 
             if (!string.IsNullOrWhiteSpace(body.Title))
             {
                 var e = Validation.ValidateName(body.Title);
                 if (e != null)
-                    return Results.BadRequest(new { error = e });
+                    return ApiResults.Validation(e);
             }
 
             root.GetRequiredService<CalendarService>().EditItem(
@@ -620,33 +656,33 @@ public static class HomeBotApiRegistration
             return Results.Ok(new { ok = true });
         });
 
-        app.MapPost("/api/calendar/items/{id:int}/complete", (HttpRequest http, int id) =>
+        w.MapPost("/calendar/items/{id:int}/complete", (HttpRequest http, int id) =>
         {
             if (!TryActor(http.Query, out var actor, out var err))
                 return err!;
 
             var idErr = Validation.ValidateId(id);
             if (idErr != null)
-                return Results.BadRequest(new { error = idErr });
+                return ApiResults.Validation(idErr);
 
             root.GetRequiredService<CalendarService>().CompleteItem(id, actor);
             return Results.Ok(new { ok = true });
         });
 
-        app.MapDelete("/api/calendar/items/{id:int}", (HttpRequest http, int id) =>
+        w.MapDelete("/calendar/items/{id:int}", (HttpRequest http, int id) =>
         {
             if (!TryActor(http.Query, out var actor, out var err))
                 return err!;
 
             var idErr = Validation.ValidateId(id);
             if (idErr != null)
-                return Results.BadRequest(new { error = idErr });
+                return ApiResults.Validation(idErr);
 
             root.GetRequiredService<CalendarService>().DeleteItem(id, actor);
             return Results.Ok(new { ok = true });
         });
 
-        app.MapPost("/api/undo", (HttpRequest http) =>
+        w.MapPost("/undo", (HttpRequest http) =>
         {
             if (!TryActor(http.Query, out var actor, out var err))
                 return err!;
@@ -657,7 +693,7 @@ public static class HomeBotApiRegistration
                 return Results.Ok(new { undone = false, message = result.Message });
 
             if (!result.IsSuccess)
-                return Results.BadRequest(new { error = result.Message });
+                return ApiResults.BadRequest(result.Message ?? "Undo failed.", "undo_failed");
 
             return Results.Ok(new { undone = true });
         });

@@ -170,3 +170,5 @@ c:\Users\mattg\Desktop\HomeBot\_testout4\runtimes\win-arm\native\e_sqlite3.dll
 c:\Users\mattg\Desktop\HomeBot\_testout4\runtimes\win-arm64\native\e_sqlite3.dll
 c:\Users\mattg\Desktop\HomeBot\_testout4\runtimes\win-x64\native\e_sqlite3.dll
 c:\Users\mattg\Desktop\HomeBot\_testout4\runtimes\win-x86\native\e_sqlite3.dll
+c:\Users\mattg\Desktop\HomeBot\bin\Debug\net10.0\Microsoft.AspNetCore.OpenApi.dll
+c:\Users\mattg\Desktop\HomeBot\bin\Debug\net10.0\Microsoft.OpenApi.dll

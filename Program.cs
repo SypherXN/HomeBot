@@ -28,6 +28,20 @@ class Program
     public async Task RunAsync()
     {
         _services = ConfigureServices();
+
+        // Construct Discord client before the API accepts traffic so DI never caches a null
+        // DiscordSocketClient singleton and Web/API notifications can resolve the live socket.
+        if (IsDiscordEnabled())
+        {
+            _client = new DiscordSocketClient(new DiscordSocketConfig
+            {
+                GatewayIntents = GatewayIntents.All
+            });
+
+            _interactions = new InteractionService(_client.Rest);
+            _services.GetRequiredService<DiscordSocketHolder>().Client = _client;
+        }
+
         var apiTask = StartApiAsync();
 
         if (!IsDiscordEnabled())
@@ -36,13 +50,6 @@ class Program
             await apiTask;
             return;
         }
-
-        _client = new DiscordSocketClient(new DiscordSocketConfig
-        {
-            GatewayIntents = GatewayIntents.All
-        });
-
-        _interactions = new InteractionService(_client.Rest);
 
         _client.Ready += OnReady;
         _client.InteractionCreated += HandleInteraction;
@@ -443,6 +450,7 @@ class Program
         var apiToken = Environment.GetEnvironmentVariable("HOMEBOT_API_TOKEN") ?? "";
 
         HomeBotApiHost.AddApiCors(builder);
+        builder.AddPhase3Services();
 
         var app = builder.Build();
         HomeBotApiHost.Configure(app, _services, apiToken);

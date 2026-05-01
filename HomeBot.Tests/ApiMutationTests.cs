@@ -38,6 +38,8 @@ public sealed class ApiMutationTests : IDisposable
         sc.AddSingleton<WishlistService>();
         sc.AddSingleton<MoneyService>();
         sc.AddSingleton<CalendarService>();
+        sc.AddSingleton<DiscordSocketHolder>();
+        sc.AddSingleton<IDiscordChannelNotifier, DiscordChannelNotifier>();
         _services = sc.BuildServiceProvider();
 
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
@@ -46,6 +48,7 @@ public sealed class ApiMutationTests : IDisposable
         });
 
         HomeBotApiHost.AddApiCors(builder);
+        builder.AddPhase3Services(maxRequestBodyBytes: 65536, mutationPermitsPerMinute: 100_000);
         builder.WebHost.UseTestServer();
 
         _app = builder.Build();

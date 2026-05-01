@@ -11,6 +11,7 @@
           "Discord.Net": "3.19.1",
           "Discord.Net.Commands": "3.19.1",
           "Discord.Net.Interactions": "3.19.1",
+          "Microsoft.AspNetCore.OpenApi": "10.0.0",
           "Microsoft.Data.Sqlite": "10.0.7"
         },
         "runtime": {
@@ -105,6 +106,17 @@
           }
         }
       },
+      "Microsoft.AspNetCore.OpenApi/10.0.0": {
+        "dependencies": {
+          "Microsoft.OpenApi": "2.0.0"
+        },
+        "runtime": {
+          "lib/net10.0/Microsoft.AspNetCore.OpenApi.dll": {
+            "assemblyVersion": "10.0.0.0",
+            "fileVersion": "10.0.25.52411"
+          }
+        }
+      },
       "Microsoft.Data.Sqlite/10.0.7": {
         "dependencies": {
           "Microsoft.Data.Sqlite.Core": "10.0.7",
@@ -120,6 +132,14 @@
           "lib/net8.0/Microsoft.Data.Sqlite.dll": {
             "assemblyVersion": "10.0.7.0",
             "fileVersion": "10.0.726.21808"
+          }
+        }
+      },
+      "Microsoft.OpenApi/2.0.0": {
+        "runtime": {
+          "lib/net8.0/Microsoft.OpenApi.dll": {
+            "assemblyVersion": "2.0.0.0",
+            "fileVersion": "2.0.0.0"
           }
         }
       },
@@ -345,6 +365,13 @@
       "path": "discord.net.websocket/3.19.1",
       "hashPath": "discord.net.websocket.3.19.1.nupkg.sha512"
     },
+    "Microsoft.AspNetCore.OpenApi/10.0.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-0aqIF1t+sA2T62LIeMtXGSiaV7keGQaJnvwwmu+htQdjCaKYARfXAeqp4nHH9y2etpilyZ/tnQzZg4Ilmo/c4Q==",
+      "path": "microsoft.aspnetcore.openapi/10.0.0",
+      "hashPath": "microsoft.aspnetcore.openapi.10.0.0.nupkg.sha512"
+    },
     "Microsoft.Data.Sqlite/10.0.7": {
       "type": "package",
       "serviceable": true,
@@ -358,6 +385,13 @@
       "sha512": "sha512-xVrtBg3M1wJlBDkoT0dXEYB/wSc8bIHJPYtw/bu1AqpWgF79uPSs87DAhERR/Ilumre6TKZa1cjMg3VUUObVLA==",
       "path": "microsoft.data.sqlite.core/10.0.7",
       "hashPath": "microsoft.data.sqlite.core.10.0.7.nupkg.sha512"
+    },
+    "Microsoft.OpenApi/2.0.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-GGYLfzV/G/ct80OZ45JxnWP7NvMX1BCugn/lX7TH5o0lcVaviavsLMTxmFV2AybXWjbi3h6FF1vgZiTK6PXndw==",
+      "path": "microsoft.openapi/2.0.0",
+      "hashPath": "microsoft.openapi.2.0.0.nupkg.sha512"
     },
     "Newtonsoft.Json/13.0.4": {
       "type": "package",

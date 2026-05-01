@@ -25,6 +25,9 @@ public static class HomeBotApiHost
     /// </summary>
     public static void Configure(WebApplication app, IServiceProvider root, string apiToken)
     {
+        HomeBotApiPhase3.UseApiExceptionHandling(app);
+        HomeBotApiPhase3.UseApiHttpLogging(app);
+
         app.UseCors("WebUiOrigins");
 
         if (!app.Environment.IsDevelopment())
@@ -32,6 +35,10 @@ public static class HomeBotApiHost
             app.UseHsts();
             app.UseHttpsRedirection();
         }
+
+        app.UseRateLimiter();
+
+        HomeBotApiPhase3.UseApiMaxPayloadContentLengthGuard(app);
 
         app.Use(async (context, next) =>
         {
@@ -42,7 +49,8 @@ public static class HomeBotApiHost
             }
 
             if (context.Request.Path.StartsWithSegments("/api/health") ||
-                context.Request.Path.StartsWithSegments("/api/meta"))
+                context.Request.Path.StartsWithSegments("/api/meta") ||
+                context.Request.Path.StartsWithSegments("/openapi"))
             {
                 await next();
                 return;
@@ -51,7 +59,8 @@ public static class HomeBotApiHost
             if (string.IsNullOrWhiteSpace(apiToken))
             {
                 context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-                await context.Response.WriteAsJsonAsync(new { error = "API token not configured." });
+                await context.Response.WriteAsJsonAsync(
+                    new ApiErrorBody("API token not configured.", "service_unavailable"));
                 return;
             }
 
@@ -61,7 +70,8 @@ public static class HomeBotApiHost
             if (!authHeader.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             {
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                await context.Response.WriteAsJsonAsync(new { error = "Missing bearer token." });
+                await context.Response.WriteAsJsonAsync(
+                    new ApiErrorBody("Missing bearer token.", "unauthorized"));
                 return;
             }
 
@@ -69,7 +79,8 @@ public static class HomeBotApiHost
             if (!string.Equals(token, apiToken, StringComparison.Ordinal))
             {
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                await context.Response.WriteAsJsonAsync(new { error = "Invalid token." });
+                await context.Response.WriteAsJsonAsync(
+                    new ApiErrorBody("Invalid token.", "unauthorized"));
                 return;
             }
 
@@ -86,9 +97,10 @@ public static class HomeBotApiHost
         app.MapGet("/api/meta", () => Results.Ok(new
         {
             name = "HomeBot API",
-            version = "phase2",
+            version = "phase3",
             features = new[] { "buy", "wishlist", "money", "calendar", "undo" },
             docs = "Mutations require Authorization: Bearer and (where noted) query actorUserId=DISCORD_USER_ID.",
+            openApi = "/openapi/v1.json",
             restExamples = new
             {
                 buy = "POST /api/buy/items?actorUserId=…",
@@ -100,6 +112,8 @@ public static class HomeBotApiHost
                 undo = "POST /api/undo?actorUserId=…"
             }
         }));
+
+        HomeBotApiPhase3.MapOpenApiDocument(app);
 
         app.MapHomeBotApi(root);
     }
