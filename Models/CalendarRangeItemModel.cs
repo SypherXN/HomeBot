@@ -24,4 +24,7 @@ public class CalendarRangeItemModel
 
     /// <summary>True when this row was synthesized from a recurring series.</summary>
     public bool IsRecurringInstance { get; set; }
+
+    /// <summary>IANA or Windows time zone id used when this occurrence was computed (row / event zone).</summary>
+    public string TimeZoneId { get; set; } = "";
 }

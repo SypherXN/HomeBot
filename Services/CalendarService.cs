@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Discord;
 
@@ -103,7 +104,7 @@ public class CalendarService
         conn.Open();
 
         int pageSize = GetPageSize(conn);
-        var tz = GetTimezone();
+        var householdTz = GetTimezone();
 
         var cmd = conn.CreateCommand();
         var whereType = typeFilter is "task" or "event" ? " AND Type = $type" : "";
@@ -117,7 +118,8 @@ public class CalendarService
             AssignedTo,
             Link,
             ReminderOffset,
-            Recurrence
+            Recurrence,
+            COALESCE(Timezone, '') AS ItemTz
         FROM CalendarItems
         WHERE Status = 'active'{whereType}
         ORDER BY 
@@ -139,11 +141,23 @@ public class CalendarService
             var dateText = "";
             var sortDate = DateTime.MaxValue;
 
-            if (!string.IsNullOrWhiteSpace(startRaw) && DateTime.TryParse(startRaw, out var parsedUtc))
+            var rowTzId = reader.IsDBNull(9) ? "" : reader.GetString(9);
+            var rowTz = TimeZoneResolver.Resolve(string.IsNullOrWhiteSpace(rowTzId) ? null : rowTzId, householdTz.Id);
+
+            if (!string.IsNullOrWhiteSpace(startRaw) &&
+                DateTime.TryParse(startRaw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsedUtc))
             {
-                var local = TimeZoneInfo.ConvertTimeFromUtc(parsedUtc, tz);
-                dateText = local.ToString("yyyy-MM-dd HH:mm");
-                sortDate = local;
+                parsedUtc = DateTime.SpecifyKind(parsedUtc, DateTimeKind.Utc);
+                try
+                {
+                    var local = TimeZoneInfo.ConvertTimeFromUtc(parsedUtc, rowTz);
+                    dateText = local.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+                    sortDate = local;
+                }
+                catch
+                {
+                    dateText = startRaw;
+                }
             }
 
             var recurrence = reader.IsDBNull(8) ? "" : reader.GetString(8);
@@ -279,6 +293,7 @@ public class CalendarService
     /// <summary>
     /// Applies partial updates to editable calendar fields.
     /// </summary>
+    /// <param name="timezone">When set, updates the row's event time zone id (IANA or Windows).</param>
     public void EditItem(
         int id,
         string title,
@@ -286,10 +301,26 @@ public class CalendarService
         string end,
         string description,
         string notes,
-        string link)
+        string link,
+        string? timezone)
     {
         using var conn = _db.GetConnection();
         conn.Open();
+
+        var householdTz = GetTimezone();
+        var get = conn.CreateCommand();
+        get.CommandText = "SELECT COALESCE(Timezone, ''), IFNULL(StartDateTime, ''), IFNULL(EndDateTime, '') FROM CalendarItems WHERE Id = $id";
+        get.Parameters.AddWithValue("$id", id);
+        var rowTzId = "";
+        using (var r = get.ExecuteReader())
+        {
+            if (!r.Read())
+                return;
+            rowTzId = r.IsDBNull(0) ? "" : r.GetString(0);
+        }
+
+        var mergedTzId = !string.IsNullOrWhiteSpace(timezone) ? timezone.Trim() : rowTzId;
+        var eventTz = TimeZoneResolver.Resolve(string.IsNullOrWhiteSpace(mergedTzId) ? null : mergedTzId, householdTz.Id);
 
         var updates = new List<string>();
         var cmd = conn.CreateCommand();
@@ -302,14 +333,16 @@ public class CalendarService
 
         if (!string.IsNullOrWhiteSpace(start))
         {
+            var norm = NormalizeCalendarInstantToUtcStorage(start.Trim(), eventTz);
             updates.Add("StartDateTime = $start");
-            cmd.Parameters.AddWithValue("$start", start);
+            cmd.Parameters.AddWithValue("$start", norm);
         }
 
         if (!string.IsNullOrWhiteSpace(end))
         {
+            var norm = NormalizeCalendarInstantToUtcStorage(end.Trim(), eventTz);
             updates.Add("EndDateTime = $end");
-            cmd.Parameters.AddWithValue("$end", end);
+            cmd.Parameters.AddWithValue("$end", norm);
         }
 
         if (!string.IsNullOrWhiteSpace(description))
@@ -330,6 +363,12 @@ public class CalendarService
             cmd.Parameters.AddWithValue("$link", link);
         }
 
+        if (!string.IsNullOrWhiteSpace(timezone))
+        {
+            updates.Add("Timezone = $tz");
+            cmd.Parameters.AddWithValue("$tz", timezone.Trim());
+        }
+
         if (updates.Count == 0)
             return;
 
@@ -344,6 +383,30 @@ public class CalendarService
     }
 
     /// <summary>
+    /// Converts API/user input to the UTC wall string stored in <c>StartDateTime</c>/<c>EndDateTime</c>.
+    /// </summary>
+    public static string NormalizeCalendarInstantToUtcStorage(string raw, TimeZoneInfo eventTz)
+    {
+        if (TimeZoneResolver.TryParseWallDateTimeToUtcStorage(raw, eventTz, out var utc, out _))
+            return utc;
+        if (DateTime.TryParseExact(
+                raw,
+                "yyyy-MM-dd HH:mm",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var asUtc))
+            return DateTime.SpecifyKind(asUtc, DateTimeKind.Utc).ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+        var parsed = DateParser.Parse(raw);
+        if (parsed.HasValue)
+        {
+            var wall = DateTime.SpecifyKind(parsed.Value, DateTimeKind.Unspecified);
+            return TimeZoneInfo.ConvertTimeToUtc(wall, eventTz).ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+        }
+
+        return raw;
+    }
+
+    /// <summary>
     /// Returns one calendar item for detail view rendering.
     /// </summary>
     public CalendarItemDetailModel? GetItem(int id)
@@ -353,7 +416,7 @@ public class CalendarService
 
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            SELECT Title, Description, Notes, Link, StartDateTime, AllDay, ReminderOffset
+            SELECT Title, Description, Notes, Link, StartDateTime, AllDay, ReminderOffset, COALESCE(Timezone, '') AS ItemTz
             FROM CalendarItems
             WHERE Id = $id";
 
@@ -372,7 +435,8 @@ public class CalendarService
             Link = reader.IsDBNull(3) ? "" : reader.GetString(3),
             Start = reader.IsDBNull(4) ? "" : reader.GetString(4),
             AllDay = reader.GetInt32(5) == 1,
-            Reminder = reader.IsDBNull(6) ? "" : reader.GetString(6)
+            Reminder = reader.IsDBNull(6) ? "" : reader.GetString(6),
+            Timezone = reader.IsDBNull(7) ? "" : reader.GetString(7)
         };
     }
 
@@ -539,15 +603,16 @@ public class CalendarService
     public const int RangeMaxDays = 92;
 
     /// <summary>
-    /// Returns events overlapping the local-day window <c>[fromLocal, toLocal)</c>, expanding
+    /// Returns events overlapping the calendar-day window <c>[fromLocal, toLocal)</c>, expanding
     /// daily/weekly recurring rows into one entry per occurrence. Tasks (rows with empty
     /// <c>StartDateTime</c>) are excluded; fetch them via <see cref="GetList"/> with a
     /// <c>typeFilter</c> instead.
     /// </summary>
-    /// <param name="fromLocal">Inclusive start of the window (local date midnight).</param>
-    /// <param name="toLocal">Exclusive end of the window (local date midnight).</param>
+    /// <param name="fromLocal">Inclusive start date (calendar components only).</param>
+    /// <param name="toLocal">Exclusive end date (calendar components only).</param>
     /// <param name="userFilter">Optional Discord user id; rows assigned to this user or to everyone (0) match.</param>
-    public List<CalendarRangeItemModel> GetRange(DateTime fromLocal, DateTime toLocal, ulong? userFilter = null)
+    /// <param name="windowTimeZoneId">IANA or Windows id used to turn <paramref name="fromLocal"/>/<paramref name="toLocal"/> into a UTC half-open window; null uses household Settings.</param>
+    public List<CalendarRangeItemModel> GetRange(DateTime fromLocal, DateTime toLocal, ulong? userFilter = null, string? windowTimeZoneId = null)
     {
         var output = new List<CalendarRangeItemModel>();
         if (toLocal <= fromLocal)
@@ -555,13 +620,17 @@ public class CalendarService
         if ((toLocal - fromLocal).TotalDays > RangeMaxDays)
             return output;
 
+        var householdTz = GetTimezone();
+        var windowTz = TimeZoneResolver.Resolve(string.IsNullOrWhiteSpace(windowTimeZoneId) ? null : windowTimeZoneId, householdTz.Id);
+        var fromUtc = TimeZoneResolver.LocalDateToUtc(fromLocal, windowTz);
+        var toUtcExclusive = TimeZoneResolver.LocalDateToUtc(toLocal, windowTz);
+
         using var conn = _db.GetConnection();
         conn.Open();
-        var tz = GetTimezone();
 
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            SELECT Id, Title, Type, StartDateTime, EndDateTime, AllDay, AssignedTo, Link, ReminderOffset, Recurrence
+            SELECT Id, Title, Type, StartDateTime, EndDateTime, AllDay, AssignedTo, Link, ReminderOffset, Recurrence, COALESCE(Timezone, '') AS ItemTz
             FROM CalendarItems
             WHERE Status = 'active' AND StartDateTime IS NOT NULL AND StartDateTime != ''";
 
@@ -569,14 +638,18 @@ public class CalendarService
 
         while (reader.Read())
         {
-            var startRaw = reader.GetString(3);
-            if (!DateTime.TryParse(startRaw, out var startUtc))
-                continue;
+            var rowTzId = reader.IsDBNull(10) ? "" : reader.GetString(10);
+            var rowTz = TimeZoneResolver.Resolve(string.IsNullOrWhiteSpace(rowTzId) ? null : rowTzId, householdTz.Id);
 
-            DateTime startLocal;
+            var startRaw = reader.GetString(3);
+            if (!DateTime.TryParse(startRaw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var startUtc))
+                continue;
+            startUtc = DateTime.SpecifyKind(startUtc, DateTimeKind.Utc);
+
+            DateTime startLocalRow;
             try
             {
-                startLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(startUtc, DateTimeKind.Utc), tz);
+                startLocalRow = TimeZoneInfo.ConvertTimeFromUtc(startUtc, rowTz);
             }
             catch
             {
@@ -585,13 +658,15 @@ public class CalendarService
 
             TimeSpan? duration = null;
             var endRaw = reader.IsDBNull(4) ? "" : reader.GetString(4);
-            if (!string.IsNullOrWhiteSpace(endRaw) && DateTime.TryParse(endRaw, out var endUtc))
+            if (!string.IsNullOrWhiteSpace(endRaw) &&
+                DateTime.TryParse(endRaw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var endUtc))
             {
+                endUtc = DateTime.SpecifyKind(endUtc, DateTimeKind.Utc);
                 try
                 {
-                    var endLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(endUtc, DateTimeKind.Utc), tz);
-                    if (endLocal > startLocal)
-                        duration = endLocal - startLocal;
+                    var endLocalRow = TimeZoneInfo.ConvertTimeFromUtc(endUtc, rowTz);
+                    if (endLocalRow > startLocalRow)
+                        duration = endLocalRow - startLocalRow;
                 }
                 catch
                 {
@@ -614,33 +689,37 @@ public class CalendarService
                 Link = reader.IsDBNull(7) ? "" : reader.GetString(7),
                 ReminderRaw = reader.IsDBNull(8) ? "" : reader.GetString(8),
                 Recurrence = reader.IsDBNull(9) ? "" : reader.GetString(9),
+                TimezoneId = rowTz.Id,
             };
+
+            var winStartDate = TimeZoneInfo.ConvertTimeFromUtc(fromUtc, rowTz).Date;
+            var winEndDateInclusive = TimeZoneInfo.ConvertTimeFromUtc(toUtcExclusive.AddTicks(-1), rowTz).Date;
 
             switch (meta.Recurrence)
             {
                 case "daily":
                     {
-                        var first = startLocal.Date > fromLocal.Date ? startLocal.Date : fromLocal.Date;
-                        for (var d = first; d < toLocal; d = d.AddDays(1))
-                            EmitInstance(output, meta, d.Add(startLocal.TimeOfDay), duration, tz, isRecurring: true);
+                        var firstDay = startLocalRow.Date > winStartDate ? startLocalRow.Date : winStartDate;
+                        for (var d = firstDay; d <= winEndDateInclusive; d = d.AddDays(1))
+                            EmitInstance(output, meta, d.Add(startLocalRow.TimeOfDay), duration, rowTz, true, fromUtc, toUtcExclusive);
                         break;
                     }
                 case "weekly":
                     {
-                        var first = startLocal.Date > fromLocal.Date ? startLocal.Date : fromLocal.Date;
-                        var dayDiff = ((int)startLocal.DayOfWeek - (int)first.DayOfWeek + 7) % 7;
-                        first = first.AddDays(dayDiff);
-                        for (var d = first; d < toLocal; d = d.AddDays(7))
-                            EmitInstance(output, meta, d.Add(startLocal.TimeOfDay), duration, tz, isRecurring: true);
+                        for (var d = winStartDate; d <= winEndDateInclusive; d = d.AddDays(1))
+                        {
+                            if (d < startLocalRow.Date)
+                                continue;
+                            if ((d - startLocalRow.Date).TotalDays % 7 != 0)
+                                continue;
+                            EmitInstance(output, meta, d.Add(startLocalRow.TimeOfDay), duration, rowTz, true, fromUtc, toUtcExclusive);
+                        }
+
                         break;
                     }
                 default:
-                    {
-                        var occurrenceEnd = duration.HasValue ? startLocal + duration.Value : startLocal;
-                        if (startLocal < toLocal && occurrenceEnd >= fromLocal)
-                            EmitInstance(output, meta, startLocal, duration, tz, isRecurring: false);
-                        break;
-                    }
+                    EmitInstance(output, meta, startLocalRow, duration, rowTz, false, fromUtc, toUtcExclusive);
+                    break;
             }
         }
 
@@ -658,6 +737,7 @@ public class CalendarService
         public string Link;
         public string ReminderRaw;
         public string Recurrence;
+        public string TimezoneId;
     }
 
     private static void EmitInstance(
@@ -666,7 +746,9 @@ public class CalendarService
         DateTime instanceLocal,
         TimeSpan? duration,
         TimeZoneInfo tz,
-        bool isRecurring)
+        bool isRecurring,
+        DateTime fromUtc,
+        DateTime toUtcExclusive)
     {
         DateTime instanceUtc;
         try
@@ -680,19 +762,38 @@ public class CalendarService
         }
 
         string? endIso = null;
+        DateTime instanceEndUtc = instanceUtc;
         if (duration.HasValue)
         {
             try
             {
                 var endLocal = instanceLocal + duration.Value;
-                var endUtc = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(endLocal, DateTimeKind.Unspecified), tz);
-                endIso = endUtc.ToString("yyyy-MM-ddTHH:mm:ssZ");
+                instanceEndUtc = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(endLocal, DateTimeKind.Unspecified), tz);
+                endIso = instanceEndUtc.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
             }
             catch
             {
                 endIso = null;
             }
         }
+        else if (meta.AllDay)
+        {
+            try
+            {
+                instanceEndUtc = TimeZoneInfo.ConvertTimeToUtc(
+                    DateTime.SpecifyKind(instanceLocal.Date.AddDays(1), DateTimeKind.Unspecified),
+                    tz);
+                endIso = instanceEndUtc.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+            }
+            catch
+            {
+                instanceEndUtc = instanceUtc.AddDays(1);
+                endIso = instanceEndUtc.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+            }
+        }
+
+        if (instanceUtc >= toUtcExclusive || instanceEndUtc <= fromUtc)
+            return;
 
         var recurrenceText = meta.Recurrence switch
         {
@@ -714,9 +815,10 @@ public class CalendarService
             ReminderText = ReminderFormatter.Format(meta.ReminderRaw),
             RecurrenceText = recurrenceText,
             Recurrence = meta.Recurrence,
-            InstanceStartUtc = instanceUtc.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+            InstanceStartUtc = instanceUtc.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture),
             InstanceEndUtc = endIso,
             IsRecurringInstance = isRecurring,
+            TimeZoneId = meta.TimezoneId,
         });
     }
 
@@ -733,15 +835,10 @@ public class CalendarService
 
     private TimeZoneInfo GetTimezone()
     {
-        var timezone = _config.Get("timezone") ?? "Pacific Standard Time";
-        try
-        {
-            return TimeZoneInfo.FindSystemTimeZoneById(timezone);
-        }
-        catch
-        {
-            return TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
-        }
+        var timezone = _config.Get("timezone");
+        return TimeZoneResolver.Resolve(
+            string.IsNullOrWhiteSpace(timezone) ? null : timezone,
+            TimeZoneResolver.DefaultHouseholdTimeZoneId);
     }
 
     private static string GetAssignedDisplay(ulong? assigned)

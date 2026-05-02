@@ -266,7 +266,11 @@ public static class HomeBotApiRegistration
             if (ulong.TryParse(request.Query["userFilter"], out var userFilterParsed))
                 userFilter = userFilterParsed;
 
-            return Results.Ok(calendarService.GetRange(fromLocal, toLocal, userFilter));
+            var windowTz = request.Query["timeZone"].ToString();
+            if (string.IsNullOrWhiteSpace(windowTz))
+                windowTz = null;
+
+            return Results.Ok(calendarService.GetRange(fromLocal, toLocal, userFilter, windowTz));
         });
 
         app.MapGet("/api/discord/guild/members", async () =>
@@ -655,25 +659,30 @@ public static class HomeBotApiRegistration
                 return ApiResults.Validation(recurError);
 
             var config = root.GetRequiredService<ConfigService>();
-            var tzValue = config.Get("timezone") ?? "Pacific Standard Time";
-
-            TimeZoneInfo tz;
-            try
-            {
-                tz = TimeZoneInfo.FindSystemTimeZoneById(tzValue);
-            }
-            catch
-            {
-                tz = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
-            }
+            var householdTzRaw = config.Get("timezone");
+            var householdTz = TimeZoneResolver.Resolve(
+                string.IsNullOrWhiteSpace(householdTzRaw) ? null : householdTzRaw.Trim(),
+                TimeZoneResolver.DefaultHouseholdTimeZoneId);
+            var eventTz = TimeZoneResolver.Resolve(
+                string.IsNullOrWhiteSpace(body.Timezone) ? null : body.Timezone!.Trim(),
+                householdTz.Id);
 
             string type = string.IsNullOrWhiteSpace(start) ? "task" : "event";
             string finalStart = start;
-            var parsedStart = DateParser.Parse(start);
-            if (parsedStart.HasValue)
+            if (!string.IsNullOrWhiteSpace(start) &&
+                TimeZoneResolver.TryParseWallDateTimeToUtcStorage(start.Trim(), eventTz, out var isoUtc, out _))
             {
-                var utc = TimeZoneInfo.ConvertTimeToUtc(parsedStart.Value, tz);
-                finalStart = utc.ToString("yyyy-MM-dd HH:mm");
+                finalStart = isoUtc;
+            }
+            else
+            {
+                var parsedStart = DateParser.Parse(start);
+                if (parsedStart.HasValue)
+                {
+                    var wall = DateTime.SpecifyKind(parsedStart.Value, DateTimeKind.Unspecified);
+                    var utc = TimeZoneInfo.ConvertTimeToUtc(wall, eventTz);
+                    finalStart = utc.ToString("yyyy-MM-dd HH:mm");
+                }
             }
 
             ulong? assignedId = null;
@@ -687,13 +696,30 @@ public static class HomeBotApiRegistration
                 ? reminderSpan.Value.TotalSeconds.ToString()
                 : "";
 
+            var endRaw = body.End ?? "";
+            var finalEnd = endRaw;
+            if (!string.IsNullOrWhiteSpace(endRaw))
+            {
+                if (TimeZoneResolver.TryParseWallDateTimeToUtcStorage(endRaw.Trim(), eventTz, out var endUtc, out _))
+                    finalEnd = endUtc;
+                else
+                {
+                    var parsedEnd = DateParser.Parse(endRaw);
+                    if (parsedEnd.HasValue)
+                    {
+                        var wallEnd = DateTime.SpecifyKind(parsedEnd.Value, DateTimeKind.Unspecified);
+                        finalEnd = TimeZoneInfo.ConvertTimeToUtc(wallEnd, eventTz).ToString("yyyy-MM-dd HH:mm");
+                    }
+                }
+            }
+
             try
             {
                 root.GetRequiredService<CalendarService>().AddItem(
                     title,
                     type,
                     finalStart,
-                    body.End ?? "",
+                    finalEnd,
                     body.AllDay,
                     reminderValue,
                     assignedId,
@@ -701,7 +727,7 @@ public static class HomeBotApiRegistration
                     body.Notes ?? "",
                     body.Link ?? "",
                     body.Recurrence ?? "",
-                    tzValue);
+                    eventTz.Id);
             }
             catch
             {
@@ -739,7 +765,8 @@ public static class HomeBotApiRegistration
                 body.End ?? "",
                 body.Description ?? "",
                 body.Notes ?? "",
-                body.Link ?? "");
+                body.Link ?? "",
+                body.Timezone);
 
             return Results.Ok(new { ok = true });
         });

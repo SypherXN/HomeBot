@@ -1,18 +1,55 @@
-# Build outputs
-bin/
-obj/
-
-# User/IDE files
-.vs/
+# --- .NET / MSBuild ---
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+out/
+artifacts/
+publish/
+TestResults/
 *.user
+*.userosscache
 *.suo
+*.rsuser
+*.cache
+project.lock.json
+project.fragment.lock.json
+*.DotSettings.user
 
-# Local environment secrets
+# Alternate / CI / local publish outputs
+_testout/
+_testout2/
+_testout3/
+_testout4/
+out-build/
+out-build2/
+
+# --- IDE ---
+.vs/
+.idea/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# --- Web UI (Vite / npm) ---
+webui/node_modules/
+webui/dist/
+webui/dist-ssr/
+webui/.vite/
+webui/*.local
+
+# --- Local environment secrets ---
 .env
 .env.*
 !.env.example
 
-# Bot runtime data
+# --- Bot runtime data ---
 homebot.db
 homebot.db-shm
 homebot.db-wal
+
+# --- Local scratch ---
+.tmp/

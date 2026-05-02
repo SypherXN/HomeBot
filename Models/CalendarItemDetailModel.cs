@@ -10,4 +10,5 @@ public class CalendarItemDetailModel
     public string Start { get; set; } = "";
     public bool AllDay { get; set; }
     public string Reminder { get; set; } = "";
+    public string Timezone { get; set; } = "";
 }

@@ -1,27 +1,21 @@
 import { useMemo } from "react";
 import type { CalendarRangeItem } from "../api";
-import {
-  SHORT_WEEKDAYS,
-  addDays,
-  formatLocalTime,
-  isSameMonth,
-  parseUtcIso,
-  sameDay,
-  startOfMonthGrid,
-} from "./dateUtils";
+import { SHORT_WEEKDAYS } from "./dateUtils";
+import { formatTimeInZone, monthGridCells, ymdInZone } from "./calendarZoned";
 
 type Props = {
-  anchor: Date;
+  anchorYmd: string;
+  displayZone: string;
   events: CalendarRangeItem[];
-  onPickDay: (day: Date) => void;
+  onPickDay: (ymd: string) => void;
   onPickEvent: (event: CalendarRangeItem) => void;
 };
 
 const MAX_PER_CELL = 3;
 
-export default function MonthView({ anchor, events, onPickDay, onPickEvent }: Props) {
-  const grid = useMemo(() => buildGrid(anchor, events), [anchor, events]);
-  const today = new Date();
+export default function MonthView({ anchorYmd, displayZone, events, onPickDay, onPickEvent }: Props) {
+  const grid = useMemo(() => buildGrid(anchorYmd, displayZone, events), [anchorYmd, displayZone, events]);
+  const todayYmd = ymdInZone(new Date(), displayZone);
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/40">
@@ -34,13 +28,13 @@ export default function MonthView({ anchor, events, onPickDay, onPickEvent }: Pr
       </div>
       <div className="grid grid-cols-7">
         {grid.map((cell) => {
-          const inMonth = isSameMonth(cell.day, anchor);
-          const isToday = sameDay(cell.day, today);
+          const inMonth = cell.inMonth;
+          const isToday = cell.ymd === todayYmd;
           return (
             <button
               type="button"
-              key={cell.day.toISOString()}
-              onClick={() => onPickDay(cell.day)}
+              key={cell.ymd}
+              onClick={() => onPickDay(cell.ymd)}
               className={`flex min-h-[110px] flex-col items-stretch gap-1 border-b border-r border-slate-800 p-1.5 text-left transition-colors hover:bg-slate-900/70 ${
                 inMonth ? "bg-slate-950/40" : "bg-slate-950/10 text-slate-500"
               }`}
@@ -55,7 +49,7 @@ export default function MonthView({ anchor, events, onPickDay, onPickEvent }: Pr
                         : "text-slate-500"
                   }`}
                 >
-                  {cell.day.getDate()}
+                  {cell.dayNum}
                 </span>
                 {cell.events.length > MAX_PER_CELL && (
                   <span className="text-[10px] font-medium text-slate-400">
@@ -81,11 +75,11 @@ export default function MonthView({ anchor, events, onPickDay, onPickEvent }: Pr
                       }
                     }}
                     className="truncate rounded bg-blue-900/60 px-1.5 py-0.5 text-[11px] font-medium text-blue-100 hover:bg-blue-800/70"
-                    title={`${ev.title}${ev.allDay ? "" : ` · ${formatLocalTime(parseUtcIso(ev.instanceStartUtc))}`}`}
+                    title={`${ev.title}${ev.allDay ? "" : ` · ${formatTimeInZone(ev.instanceStartUtc, displayZone)}`}`}
                   >
                     {!ev.allDay && (
                       <span className="mr-1 text-[10px] text-blue-300">
-                        {formatLocalTime(parseUtcIso(ev.instanceStartUtc))}
+                        {formatTimeInZone(ev.instanceStartUtc, displayZone)}
                       </span>
                     )}
                     {ev.title}
@@ -101,17 +95,16 @@ export default function MonthView({ anchor, events, onPickDay, onPickEvent }: Pr
   );
 }
 
-type Cell = { day: Date; events: CalendarRangeItem[] };
+type Cell = { ymd: string; dayNum: number; inMonth: boolean; events: CalendarRangeItem[] };
 
-function buildGrid(anchor: Date, events: CalendarRangeItem[]): Cell[] {
-  const start = startOfMonthGrid(anchor);
-  const cells: Cell[] = [];
-  for (let i = 0; i < 42; i++) {
-    cells.push({ day: addDays(start, i), events: [] });
-  }
+function buildGrid(anchorYmd: string, displayZone: string, events: CalendarRangeItem[]): Cell[] {
+  const cells = monthGridCells(anchorYmd, displayZone).map((c) => ({
+    ...c,
+    events: [] as CalendarRangeItem[],
+  }));
   for (const ev of events) {
-    const d = parseUtcIso(ev.instanceStartUtc);
-    const idx = cells.findIndex((c) => sameDay(c.day, d));
+    const y = ymdInZone(ev.instanceStartUtc, displayZone);
+    const idx = cells.findIndex((c) => c.ymd === y);
     if (idx >= 0) cells[idx].events.push(ev);
   }
   return cells;

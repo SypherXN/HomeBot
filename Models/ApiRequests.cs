@@ -113,6 +113,8 @@ public sealed class CalendarItemCreateRequest
     public string? Notes { get; set; }
     public string? Link { get; set; }
     public string? Recurrence { get; set; }
+    /// <summary>Optional IANA or Windows id; wall times in <see cref="Start"/>/<see cref="End"/> are interpreted in this zone. Defaults to household Settings timezone.</summary>
+    public string? Timezone { get; set; }
 }
 
 public sealed class CalendarItemPatchRequest
@@ -123,4 +125,5 @@ public sealed class CalendarItemPatchRequest
     public string? Description { get; set; }
     public string? Notes { get; set; }
     public string? Link { get; set; }
+    public string? Timezone { get; set; }
 }

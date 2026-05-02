@@ -41,6 +41,8 @@ public static class CommandFeatureMap
             "setup-view" => null,
             "config-set" => null,
             "config-view" => null,
+            "timezone-set" => null,
+            "timezone-list" => null,
             "undo" => null,
 
             _ => null

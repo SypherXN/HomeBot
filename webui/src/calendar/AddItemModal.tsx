@@ -1,16 +1,19 @@
 import { useEffect, useState } from "react";
+import { DateTime } from "luxon";
 import DiscordMemberSelect from "../components/DiscordMemberSelect";
 import type { DiscordGuildRosterState } from "../hooks/useDiscordGuildRoster";
 import { postCalendarItem } from "../api";
-import { toDateTimeLocalInput } from "./dateUtils";
+import { CALENDAR_TIME_ZONE_OPTIONS } from "./timeZoneOptions";
 
 type Mode = "event" | "task";
 
 type Props = {
   open: boolean;
   initialMode: Mode;
-  /** Pre-fills `start` (event mode) at midnight of this day; ignored for task mode. */
-  initialDate?: Date | null;
+  /** Calendar day (`YYYY-MM-DD`) in the viewer zone to pre-fill the event start. */
+  initialYmd?: string | null;
+  /** Default IANA id for new events (usually matches viewer zone). */
+  eventTimeZoneDefault: string;
   token: string;
   guildRoster: DiscordGuildRosterState;
   onClose: () => void;
@@ -21,7 +24,8 @@ type Props = {
 export default function AddItemModal({
   open,
   initialMode,
-  initialDate,
+  initialYmd,
+  eventTimeZoneDefault,
   token,
   guildRoster,
   onClose,
@@ -30,8 +34,11 @@ export default function AddItemModal({
 }: Props) {
   const [mode, setMode] = useState<Mode>(initialMode);
   const [title, setTitle] = useState("");
-  const [start, setStart] = useState("");
-  const [end, setEnd] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [startTime, setStartTime] = useState("09:00");
+  const [endDate, setEndDate] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [eventTz, setEventTz] = useState(eventTimeZoneDefault);
   const [allDay, setAllDay] = useState(false);
   const [reminder, setReminder] = useState("");
   const [recurrence, setRecurrence] = useState<"" | "daily" | "weekly">("");
@@ -46,8 +53,16 @@ export default function AddItemModal({
     if (!open) return;
     setMode(initialMode);
     setTitle("");
-    setStart(initialMode === "event" && initialDate ? toDateTimeLocalInput(at9am(initialDate)) : "");
-    setEnd("");
+    const tz = eventTimeZoneDefault;
+    setEventTz(tz);
+    const y =
+      initialMode === "event" && initialYmd && /^\d{4}-\d{2}-\d{2}$/.test(initialYmd)
+        ? initialYmd
+        : DateTime.now().setZone(tz).toISODate()!;
+    setStartDate(y);
+    setStartTime("09:00");
+    setEndDate("");
+    setEndTime("");
     setAllDay(false);
     setReminder("");
     setRecurrence("");
@@ -57,9 +72,21 @@ export default function AddItemModal({
     setNotes("");
     setLink("");
     setSubmitting(false);
-  }, [open, initialMode, initialDate]);
+  }, [open, initialMode, initialYmd, eventTimeZoneDefault]);
 
   if (!open) return null;
+
+  function wallStartForApi(): string {
+    if (allDay) return `${startDate}T00:00:00`;
+    const t = normalizeHm(startTime);
+    return `${startDate}T${t}`;
+  }
+
+  function wallEndForApi(): string | undefined {
+    if (!endDate.trim()) return undefined;
+    const t = endTime.trim() ? normalizeHm(endTime) : "00:00:00";
+    return `${endDate.trim()}T${t}`;
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -68,12 +95,18 @@ export default function AddItemModal({
       onError("Title is required.");
       return;
     }
+    if (mode === "event") {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate.trim())) {
+        onError("Start date must be YYYY-MM-DD.");
+        return;
+      }
+    }
     setSubmitting(true);
     try {
       await postCalendarItem(token, {
         title: t,
-        start: mode === "event" ? start.trim() : "",
-        end: end.trim() || undefined,
+        start: mode === "event" ? wallStartForApi() : "",
+        end: mode === "event" ? wallEndForApi() : undefined,
         allDay: mode === "event" ? allDay : false,
         reminder: reminder.trim() || undefined,
         recurrence: mode === "event" && recurrence ? recurrence : undefined,
@@ -82,6 +115,7 @@ export default function AddItemModal({
         description: description.trim() || undefined,
         notes: notes.trim() || undefined,
         link: link.trim() || undefined,
+        timezone: mode === "event" ? eventTz.trim() : undefined,
       });
       onCreated(mode);
     } catch (err) {
@@ -123,24 +157,47 @@ export default function AddItemModal({
 
         {mode === "event" && (
           <>
+            <Field label="Event timezone (wall times below are in this zone)">
+              <select
+                value={eventTz}
+                onChange={(e) => setEventTz(e.target.value)}
+                className={inputClass}
+              >
+                {CALENDAR_TIME_ZONE_OPTIONS.map((z) => (
+                  <option key={z.id} value={z.id}>
+                    {z.label} ({z.id})
+                  </option>
+                ))}
+              </select>
+            </Field>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Start">
+              <Field label="Start date">
                 <input
-                  type="datetime-local"
-                  value={start}
-                  onChange={(e) => setStart(e.target.value)}
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
                   className={inputClass}
                 />
-                <p className="mt-1 text-xs text-slate-500">
-                  Empty = treat as task. Natural language also accepted (e.g. “tomorrow 6pm”).
-                </p>
               </Field>
-              <Field label="End">
+              <Field label="Start time">
                 <input
-                  type="datetime-local"
-                  value={end}
-                  onChange={(e) => setEnd(e.target.value)}
-                  className={inputClass}
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  disabled={allDay}
+                  className={`${inputClass} disabled:opacity-50`}
+                />
+              </Field>
+              <Field label="End date (optional)">
+                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inputClass} />
+              </Field>
+              <Field label="End time (optional)">
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  disabled={allDay}
+                  className={`${inputClass} disabled:opacity-50`}
                 />
               </Field>
               <Field label="Reminder">
@@ -170,7 +227,7 @@ export default function AddItemModal({
                 onChange={(e) => setAllDay(e.target.checked)}
                 className="h-4 w-4 rounded border-slate-600 bg-slate-900"
               />
-              All-day event
+              All-day event (uses start date at midnight in the event timezone)
             </label>
             <label className="flex items-center gap-2 text-sm text-slate-300">
               <input
@@ -240,6 +297,13 @@ export default function AddItemModal({
   );
 }
 
+function normalizeHm(t: string): string {
+  const s = t.trim();
+  if (/^\d{2}:\d{2}$/.test(s)) return `${s}:00`;
+  if (/^\d{2}:\d{2}:\d{2}$/.test(s)) return s;
+  return "09:00:00";
+}
+
 const inputClass =
   "w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
 
@@ -261,12 +325,6 @@ function Field({
       {children}
     </label>
   );
-}
-
-function at9am(d: Date): Date {
-  const out = new Date(d);
-  out.setHours(9, 0, 0, 0);
-  return out;
 }
 
 function ModalShell({

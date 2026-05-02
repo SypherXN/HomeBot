@@ -9,22 +9,25 @@ import {
 } from "../api";
 import { useAuth } from "../auth/AuthContext";
 import DiscordMemberSelect from "../components/DiscordMemberSelect";
+import TimeZoneSelect from "../components/TimeZoneSelect";
+import { useCalendarZone } from "../calendar/CalendarZoneContext";
+import {
+  addDaysYmd,
+  addMonthsYmd,
+  computeRangeQuery,
+  dayRange,
+  formatLongDateYmd,
+  formatMonthYearYmd,
+  formatWeekRangeYmd,
+  parseAnchorYmd,
+  todayYmd,
+  weekRangeSunday,
+  ymdListForDays,
+} from "../calendar/calendarZoned";
 import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
 import { validActorId } from "../lib/validation";
 import AddItemModal from "../calendar/AddItemModal";
 import AgendaView from "../calendar/AgendaView";
-import {
-  addDays,
-  addMonths,
-  endOfMonthGrid,
-  formatLongDate,
-  formatMonthYear,
-  formatWeekRange,
-  startOfDay,
-  startOfMonthGrid,
-  startOfWeek,
-  ymd,
-} from "../calendar/dateUtils";
 import ItemDetailModal from "../calendar/ItemDetailModal";
 import MonthView from "../calendar/MonthView";
 import TasksPanel from "../calendar/TasksPanel";
@@ -37,6 +40,7 @@ const AGENDA_DAYS = 60;
 
 export default function CalendarPage() {
   const { token, actorUserId } = useAuth();
+  const { viewerTimeZone, effectiveViewerZone, setViewerTimeZone } = useCalendarZone();
   const tok = token.trim();
   const actor = actorUserId.trim();
   const canAuth = tok.length > 0;
@@ -45,7 +49,11 @@ export default function CalendarPage() {
 
   const [params, setParams] = useSearchParams();
   const view = (ALL_VIEWS.includes(params.get("view") as View) ? params.get("view") : "month") as View;
-  const anchor = useMemo(() => parseDateParam(params.get("date")) ?? startOfDay(new Date()), [params]);
+  const dateParam = params.get("date");
+  const anchorYmd = useMemo(
+    () => parseAnchorYmd(dateParam, effectiveViewerZone),
+    [dateParam, effectiveViewerZone]
+  );
 
   const [filterMode, setFilterMode] = useState<"all" | "me" | "user">("all");
   const [filterUser, setFilterUser] = useState("");
@@ -73,11 +81,24 @@ export default function CalendarPage() {
 
   type ModalState =
     | { kind: "none" }
-    | { kind: "add"; mode: "event" | "task"; date?: Date }
+    | { kind: "add"; mode: "event" | "task"; ymd?: string }
     | { kind: "detail"; itemId: number; isRecurring?: boolean; title?: string };
   const [modal, setModal] = useState<ModalState>({ kind: "none" });
 
-  const visibleWindow = useMemo(() => computeWindow(view, anchor), [view, anchor]);
+  const rangeYmd = useMemo(
+    () => computeRangeQuery(view, anchorYmd, effectiveViewerZone, AGENDA_DAYS),
+    [view, anchorYmd, effectiveViewerZone]
+  );
+
+  const weekDayYmds = useMemo(() => {
+    const { fromYmd } = weekRangeSunday(anchorYmd, effectiveViewerZone);
+    return ymdListForDays(fromYmd, effectiveViewerZone, 7);
+  }, [anchorYmd, effectiveViewerZone]);
+
+  const singleDayYmds = useMemo(() => {
+    const { fromYmd } = dayRange(anchorYmd, effectiveViewerZone);
+    return [fromYmd];
+  }, [anchorYmd, effectiveViewerZone]);
 
   const loadRange = useCallback(async () => {
     if (!canAuth) {
@@ -89,9 +110,10 @@ export default function CalendarPage() {
     try {
       const data = await getCalendarRange(
         tok,
-        ymd(visibleWindow.from),
-        ymd(visibleWindow.to),
-        userFilter || undefined
+        rangeYmd.fromYmd,
+        rangeYmd.toYmd,
+        userFilter || undefined,
+        effectiveViewerZone
       );
       setRange(data);
     } catch (err) {
@@ -100,7 +122,7 @@ export default function CalendarPage() {
     } finally {
       setRangeLoading(false);
     }
-  }, [canAuth, tok, visibleWindow.from, visibleWindow.to, userFilter]);
+  }, [canAuth, tok, rangeYmd.fromYmd, rangeYmd.toYmd, userFilter, effectiveViewerZone]);
 
   const loadTasks = useCallback(async () => {
     if (!canAuth) {
@@ -143,21 +165,21 @@ export default function CalendarPage() {
     setParams(p, { replace: true });
   }
 
-  function setAnchor(next: Date) {
+  function setAnchorYmd(nextYmd: string) {
     const p = new URLSearchParams(params);
-    p.set("date", ymd(next));
+    p.set("date", nextYmd);
     setParams(p, { replace: true });
   }
 
   function gotoToday() {
-    setAnchor(startOfDay(new Date()));
+    setAnchorYmd(todayYmd(effectiveViewerZone));
   }
 
   function step(direction: -1 | 1) {
-    if (view === "month") setAnchor(addMonths(anchor, direction));
-    else if (view === "week") setAnchor(addDays(anchor, 7 * direction));
-    else if (view === "day") setAnchor(addDays(anchor, direction));
-    else setAnchor(addDays(anchor, AGENDA_DAYS * direction));
+    if (view === "month") setAnchorYmd(addMonthsYmd(anchorYmd, direction));
+    else if (view === "week") setAnchorYmd(addDaysYmd(anchorYmd, 7 * direction));
+    else if (view === "day") setAnchorYmd(addDaysYmd(anchorYmd, direction));
+    else setAnchorYmd(addDaysYmd(anchorYmd, AGENDA_DAYS * direction));
   }
 
   async function handleUndo() {
@@ -182,7 +204,10 @@ export default function CalendarPage() {
     }
   }
 
-  const dateLabel = useMemo(() => formatRangeLabel(view, anchor), [view, anchor]);
+  const dateLabel = useMemo(
+    () => formatRangeLabelYmd(view, anchorYmd, effectiveViewerZone),
+    [view, anchorYmd, effectiveViewerZone]
+  );
 
   return (
     <div className="mx-auto max-w-6xl px-3 pb-12 sm:px-4">
@@ -191,6 +216,7 @@ export default function CalendarPage() {
           <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Calendar</h1>
           <p className="text-sm text-slate-500">
             {dateLabel}
+            <span className="ml-2 text-xs text-slate-600">· {effectiveViewerZone}</span>
             {rangeLoading && <span className="ml-2 text-xs text-slate-600">refreshing…</span>}
           </p>
         </div>
@@ -225,7 +251,7 @@ export default function CalendarPage() {
         onPrev={() => step(-1)}
         onNext={() => step(1)}
         onToday={gotoToday}
-        onAddEvent={() => setModal({ kind: "add", mode: "event", date: anchor })}
+        onAddEvent={() => setModal({ kind: "add", mode: "event", ymd: anchorYmd })}
         canAuth={canAuth}
         filterMode={filterMode}
         onFilterMode={setFilterMode}
@@ -234,6 +260,8 @@ export default function CalendarPage() {
         token={tok}
         guildRoster={guildRoster}
         canActor={canActor}
+        viewerTimeZone={viewerTimeZone}
+        onViewerTimeZone={setViewerTimeZone}
       />
 
       {rangeError && (
@@ -246,10 +274,11 @@ export default function CalendarPage() {
         <div className="min-w-0 flex-1">
           {view === "month" && (
             <MonthView
-              anchor={anchor}
+              anchorYmd={anchorYmd}
+              displayZone={effectiveViewerZone}
               events={range ?? []}
-              onPickDay={(d) => {
-                setAnchor(d);
+              onPickDay={(ymd) => {
+                setAnchorYmd(ymd);
                 setView("day");
               }}
               onPickEvent={(ev) =>
@@ -264,7 +293,8 @@ export default function CalendarPage() {
           )}
           {view === "week" && (
             <TimeGridView
-              days={Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i))}
+              dayYmds={weekDayYmds}
+              displayZone={effectiveViewerZone}
               events={range ?? []}
               onPickEvent={(ev) =>
                 setModal({
@@ -278,7 +308,8 @@ export default function CalendarPage() {
           )}
           {view === "day" && (
             <TimeGridView
-              days={[startOfDay(anchor)]}
+              dayYmds={singleDayYmds}
+              displayZone={effectiveViewerZone}
               events={range ?? []}
               onPickEvent={(ev) =>
                 setModal({
@@ -293,6 +324,7 @@ export default function CalendarPage() {
           {view === "agenda" && (
             <AgendaView
               events={range ?? []}
+              displayZone={effectiveViewerZone}
               onPickEvent={(ev) =>
                 setModal({
                   kind: "detail",
@@ -341,7 +373,8 @@ export default function CalendarPage() {
       <AddItemModal
         open={modal.kind === "add"}
         initialMode={modal.kind === "add" ? modal.mode : "event"}
-        initialDate={modal.kind === "add" ? modal.date ?? null : null}
+        initialYmd={modal.kind === "add" ? modal.ymd ?? null : null}
+        eventTimeZoneDefault={effectiveViewerZone}
         token={tok}
         guildRoster={guildRoster}
         onClose={() => setModal({ kind: "none" })}
@@ -388,6 +421,8 @@ function Toolbar({
   token,
   guildRoster,
   canActor,
+  viewerTimeZone,
+  onViewerTimeZone,
 }: {
   view: View;
   onViewChange: (v: View) => void;
@@ -403,6 +438,8 @@ function Toolbar({
   token: string;
   guildRoster: ReturnType<typeof useDiscordGuildRoster>;
   canActor: boolean;
+  viewerTimeZone: string;
+  onViewerTimeZone: (z: string) => void;
 }) {
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-slate-800 bg-slate-900/40 p-3 lg:flex-row lg:items-center lg:justify-between">
@@ -497,37 +534,23 @@ function Toolbar({
         >
           + Event
         </button>
+        <label className="flex items-center gap-2 text-xs text-slate-400">
+          <span className="shrink-0">View TZ</span>
+          <TimeZoneSelect
+            value={viewerTimeZone}
+            onChange={onViewerTimeZone}
+            disabled={!canAuth}
+            className="h-9 max-w-[min(100vw-8rem,260px)] truncate rounded-md border border-slate-700 bg-slate-950 px-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
+          />
+        </label>
       </div>
     </div>
   );
 }
 
-function parseDateParam(s: string | null): Date | null {
-  if (!s) return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
-  if (!m) return null;
-  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-}
-
-function computeWindow(view: View, anchor: Date): { from: Date; to: Date } {
-  if (view === "month") {
-    return { from: startOfMonthGrid(anchor), to: endOfMonthGrid(anchor) };
-  }
-  if (view === "week") {
-    const from = startOfWeek(anchor);
-    return { from, to: addDays(from, 7) };
-  }
-  if (view === "day") {
-    const from = startOfDay(anchor);
-    return { from, to: addDays(from, 1) };
-  }
-  const from = startOfDay(anchor);
-  return { from, to: addDays(from, AGENDA_DAYS) };
-}
-
-function formatRangeLabel(view: View, anchor: Date): string {
-  if (view === "month") return formatMonthYear(anchor);
-  if (view === "week") return formatWeekRange(anchor);
-  if (view === "day") return formatLongDate(anchor);
-  return `${formatLongDate(anchor)} + ${AGENDA_DAYS} days`;
+function formatRangeLabelYmd(view: View, anchorYmd: string, zone: string): string {
+  if (view === "month") return formatMonthYearYmd(anchorYmd, zone);
+  if (view === "week") return formatWeekRangeYmd(anchorYmd, zone);
+  if (view === "day") return formatLongDateYmd(anchorYmd, zone);
+  return `${formatLongDateYmd(anchorYmd, zone)} + ${AGENDA_DAYS} days`;
 }

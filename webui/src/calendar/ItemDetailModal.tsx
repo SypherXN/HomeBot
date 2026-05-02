@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DateTime } from "luxon";
 import {
   deleteCalendarItem,
   getCalendarItemDetail,
@@ -6,6 +7,7 @@ import {
   postCalendarItemComplete,
   type CalendarItemDetail,
 } from "../api";
+import { CALENDAR_TIME_ZONE_OPTIONS } from "./timeZoneOptions";
 
 type Props = {
   open: boolean;
@@ -38,8 +40,9 @@ export default function ItemDetailModal({
   const [loading, setLoading] = useState(false);
 
   const [title, setTitle] = useState("");
-  const [start, setStart] = useState("");
-  const [end, setEnd] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [eventTz, setEventTz] = useState("UTC");
   const [description, setDescription] = useState("");
   const [notes, setNotes] = useState("");
   const [link, setLink] = useState("");
@@ -49,8 +52,9 @@ export default function ItemDetailModal({
     if (!open || itemId == null) return;
     setDetail(null);
     setTitle(initialTitle ?? "");
-    setStart("");
-    setEnd("");
+    setStartDate("");
+    setStartTime("");
+    setEventTz("UTC");
     setDescription("");
     setNotes("");
     setLink("");
@@ -61,7 +65,16 @@ export default function ItemDetailModal({
         if (cancelled) return;
         setDetail(d);
         setTitle(d.title);
-        setStart(d.start);
+        const tz = (d.timezone && d.timezone.trim()) || "UTC";
+        setEventTz(tz);
+        const wall = d.start.trim() ? utcStorageToWallParts(d.start, tz) : null;
+        if (wall) {
+          setStartDate(wall.date);
+          setStartTime(wall.time);
+        } else {
+          setStartDate("");
+          setStartTime("09:00");
+        }
         setDescription(d.description);
         setNotes(d.notes);
         setLink(d.link);
@@ -82,13 +95,17 @@ export default function ItemDetailModal({
   async function handleSave() {
     setBusy("save");
     try {
+      const startPayload =
+        detail?.start?.trim() && startDate.trim()
+          ? `${startDate.trim()}T${normalizeHmDetail(startTime)}`
+          : undefined;
       await patchCalendarItem(token, itemId!, {
         title: title.trim() || undefined,
-        start: start.trim() || undefined,
-        end: end.trim() || undefined,
+        start: startPayload,
         description: description.trim() || undefined,
         notes: notes.trim() || undefined,
         link: link.trim() || undefined,
+        timezone: eventTz.trim() || undefined,
       });
       onSuccess("Saved.");
       onChanged();
@@ -179,24 +196,42 @@ export default function ItemDetailModal({
             <Field label="Title">
               <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
             </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Start (UTC text or natural language)">
-                <input
-                  value={start}
-                  onChange={(e) => setStart(e.target.value)}
-                  className={inputClass}
-                  placeholder="empty = task"
-                />
-              </Field>
-              <Field label="End (optional)">
-                <input
-                  value={end}
-                  onChange={(e) => setEnd(e.target.value)}
-                  className={inputClass}
-                  placeholder="leave blank to keep current"
-                />
-              </Field>
-            </div>
+            {detail.start.trim() ? (
+              <>
+                <Field label="Event timezone">
+                  <select value={eventTz} onChange={(e) => setEventTz(e.target.value)} className={inputClass}>
+                    {!CALENDAR_TIME_ZONE_OPTIONS.some((o) => o.id === eventTz) && (
+                      <option value={eventTz}>{eventTz}</option>
+                    )}
+                    {CALENDAR_TIME_ZONE_OPTIONS.map((z) => (
+                      <option key={z.id} value={z.id}>
+                        {z.label} ({z.id})
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Start date">
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className={inputClass}
+                    />
+                  </Field>
+                  <Field label="Start time">
+                    <input
+                      type="time"
+                      value={startTime}
+                      onChange={(e) => setStartTime(e.target.value)}
+                      className={inputClass}
+                    />
+                  </Field>
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-slate-500">This row has no scheduled start (task-style).</p>
+            )}
             <Field label="Description">
               <input value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />
             </Field>
@@ -266,6 +301,19 @@ export default function ItemDetailModal({
 
 const inputClass =
   "w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+
+function utcStorageToWallParts(raw: string, zone: string): { date: string; time: string } | null {
+  const dt = DateTime.fromFormat(raw.trim(), "yyyy-MM-dd HH:mm", { zone: "utc" }).setZone(zone);
+  if (!dt.isValid) return null;
+  return { date: dt.toFormat("yyyy-MM-dd"), time: dt.toFormat("HH:mm") };
+}
+
+function normalizeHmDetail(t: string): string {
+  const s = t.trim();
+  if (/^\d{2}:\d{2}$/.test(s)) return `${s}:00`;
+  if (/^\d{2}:\d{2}:\d{2}$/.test(s)) return s;
+  return "00:00:00";
+}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

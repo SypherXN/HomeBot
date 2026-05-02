@@ -57,17 +57,10 @@ public class CalendarCommands : InteractionModuleBase<SocketInteractionContext>
 
             DateTime? parsedStart = DateParser.Parse(start);
 
-            var tzValue = _config.Get("timezone") ?? "Pacific Standard Time";
-
-            TimeZoneInfo tz;
-            try
-            {
-                tz = TimeZoneInfo.FindSystemTimeZoneById(tzValue);
-            }
-            catch
-            {
-                tz = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
-            }
+            var tzRaw = _config.Get("timezone");
+            var tz = TimeZoneResolver.Resolve(
+                string.IsNullOrWhiteSpace(tzRaw) ? null : tzRaw,
+                TimeZoneResolver.DefaultHouseholdTimeZoneId);
 
             string finalStart = start;
 
@@ -102,7 +95,7 @@ public class CalendarCommands : InteractionModuleBase<SocketInteractionContext>
                 notes,
                 link,
                 recurrence,
-                tzValue
+                TimeZoneResolver.ToStorageId(tz)
             );
 
             await RespondAsync($"📅 Added: {title}");
@@ -167,7 +160,7 @@ public class CalendarCommands : InteractionModuleBase<SocketInteractionContext>
         string notes = "",
         string link = "")
     {
-        _calendar.EditItem(id, title, start, end, description, notes, link);
+        _calendar.EditItem(id, title, start, end, description, notes, link, null);
 
         await RespondAsync("✏️ Calendar item updated");
     }

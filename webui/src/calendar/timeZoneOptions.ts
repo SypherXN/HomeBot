@@ -1,0 +1,23 @@
+/** Curated IANA ids for dropdowns (subset of full tz database). */
+export const CALENDAR_TIME_ZONE_OPTIONS: { id: string; label: string }[] = [
+  { id: "Pacific/Honolulu", label: "Honolulu" },
+  { id: "America/Anchorage", label: "Anchorage" },
+  { id: "America/Los_Angeles", label: "Los Angeles" },
+  { id: "America/Denver", label: "Denver" },
+  { id: "America/Chicago", label: "Chicago" },
+  { id: "America/New_York", label: "New York" },
+  { id: "America/Sao_Paulo", label: "São Paulo" },
+  { id: "UTC", label: "UTC" },
+  { id: "Europe/London", label: "London" },
+  { id: "Europe/Paris", label: "Paris" },
+  { id: "Europe/Berlin", label: "Berlin" },
+  { id: "Europe/Athens", label: "Athens" },
+  { id: "Asia/Dubai", label: "Dubai" },
+  { id: "Asia/Kolkata", label: "India" },
+  { id: "Asia/Bangkok", label: "Bangkok" },
+  { id: "Asia/Shanghai", label: "Shanghai" },
+  { id: "Asia/Tokyo", label: "Tokyo" },
+  { id: "Asia/Seoul", label: "Seoul" },
+  { id: "Australia/Sydney", label: "Sydney" },
+  { id: "Pacific/Auckland", label: "Auckland" },
+];

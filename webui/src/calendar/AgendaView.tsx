@@ -1,21 +1,17 @@
 import { useMemo } from "react";
 import type { CalendarRangeItem } from "../api";
-import {
-  formatLocalTime,
-  formatLongDate,
-  parseUtcIso,
-  sameDay,
-} from "./dateUtils";
+import { formatLongDateYmd, formatTimeInZone, ymdInZone } from "./calendarZoned";
 
 type Props = {
   events: CalendarRangeItem[];
+  displayZone: string;
   onPickEvent: (event: CalendarRangeItem) => void;
 };
 
-type DayBucket = { day: Date; events: CalendarRangeItem[] };
+type DayBucket = { ymd: string; events: CalendarRangeItem[] };
 
-export default function AgendaView({ events, onPickEvent }: Props) {
-  const buckets = useMemo(() => groupByDay(events), [events]);
+export default function AgendaView({ events, displayZone, onPickEvent }: Props) {
+  const buckets = useMemo(() => groupByDay(events, displayZone), [events, displayZone]);
 
   if (buckets.length === 0) {
     return (
@@ -28,9 +24,9 @@ export default function AgendaView({ events, onPickEvent }: Props) {
   return (
     <div className="space-y-6">
       {buckets.map((bucket) => (
-        <section key={bucket.day.toISOString()}>
+        <section key={bucket.ymd}>
           <h3 className="border-b border-slate-800 pb-1 text-sm font-semibold text-slate-300">
-            {formatLongDate(bucket.day)}
+            {formatLongDateYmd(bucket.ymd, displayZone)}
           </h3>
           <ul className="mt-2 space-y-2">
             {bucket.events.map((ev) => (
@@ -52,9 +48,9 @@ export default function AgendaView({ events, onPickEvent }: Props) {
                     <span className="shrink-0 text-xs text-slate-400">
                       {ev.allDay
                         ? "all-day"
-                        : `${formatLocalTime(parseUtcIso(ev.instanceStartUtc))}${
+                        : `${formatTimeInZone(ev.instanceStartUtc, displayZone)}${
                             ev.instanceEndUtc
-                              ? ` – ${formatLocalTime(parseUtcIso(ev.instanceEndUtc))}`
+                              ? ` – ${formatTimeInZone(ev.instanceEndUtc, displayZone)}`
                               : ""
                           }`}
                     </span>
@@ -71,6 +67,9 @@ export default function AgendaView({ events, onPickEvent }: Props) {
                       {ev.hasLink && <span>🔗 link</span>}
                     </p>
                   )}
+                  {ev.timeZoneId && ev.timeZoneId !== displayZone && (
+                    <p className="text-[11px] text-slate-600">Event TZ: {ev.timeZoneId}</p>
+                  )}
                 </button>
               </li>
             ))}
@@ -81,15 +80,16 @@ export default function AgendaView({ events, onPickEvent }: Props) {
   );
 }
 
-function groupByDay(events: CalendarRangeItem[]): DayBucket[] {
+function groupByDay(events: CalendarRangeItem[], displayZone: string): DayBucket[] {
+  const sorted = [...events].sort((a, b) => a.instanceStartUtc.localeCompare(b.instanceStartUtc));
   const buckets: DayBucket[] = [];
-  for (const ev of events) {
-    const d = parseUtcIso(ev.instanceStartUtc);
+  for (const ev of sorted) {
+    const y = ymdInZone(ev.instanceStartUtc, displayZone);
     const last = buckets[buckets.length - 1];
-    if (last && sameDay(last.day, d)) {
+    if (last && last.ymd === y) {
       last.events.push(ev);
     } else {
-      buckets.push({ day: new Date(d.getFullYear(), d.getMonth(), d.getDate()), events: [ev] });
+      buckets.push({ ymd: y, events: [ev] });
     }
   }
   return buckets;

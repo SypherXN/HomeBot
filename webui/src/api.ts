@@ -313,6 +313,8 @@ export type CalendarRangeItem = {
   instanceStartUtc: string;
   instanceEndUtc?: string | null;
   isRecurringInstance: boolean;
+  /** IANA / Windows id for the event row (recurrence expansion used this zone). */
+  timeZoneId?: string;
 };
 
 export type CalendarItemDetail = {
@@ -323,6 +325,7 @@ export type CalendarItemDetail = {
   start: string;
   allDay: boolean;
   reminder: string;
+  timezone: string;
 };
 
 export type CalendarItemTypeFilter = "task" | "event";
@@ -353,15 +356,20 @@ export function getCalendarUpcoming(token: string, page = 0, userFilter?: string
   return apiJson<PagedCalendarList>(`/api/calendar/upcoming?${q.toString()}`, { token });
 }
 
-/** Fetch events overlapping a local-day window. Server caps the window at 92 days. */
+/**
+ * Fetch events overlapping a calendar-day window. `from`/`to` are interpreted in `windowTimeZone`
+ * (IANA or Windows id); omit to use the household Settings timezone on the server.
+ */
 export function getCalendarRange(
   token: string,
   fromYmd: string,
   toYmd: string,
-  userFilter?: string
+  userFilter?: string,
+  windowTimeZone?: string
 ) {
   const q = new URLSearchParams({ from: fromYmd, to: toYmd });
   if (userFilter) q.set("userFilter", userFilter);
+  if (windowTimeZone?.trim()) q.set("timeZone", windowTimeZone.trim());
   return apiJson<CalendarRangeItem[]>(`/api/calendar/range?${q.toString()}`, { token });
 }
 
@@ -594,6 +602,8 @@ export function postCalendarItem(
     notes?: string;
     link?: string;
     recurrence?: string;
+    /** IANA or Windows id; wall times in start/end are interpreted in this zone. */
+    timezone?: string;
   }
 ) {
   const payload: Record<string, unknown> = {
@@ -608,6 +618,7 @@ export function postCalendarItem(
   if (body.notes != null) payload.notes = body.notes;
   if (body.link != null) payload.link = body.link;
   if (body.recurrence != null) payload.recurrence = body.recurrence;
+  if (body.timezone?.trim()) payload.timezone = body.timezone.trim();
   const trimmedAssignee = body.assignedToUserId?.trim();
   if (trimmedAssignee && /^\d+$/.test(trimmedAssignee) && trimmedAssignee !== "0") {
     payload.assignedToUserId = trimmedAssignee;
@@ -618,7 +629,15 @@ export function postCalendarItem(
 export function patchCalendarItem(
   token: string,
   id: number,
-  body: { title?: string; start?: string; end?: string; description?: string; notes?: string; link?: string }
+  body: {
+    title?: string;
+    start?: string;
+    end?: string;
+    description?: string;
+    notes?: string;
+    link?: string;
+    timezone?: string;
+  }
 ) {
   return apiJson<unknown>(`/api/calendar/items/${id}`, { token, method: "PATCH", body });
 }

@@ -1,15 +1,12 @@
 import { useMemo } from "react";
+import { DateTime } from "luxon";
 import type { CalendarRangeItem } from "../api";
-import {
-  SHORT_WEEKDAYS,
-  formatLocalTime,
-  parseUtcIso,
-  sameDay,
-} from "./dateUtils";
+import { formatTimeInZone, wallMinutesInZone, ymdInZone } from "./calendarZoned";
 
 type Props = {
-  /** Days to show as columns. Pass 1 day for a "Day" view, 7 for a "Week" view. */
-  days: Date[];
+  /** Calendar columns as `YYYY-MM-DD` in <see cref="displayZone"/>. */
+  dayYmds: string[];
+  displayZone: string;
   events: CalendarRangeItem[];
   onPickEvent: (event: CalendarRangeItem) => void;
 };
@@ -18,51 +15,55 @@ const HOUR_START = 6;
 const HOUR_END = 23;
 const HOUR_HEIGHT_PX = 44;
 
-export default function TimeGridView({ days, events, onPickEvent }: Props) {
-  const partition = useMemo(() => splitAllDayAndTimed(events, days), [events, days]);
-  const today = new Date();
+export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent }: Props) {
+  const partition = useMemo(
+    () => splitAllDayAndTimed(events, dayYmds, displayZone),
+    [events, dayYmds, displayZone]
+  );
+  const todayYmd = ymdInZone(new Date(), displayZone);
   const hours = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => HOUR_START + i);
 
-  const dayLabels = days.map((d) => ({
-    date: d,
-    label: SHORT_WEEKDAYS[d.getDay()],
-    isToday: sameDay(d, today),
-  }));
+  const dayLabels = dayYmds.map((ymd) => {
+    const d = DateTime.fromISO(ymd, { zone: displayZone });
+    return {
+      ymd,
+      label: d.toFormat("ccc"),
+      dayNum: d.day,
+      isToday: ymd === todayYmd,
+    };
+  });
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/40">
       <div
         className="grid border-b border-slate-800 bg-slate-900/60 text-center text-xs"
-        style={{ gridTemplateColumns: `64px repeat(${days.length}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: `64px repeat(${dayYmds.length}, minmax(0, 1fr))` }}
       >
         <div className="border-r border-slate-800 px-2 py-2 text-slate-500">All-day</div>
         {dayLabels.map((d) => (
           <div
-            key={d.date.toISOString()}
+            key={d.ymd}
             className={`border-r border-slate-800 px-2 py-2 ${
               d.isToday ? "bg-blue-950/40 text-blue-100" : "text-slate-300"
             }`}
           >
             <div className="text-[10px] uppercase tracking-wide text-slate-500">{d.label}</div>
-            <div className="text-base font-medium">{d.date.getDate()}</div>
+            <div className="text-base font-medium">{d.dayNum}</div>
           </div>
         ))}
       </div>
 
       <div
         className="grid border-b border-slate-800"
-        style={{ gridTemplateColumns: `64px repeat(${days.length}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: `64px repeat(${dayYmds.length}, minmax(0, 1fr))` }}
       >
         <div className="border-r border-slate-800 bg-slate-950/40 px-2 py-1 text-[10px] text-slate-500">
           all-day
         </div>
-        {days.map((day) => {
-          const all = partition.allDay.get(day.toDateString()) ?? [];
+        {dayYmds.map((ymd) => {
+          const all = partition.allDay.get(ymd) ?? [];
           return (
-            <div
-              key={day.toISOString()}
-              className="min-h-[36px] border-r border-slate-800 p-1"
-            >
+            <div key={ymd} className="min-h-[36px] border-r border-slate-800 p-1">
               <div className="flex flex-col gap-0.5">
                 {all.map((ev) => (
                   <button
@@ -85,7 +86,7 @@ export default function TimeGridView({ days, events, onPickEvent }: Props) {
       <div
         className="relative grid"
         style={{
-          gridTemplateColumns: `64px repeat(${days.length}, minmax(0, 1fr))`,
+          gridTemplateColumns: `64px repeat(${dayYmds.length}, minmax(0, 1fr))`,
           height: `${(HOUR_END - HOUR_START + 1) * HOUR_HEIGHT_PX}px`,
         }}
       >
@@ -101,13 +102,10 @@ export default function TimeGridView({ days, events, onPickEvent }: Props) {
           ))}
         </div>
 
-        {days.map((day) => {
-          const timed = partition.timed.get(day.toDateString()) ?? [];
+        {dayYmds.map((ymd) => {
+          const timed = partition.timed.get(ymd) ?? [];
           return (
-            <div
-              key={day.toISOString()}
-              className="relative border-r border-slate-800"
-            >
+            <div key={ymd} className="relative border-r border-slate-800">
               {hours.map((h) => (
                 <div
                   key={h}
@@ -116,15 +114,11 @@ export default function TimeGridView({ days, events, onPickEvent }: Props) {
                 />
               ))}
               {timed.map((ev) => {
-                const start = parseUtcIso(ev.instanceStartUtc);
-                const end = ev.instanceEndUtc
-                  ? parseUtcIso(ev.instanceEndUtc)
-                  : new Date(start.getTime() + 60 * 60 * 1000);
-                const startMin = Math.max(0, hoursToMinutes(start) - HOUR_START * 60);
-                const endMin = Math.min(
-                  (HOUR_END - HOUR_START + 1) * 60,
-                  hoursToMinutes(end) - HOUR_START * 60
-                );
+                const startMin = Math.max(0, wallMinutesInZone(ev.instanceStartUtc, displayZone) - HOUR_START * 60);
+                const endMinRaw = ev.instanceEndUtc
+                  ? wallMinutesInZone(ev.instanceEndUtc, displayZone)
+                  : wallMinutesInZone(ev.instanceStartUtc, displayZone) + 60;
+                const endMin = Math.min((HOUR_END - HOUR_START + 1) * 60, endMinRaw - HOUR_START * 60);
                 const top = (startMin / 60) * HOUR_HEIGHT_PX;
                 const height = Math.max(20, ((endMin - startMin) / 60) * HOUR_HEIGHT_PX - 2);
                 if (endMin <= 0 || startMin >= (HOUR_END - HOUR_START + 1) * 60) return null;
@@ -142,8 +136,8 @@ export default function TimeGridView({ days, events, onPickEvent }: Props) {
                       {ev.isRecurringInstance && <span className="ml-1 text-blue-200">↻</span>}
                     </div>
                     <div className="truncate text-[10px] text-blue-100">
-                      {formatLocalTime(start)}
-                      {ev.instanceEndUtc ? ` – ${formatLocalTime(end)}` : ""}
+                      {formatTimeInZone(ev.instanceStartUtc, displayZone)}
+                      {ev.instanceEndUtc ? ` – ${formatTimeInZone(ev.instanceEndUtc, displayZone)}` : ""}
                     </div>
                   </button>
                 );
@@ -161,28 +155,24 @@ type Partition = {
   timed: Map<string, CalendarRangeItem[]>;
 };
 
-function splitAllDayAndTimed(events: CalendarRangeItem[], days: Date[]): Partition {
+function splitAllDayAndTimed(
+  events: CalendarRangeItem[],
+  dayYmds: string[],
+  displayZone: string
+): Partition {
   const all = new Map<string, CalendarRangeItem[]>();
   const timed = new Map<string, CalendarRangeItem[]>();
-  for (const day of days) {
-    all.set(day.toDateString(), []);
-    timed.set(day.toDateString(), []);
+  for (const y of dayYmds) {
+    all.set(y, []);
+    timed.set(y, []);
   }
   for (const ev of events) {
-    const start = parseUtcIso(ev.instanceStartUtc);
-    for (const day of days) {
-      if (sameDay(day, start)) {
-        const target = ev.allDay ? all.get(day.toDateString()) : timed.get(day.toDateString());
-        if (target) target.push(ev);
-        break;
-      }
-    }
+    const y = ymdInZone(ev.instanceStartUtc, displayZone);
+    if (!dayYmds.includes(y)) continue;
+    const target = ev.allDay ? all.get(y) : timed.get(y);
+    if (target) target.push(ev);
   }
   return { allDay: all, timed };
-}
-
-function hoursToMinutes(d: Date): number {
-  return d.getHours() * 60 + d.getMinutes();
 }
 
 function formatHourLabel(h: number): string {

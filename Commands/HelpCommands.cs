@@ -41,14 +41,18 @@ public class HelpCommands : InteractionModuleBase<SocketInteractionContext>
     @"⚙️ Config System
 
     /config-set <key> <value>
-    /config-get <key>
+    /config-view
 
     Common keys:
     - page_size → list size
-    - timezone → system timezone
+    - timezone → household calendar zone (IANA recommended)
+
+    Timezone (easiest):
+    - /timezone-set  (type to filter; stores a portable IANA id when possible)
+    - /timezone-list (examples)
 
     Example:
-    - /config-set timezone ""Pacific Standard Time""";
+    - /config-set timezone America/Los_Angeles";
                 break;
 
             // ================= SETUP =================
@@ -78,6 +82,8 @@ public class HelpCommands : InteractionModuleBase<SocketInteractionContext>
     /calendar-today
     /calendar-upcoming
     /calendar-view
+
+    Household timezone: /timezone-set or /config-set timezone <IANA>
 
     Date formats:
     - tomorrow 6pm
