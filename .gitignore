@@ -86,3 +86,13 @@ _NCrunch_*/
 
 # --- Local scratch ---
 .tmp/
+
+# --- Optional ops / planning docs (not required to build or run the bot) ---
+docs/OPS.md
+docs/HomeBot_Base_Design.md
+docs/HomeBot_WebUI_Plan.md
+docs/Refined_WebUI_Adaptation_Plan.md
+docs/WebUI_Future_Work.md
+
+# --- GitHub Pages CI (optional; self-hosters can add their own workflow or upload dist manually) ---
+.github/workflows/deploy-webui.yml

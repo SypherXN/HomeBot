@@ -102,7 +102,7 @@ Values are read from the **process** environment (shell, systemd, Docker, or IDE
 
 ### Discord OAuth (optional — “Continue with Discord” on Sign in)
 
-Uses the same **`WebUsers`** row as password login when **`DiscordUserId`** matches. There is **no** auto-provisioning from OAuth alone; the user must already exist (e.g. after Discord verify signup). **Multi-tenant / SSO** and **Discord-first account creation** are out of scope for this repo ([**docs/WebUI_Future_Work.md**](docs/WebUI_Future_Work.md) — *Explicitly not backlog*).
+Uses the same **`WebUsers`** row as password login when **`DiscordUserId`** matches. There is **no** auto-provisioning from OAuth alone; the user must already exist (e.g. after Discord verify signup). **Multi-tenant / SSO** and **Discord-first account creation** are out of scope for this repository.
 
 | Variable | Purpose |
 |----------|---------|
@@ -205,13 +205,6 @@ Output is in **`webui/dist`**. Set **`VITE_API_BASE_URL`** at build time if the 
 - **SQLite** holds items, settings, channel bindings, action log (undo), web users, and verification sessions.
 - **Snowflakes:** Large Discord ids are handled as **strings** in JSON where it matters (money, calendar assignee, list API responses, buy/wishlist writes). Prefer roster picks or member labels when the UI offers them.
 - **Secrets:** Do not commit tokens or `HOMEBOT_WEB_JWT_SECRET`. The Web UI stores the bearer/JWT and refresh token only in **browser localStorage** (refresh is cleared on sign-out; the server row is revoked when sign-out calls **`POST /api/auth/logout`**).
-
----
-
-## More documentation
-
-- **`docs/Refined_WebUI_Adaptation_Plan.md`** — Architecture snapshot, routes, API notes, and Phase status.
-- **`docs/`** — Older planning docs; the refined plan is the best match for the current app.
 
 ---
 

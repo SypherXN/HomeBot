@@ -553,7 +553,7 @@ On the **server** that runs HomeBot:
 
 1. Push your repository to GitHub (**`OWNER/REPO`**).
 2. In the repo on GitHub: **Settings** → **Pages**.
-3. Under **Build and deployment** → **Source**, choose **GitHub Actions** (recommended) so the workflow below can deploy **`webui/dist`**.
+3. Under **Build and deployment** → **Source**, choose **GitHub Actions** (recommended) so your workflow can deploy **`webui/dist`**.
 
 If you use **Deploy from a branch** instead, you must commit **`webui/dist`** or a **`gh-pages`** branch yourself; the Actions approach avoids committing build output to **`main`**.
 
@@ -561,17 +561,19 @@ If you use **Deploy from a branch** instead, you must commit **`webui/dist`** or
 
 ### 5.2 Add a GitHub Actions workflow
 
-This repository includes **`.github/workflows/deploy-webui.yml`**. Enable it by choosing **GitHub Actions** as the Pages source (§5.1) and setting the variable below. If you maintain a fork from an older tree, compare your workflow to the file in **`main`**. Adjust:
+The repository does **not** ship a checked-in Pages deploy workflow; add your own under **`.github/workflows/`** (for example **`deploy-webui.yml`**) after choosing **GitHub Actions** as the Pages source (§5.1). A typical pipeline:
 
-- **`VITE_API_BASE_URL`** — use a **[repository variable](https://docs.github.com/en/actions/learn-github-actions/variables#defining-configuration-variables-for-multiple-workflows)** (e.g. `HOMEBOT_API_PUBLIC_URL`) or a secret, set in **Settings** → **Secrets and variables** → **Actions** → **Variables** tab.
+- **Trigger:** `push` to **`main`** with **`paths`** for **`webui/**`** (optional **`workflow_dispatch`**).
+- **Permissions:** `contents: read`, `pages: write`, `id-token: write`.
+- **Build:** checkout → **`actions/setup-node`** (e.g. Node **22**) → **`npm ci`** in **`webui/`** → set **`VITE_BASE_PATH`** to your Pages base (e.g. **`/REPO/`** for **`https://OWNER.github.io/REPO/`**) → set **`VITE_API_BASE_URL`** at build time (often from **`vars.HOMEBOT_API_PUBLIC_URL`**) → **`npm run build`**.
+- **Deploy:** **`actions/configure-pages`** → **`actions/upload-pages-artifact`** with **`path: webui/dist`** → **`actions/deploy-pages`**.
 
-The YAML lives at **`.github/workflows/deploy-webui.yml`** (Node **22**, **`npm ci`**, **`VITE_BASE_PATH`** set to the GitHub **project** path, **`VITE_API_BASE_URL`** from **`vars.HOMEBOT_API_PUBLIC_URL`**). Edit the file in-repo if you need a different branch filter or Node version.
+Create a **[repository variable](https://docs.github.com/en/actions/learn-github-actions/variables#defining-configuration-variables-for-multiple-workflows)** **`HOMEBOT_API_PUBLIC_URL`** (**Settings** → **Secrets and variables** → **Actions** → **Variables**) with your public API base (same value as **`VITE_API_BASE_URL`** in §4).
 
 **After the workflow is enabled:**
 
-1. In GitHub: **Settings** → **Secrets and variables** → **Actions** → **Variables** → create **`HOMEBOT_API_PUBLIC_URL`** with your public API base (same value you want in **`VITE_API_BASE_URL`**, e.g. **`https://your-api-host`**).
-2. Commit and push the workflow (if you have not already). Open the **Actions** tab and confirm the workflow run succeeds.
-3. **Settings** → **Pages**: after the first successful run, GitHub shows the site URL (for example **`https://OWNER.github.io/HomeBot/`**).
+1. Commit and push your workflow file. Open the **Actions** tab and confirm the run succeeds.
+2. **Settings** → **Pages**: after the first successful run, GitHub shows the site URL (for example **`https://OWNER.github.io/HomeBot/`**).
 
 ### 5.3 First-time “Create GitHub Pages environment”
 
@@ -622,4 +624,46 @@ For deeper configuration (rate limits, OAuth partial-env override, database path
 
 ## 8. Reverse proxy snippets (optional)
 
-For **TLS** and a public hostname in front of the API (**`5050`**), see **[docs/OPS.md](./docs/OPS.md)** (Caddy / nginx examples and renewal pointers).
+For **TLS** and a public hostname in front of the API (**`5050`**), put **Caddy** or **nginx** on **`80`/`443`**, terminate TLS, and forward to **`127.0.0.1:5050`**.
+
+### Caddy (example)
+
+Replace **`api.example.com`** and ensure DNS points at this host.
+
+```caddy
+api.example.com {
+    encode gzip
+    reverse_proxy 127.0.0.1:5050
+}
+```
+
+Caddy obtains certificates automatically. Reload: **`caddy reload`** (or your unit’s restart command).
+
+### nginx (example)
+
+Use **certbot** (`certbot --nginx`) or your CA to obtain certs, then:
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name api.example.com;
+
+    # ssl_certificate /etc/letsencrypt/live/api.example.com/fullchain.pem;
+    # ssl_certificate_key /etc/letsencrypt/live/api.example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:5050;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Set **`HOMEBOT_ALLOWED_ORIGINS`** on the API to include every **browser origin** that calls the API (GitHub Pages URL, **`https://app.example.com`**, etc.) — not the API hostname alone.
+
+### Renewals
+
+- **Let’s Encrypt:** **`certbot renew`** (often cron or a systemd timer). Reload nginx/Caddy after renewal if your stack requires it.
+- **Discord / OAuth secrets:** rotate in the Discord Developer Portal and **`.env`**; restart the process.
