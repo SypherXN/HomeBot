@@ -50,7 +50,7 @@ This guide is written for people who have **never** wired up a Discord bot, a sm
 | 7 | In Discord, run **`/setup-set`** to bind features to channels | [Section 10](#10-discord--finish-in-server-setup-setup-set) |
 | 8 | In the browser, open **Sign in** / **New account** and complete setup | [Section 11](#11-web-accounts--sign-in-discord-verify-bootstrap) |
 | 9 | (Optional) OAuth button, **GitHub Pages**, **HTTPS** for the API | [Section 12](#12-optional--discord-oauth-continue-with-discord)–[Section 14](#14-optional--public-https-api-reverse-proxy) |
-| 10 | (Ongoing) **Back up** your SQLite file so you can recover from mistakes or disk loss | [Section 20](#20-backing-up-sqlite-homebotdb) |
+| 10 | (Ongoing) **Back up** your SQLite file so you can recover from mistakes or disk loss | [Section 20](#20-backing-up-sqlite-homebotdb) — [automated backups](#201-automated-backups-optional) |
 
 ---
 
@@ -740,13 +740,159 @@ Create **`/opt/homebot/backups`** once (`sudo mkdir -p /opt/homebot/backups && s
 
 ### 20.1 Automated backups (optional)
 
-The repo includes:
+These files live in the repo:
 
-- **[`scripts/backup-homebot-sqlite.sh`](scripts/backup-homebot-sqlite.sh)** — **`sudo`** script: **`systemctl stop`** → copy **`homebot.db`** (+ **`-wal`** / **`-shm`** if present) with a timestamp → **`systemctl start`**. Defaults: app **`/opt/homebot/app`**, backups **`/opt/homebot/backups`**, service **`homebot.service`**. Install on the server, then **`chmod +x`**. Expects a **`homebot`** unix user (see [Section 8](#8-ubuntu-server--install-systemd-auto-start-on-reboot)).
-- **[`scripts/systemd/homebot-sqlite-backup.service.example`](scripts/systemd/homebot-sqlite-backup.service.example)** and **[`scripts/systemd/homebot-sqlite-backup.timer.example`](scripts/systemd/homebot-sqlite-backup.timer.example)** — copy to **`/etc/systemd/system/`** (remove **`.example`**), adjust **`ExecStart`** paths, then **`sudo systemctl daemon-reload`**, **`sudo systemctl enable --now homebot-sqlite-backup.timer`**. The sample timer runs **weekly Sunday 03:15** (edit **`OnCalendar`** to taste).
-- **[`scripts/backup-homebot-sqlite.ps1`](scripts/backup-homebot-sqlite.ps1)** — copies **`homebot.db`** (+ sidecars) into a **`backups`** folder under the repo root by default. **Stop HomeBot first** (or pass **`-Force`** if you accept risk while **`dotnet run`** is active). Schedule with **Task Scheduler** if you want a recurring job.
+| File | Role |
+|------|------|
+| **[`scripts/backup-homebot-sqlite.sh`](scripts/backup-homebot-sqlite.sh)** | Linux: stop **`systemd`** service → copy DB + WAL/SHM with timestamp → start service. |
+| **[`scripts/systemd/homebot-sqlite-backup.service.example`](scripts/systemd/homebot-sqlite-backup.service.example)** | **`systemd` oneshot** unit that runs the script. |
+| **[`scripts/systemd/homebot-sqlite-backup.timer.example`](scripts/systemd/homebot-sqlite-backup.timer.example)** | **`systemd` timer** (sample: weekly Sunday 03:15). |
+| **[`scripts/backup-homebot-sqlite.ps1`](scripts/backup-homebot-sqlite.ps1)** | Windows: copy **`homebot.db`** (+ sidecars) into **`backups/`** with a timestamp (does **not** stop **`dotnet`** for you). |
 
-The **`backups/`** directory is **gitignored** so snapshots are not committed by accident.
+The **`backups/`** folder under your repo root is **gitignored** so backup files are never committed.
+
+**Where is the database?** The scripts assume the default filename **`homebot.db`** next to your app ([Section 8](#8-ubuntu-server--install-systemd-auto-start-on-reboot) uses **`/opt/homebot/app`**). If you set **`HOMEBOT_DATABASE_PATH`** to another path, pass that directory as **`APP_DIR`** (Linux) or **`RepoRoot`** (Windows), or edit the **`systemd`** **`ExecStart`** line to point at the folder that **contains** **`homebot.db`**.
+
+---
+
+#### 20.1.1 Linux — install and smoke-test `backup-homebot-sqlite.sh`
+
+1. **Confirm the service name** matches your unit (often **`homebot.service`** from [Section 8.7](#87-publish-and-install-the-systemd-unit)).
+2. On the server, from your clone (or after copying the script onto the box), make it executable:
+
+   ```bash
+   chmod +x /opt/homebot/app/scripts/backup-homebot-sqlite.sh
+   ```
+
+3. **Create the backup directory** (once), owned by **`homebot`** if that user exists:
+
+   ```bash
+   sudo mkdir -p /opt/homebot/backups
+   sudo chown homebot:homebot /opt/homebot/backups
+   ```
+
+4. **Run one backup manually** (stops the bot for a few seconds):
+
+   ```bash
+   sudo /opt/homebot/app/scripts/backup-homebot-sqlite.sh
+   ```
+
+   This uses the defaults: **`APP_DIR=/opt/homebot/app`**, **`BACKUP_DIR=/opt/homebot/backups`**, **`SERVICE=homebot.service`**.
+
+5. **Check output:** you should see new files such as **`homebot.db.2026-05-03-0315`** and, if WAL mode created them, **`homebot.db.2026-05-03-0315-wal`** / **`…-shm`**.
+
+6. **Custom paths or service name** — arguments are positional:
+
+   ```bash
+   sudo /path/to/backup-homebot-sqlite.sh /path/to/app/dir /path/to/backups your-service.service
+   ```
+
+7. **Must run as root** (`sudo`) so **`systemctl stop`** / **`start`** succeed. The script uses **`sudo -u homebot cp`** when the **`homebot`** user exists so files stay owned by the app user.
+
+---
+
+#### 20.1.2 Linux — enable the weekly `systemd` timer
+
+1. **Copy** the example unit files into **`/etc/systemd/system/`** and drop the **`.example`** suffix:
+
+   ```bash
+   sudo cp /opt/homebot/app/scripts/systemd/homebot-sqlite-backup.service.example /etc/systemd/system/homebot-sqlite-backup.service
+   sudo cp /opt/homebot/app/scripts/systemd/homebot-sqlite-backup.timer.example /etc/systemd/system/homebot-sqlite-backup.timer
+   ```
+
+2. **Edit the service file** with your real paths (the sample **`ExecStart`** points at **`/opt/homebot/app/scripts/backup-homebot-sqlite.sh`** and passes app dir, backup dir, and **`homebot.service`**). If your clone lives elsewhere, update every path.
+
+3. **Reload systemd** and **enable the timer** (starts scheduling; does not run a backup until the next calendar slot unless you trigger one):
+
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable homebot-sqlite-backup.timer
+   sudo systemctl start homebot-sqlite-backup.timer
+   ```
+
+4. **Check the timer** is active and see the next run time:
+
+   ```bash
+   systemctl list-timers homebot-sqlite-backup.timer
+   ```
+
+5. **Run a backup immediately** (without waiting for Sunday) — start the **oneshot** service by hand:
+
+   ```bash
+   sudo systemctl start homebot-sqlite-backup.service
+   sudo systemctl status homebot-sqlite-backup.service
+   ```
+
+6. **Change the schedule** — edit **`OnCalendar=`** in **`homebot-sqlite-backup.timer`** (see **`man systemd.time`**), then **`sudo systemctl daemon-reload`** and **`sudo systemctl restart homebot-sqlite-backup.timer`**.
+
+7. **Logs** if something fails:
+
+   ```bash
+   journalctl -u homebot-sqlite-backup.service -b
+   ```
+
+---
+
+#### 20.1.3 Windows — run `backup-homebot-sqlite.ps1` correctly
+
+1. **Prefer a clean copy:** stop HomeBot before running the script (close the **`dotnet run`** window, end the Task Scheduler task if you use one, or stop **`HomeBot.exe`**). The script **refuses** to run if a process named **`HomeBot`** is running, unless you pass **`-Force`** (unsafe if SQLite is writing).
+
+2. Open **PowerShell**, **`cd`** to your repo root (the folder that contains **`homebot.db`** and the **`scripts`** folder):
+
+   ```powershell
+   cd C:\path\to\HomeBot
+   ```
+
+3. **Allow scripts** if execution policy blocks them (one session):
+
+   ```powershell
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+   ```
+
+4. **Run the backup:**
+
+   ```powershell
+   .\scripts\backup-homebot-sqlite.ps1
+   ```
+
+   By default this writes under **`.\backups\`** with filenames like **`homebot.db.2026-05-03-1430`**.
+
+5. **Custom folders:**
+
+   ```powershell
+   .\scripts\backup-homebot-sqlite.ps1 -RepoRoot "D:\Data\HomeBot" -BackupDir "D:\Backups\HomeBot"
+   ```
+
+6. **Only use `-Force`** if you understand the risk (e.g. quick copy while nothing is writing to the DB).
+
+---
+
+#### 20.1.4 Windows — schedule with Task Scheduler (optional)
+
+1. Open **Task Scheduler** → **Create Task…**.
+2. **General:** name **`HomeBot SQLite backup`**; choose **Run only when user is logged on** (simplest) or **Run whether user is logged on or not** if you use a service account and stored password.
+3. **Triggers:** **New…** → **Weekly** (or **Daily**) and pick a quiet time.
+4. **Actions:** **New…** → **Start a program**
+   - **Program:** **`powershell`**
+   - **Add arguments:** **`-NoProfile -ExecutionPolicy Bypass -File "C:\full\path\to\HomeBot\scripts\backup-homebot-sqlite.ps1"`**
+   - **Start in:** **`C:\full\path\to\HomeBot`**
+5. Ensure nothing else runs **`dotnet run`** for HomeBot at the same instant, or stop the main HomeBot task **before** this task and restart **after** (two tasks in sequence), if you need a guaranteed quiescent DB. The script does **not** stop **`dotnet`** automatically.
+
+---
+
+#### 20.1.5 Restore from a backup (short procedure)
+
+1. **Stop HomeBot** (same as for a backup).
+2. **Rename or move away** the current live files (**`homebot.db`**, **`homebot.db-wal`**, **`homebot.db-shm`**) so you can roll back if needed.
+3. **Copy** the chosen backup file back to **`homebot.db`** (and restore **`-wal`** / **`-shm`** only if they were part of that backup set; if you are unsure, restore **only** **`homebot.db`** and delete stray **`-wal`**/**`-shm`** so SQLite recreates them — ask a backup guide if you need WAL-specific restore).
+4. **Fix ownership** on Linux if needed (**`chown homebot:homebot homebot.db`**).
+5. **Start HomeBot** again and smoke-test the Web UI and Discord.
+
+---
+
+#### 20.1.6 Retention (optional)
+
+Backup files accumulate. After you trust the process, delete or archive old dated copies (keep several generations). **`systemd`** does not prune automatically.
 
 ### Online backup without stopping (advanced)
 
