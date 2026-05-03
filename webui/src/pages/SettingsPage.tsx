@@ -3,7 +3,13 @@ import { useAuth } from "../auth/AuthContext";
 import DiscordMemberSelect from "../components/DiscordMemberSelect";
 import TimeZoneSelect from "../components/TimeZoneSelect";
 import { useCalendarZone } from "../calendar/CalendarZoneContext";
-import { getApiBaseUrl, resetApiBaseUrlToDefault, setApiBaseUrl, subscribeApiBaseUrl } from "../api";
+import {
+  getApiBaseUrl,
+  isApiBaseInferred,
+  resetApiBaseUrlToDefault,
+  setApiBaseUrl,
+  subscribeApiBaseUrl,
+} from "../api";
 
 export default function SettingsPage() {
   const { token, setToken, actorUserId, setActorUserId, webUsername, clearSession } = useAuth();
@@ -24,11 +30,19 @@ export default function SettingsPage() {
       <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/30 p-4">
         <h2 className="text-sm font-semibold text-white">API server</h2>
         <p className="max-w-2xl text-sm text-slate-400">
-          Base URL the UI uses for <code className="text-slate-300">/api/…</code> requests. The build default is{" "}
-          <code className="text-slate-300">VITE_API_BASE_URL</code> (often <code className="text-slate-300">localhost</code>
-          ). On a phone or tablet, <code className="text-slate-300">localhost</code> means that device — use your PC’s
-          LAN address instead (example <code className="text-slate-300">http://192.168.1.5:5050</code>), then tap{" "}
-          <strong className="text-slate-300">Save</strong>.
+          Base URL for <code className="text-slate-300">/api/…</code> requests. With Vite on port{" "}
+          <strong className="text-slate-300">5173</strong> (dev) or <strong className="text-slate-300">4173</strong>{" "}
+          (preview), the UI assumes the API is on the <strong className="text-slate-300">same hostname</strong> with
+          port <strong className="text-slate-300">5050</strong> — so opening{" "}
+          <code className="text-slate-300">http://192.168.1.5:5173</code> on your phone talks to{" "}
+          <code className="text-slate-300">http://192.168.1.5:5050</code> automatically.{" "}
+          {isApiBaseInferred() ? (
+            <span className="text-emerald-400/90">Using that auto-detection right now.</span>
+          ) : (
+            <span>
+              Override below if your API uses a different host or port, then <strong className="text-slate-300">Save</strong>.
+            </span>
+          )}
         </p>
         <label htmlFor="settings-api-base" className="block text-sm font-medium text-slate-300">
           API base URL

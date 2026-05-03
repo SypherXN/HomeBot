@@ -282,7 +282,7 @@ Use this when HomeBot runs on your **Windows PC** and you want the **Web UI** on
 
 7. **On the phone’s browser**, open **`http://192.168.1.42:5173`** (your real IP).
 
-8. **API base URL in the app**: open **Settings** → **API server**, set **API base URL** to **`http://192.168.1.42:5050`** (your PC’s IPv4, port **5050**), then **Save**. The UI stores this in the phone’s browser so it does not use **`localhost`** (which would mean the phone itself). The header **Base URL** line should match after you save.
+8. **API base URL**: with the default Vite dev port (**5173**), the Web UI **automatically** uses the same hostname as the page with port **5050** (e.g. phone opens **`http://192.168.1.42:5173`** → API **`http://192.168.1.42:5050`**). You only need **Settings → API server** if your API is on another host or port. The header **Base URL** line shows what is in use.
 
 **If it still fails:** from the phone, try opening **`http://192.168.1.42:5050/api/health`** — if that does not load, fix firewall or IP first before debugging the React app.
 

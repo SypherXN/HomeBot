@@ -68,7 +68,13 @@ export async function apiJson<T>(path: string, options: ApiJsonOptions = {}): Pr
   return JSON.parse(text) as T;
 }
 
-export { getApiBaseUrl, setApiBaseUrl, resetApiBaseUrlToDefault, subscribeApiBaseUrl } from "./apiBaseUrl";
+export {
+  getApiBaseUrl,
+  isApiBaseInferred,
+  resetApiBaseUrlToDefault,
+  setApiBaseUrl,
+  subscribeApiBaseUrl,
+} from "./apiBaseUrl";
 
 export function getHealth() {
   return apiJson<unknown>("/api/health");

@@ -9,21 +9,37 @@ function normalize(url: string): string {
   return t.length > 0 ? t : viteDefault();
 }
 
-let current = viteDefault();
-
 const listeners = new Set<() => void>();
 
 function emit(): void {
   for (const cb of listeners) cb();
 }
 
-function loadFromStorage(): void {
-  if (typeof localStorage === "undefined") return;
-  const saved = localStorage.getItem(STORAGE_KEY)?.trim();
-  if (saved) current = normalize(saved);
+/**
+ * When the SPA is served by Vite (dev or preview) from a normal host, assume the API is the same
+ * host on port 5050 (HomeBot default). Skips GitHub Pages and other non-Vite ports.
+ */
+function inferSameHostApiBase(): string | null {
+  if (typeof window === "undefined") return null;
+  const port = window.location.port;
+  if (port !== "5173" && port !== "4173") return null;
+  const host = window.location.hostname;
+  if (host.endsWith("github.io")) return null;
+  return `${window.location.protocol}//${host}:5050`;
 }
 
-loadFromStorage();
+/** Base URL when the user has not saved an override in localStorage. */
+function resolvedDefaultBase(): string {
+  return inferSameHostApiBase() ?? viteDefault();
+}
+
+function readStoredOverride(): string | null {
+  if (typeof localStorage === "undefined") return null;
+  const saved = localStorage.getItem(STORAGE_KEY)?.trim();
+  return saved ? normalize(saved) : null;
+}
+
+let current = readStoredOverride() ?? resolvedDefaultBase();
 
 /** Current API origin (no trailing slash), for fetch() and display. */
 export function getApiBaseUrl(): string {
@@ -42,12 +58,12 @@ export function setApiBaseUrl(url: string): void {
   emit();
 }
 
-/** Restore build-time default and clear the override. */
+/** Clears the saved override and reapplies the automatic / build-time default. */
 export function resetApiBaseUrlToDefault(): void {
-  current = viteDefault();
   if (typeof localStorage !== "undefined") {
     localStorage.removeItem(STORAGE_KEY);
   }
+  current = resolvedDefaultBase();
   emit();
 }
 
@@ -56,4 +72,9 @@ export function subscribeApiBaseUrl(listener: () => void): () => void {
   return () => {
     listeners.delete(listener);
   };
+}
+
+/** True when API URL is inferred from the page URL (Vite dev/preview on port 5173 or 4173). */
+export function isApiBaseInferred(): boolean {
+  return readStoredOverride() === null && inferSameHostApiBase() !== null;
 }
