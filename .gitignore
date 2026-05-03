@@ -26,7 +26,6 @@ out-build2/
 .build-out/
 
 # --- Test / coverage artifacts (HomeBot.Tests/*.cs stays in git; only outputs ignored) ---
-TestResults/
 *.trx
 *.coverage
 *.coveragexml
@@ -45,22 +44,45 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
-# --- Web UI (Vite / npm) ---
+# --- Web UI (Vite / npm) — not needed to run the bot binary; reinstall with npm ci / npm i ---
 webui/node_modules/
 webui/dist/
 webui/dist-ssr/
 webui/.vite/
 webui/*.local
+webui/npm-debug.log*
+webui/yarn-debug.log*
+webui/yarn-error.log*
+webui/pnpm-debug.log*
+webui/.eslintcache
+webui/node_modules/.cache/
 
 # --- Local environment secrets ---
 .env
 .env.*
 !.env.example
 
-# --- Bot runtime data ---
+# --- Bot runtime data (SQLite + sidecars for any DB filename) ---
 homebot.db
 homebot.db-shm
 homebot.db-wal
+*.db-shm
+*.db-wal
+
+# --- Runtime / local logs (not source) ---
+*.log
+
+# --- Local settings overrides (machine-specific or secrets; not required to run from defaults) ---
+**/appsettings.*.local.json
+appsettings.Local.json
+
+# --- Tooling / merge / third-party IDE noise (not used at runtime) ---
+*.orig
+*.rej
+_NCrunch_*/
+*.ncrunchproject
+*.DotCover
+.sonar/
 
 # --- Local scratch ---
 .tmp/
