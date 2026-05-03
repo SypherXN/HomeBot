@@ -184,6 +184,10 @@ The test assembly disables **xUnit parallelization** (`HomeBot.Tests/AssemblyInf
 
 Stop any running `HomeBot` process first if the build cannot overwrite `HomeBot.dll` or `HomeBot.exe`.
 
+### Continuous integration
+
+Pushes and pull requests to **`main`** run **[`.github/workflows/ci.yml`](.github/workflows/ci.yml)`**: **.NET** restore, Release build, **`dotnet test`**, and **Web UI** **`npm ci`**, **`npm run lint`**, and **`npm run build`** (Ubuntu, Node **22**).
+
 ### Web UI
 
 ```bash

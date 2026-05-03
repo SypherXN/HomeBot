@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 
 /// <summary>
@@ -54,7 +55,7 @@ public class MoneyService
 
         var idCmd = conn.CreateCommand();
         idCmd.CommandText = "SELECT last_insert_rowid()";
-        int id = Convert.ToInt32((long)idCmd.ExecuteScalar());
+        int id = ReadLastInsertRowId(idCmd);
 
         _undo.LogAction(paidBy, "create", "money", id, "");
     }
@@ -83,7 +84,7 @@ public class MoneyService
 
         var idCmd = conn.CreateCommand();
         idCmd.CommandText = "SELECT last_insert_rowid()";
-        int id = Convert.ToInt32((long)idCmd.ExecuteScalar());
+        int id = ReadLastInsertRowId(idCmd);
 
         _undo.LogAction(paidBy, "create", "money", id, "");
     }
@@ -300,7 +301,7 @@ public class MoneyService
 
         var idCmd = conn.CreateCommand();
         idCmd.CommandText = "SELECT last_insert_rowid()";
-        int id = Convert.ToInt32((long)idCmd.ExecuteScalar());
+        int id = ReadLastInsertRowId(idCmd);
 
         _undo.LogAction(paidBy, "create", "money", id, "");
     }
@@ -409,4 +410,10 @@ public class MoneyService
         deleteCmd.ExecuteNonQuery();
     }
 
+    private static int ReadLastInsertRowId(SqliteCommand idCmd)
+    {
+        var v = idCmd.ExecuteScalar();
+        ArgumentNullException.ThrowIfNull(v);
+        return Convert.ToInt32(Convert.ToInt64(v, CultureInfo.InvariantCulture));
+    }
 }
