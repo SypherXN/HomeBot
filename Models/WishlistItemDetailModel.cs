@@ -1,9 +1,12 @@
+using System.Text.Json.Serialization;
+
 /// <summary>
 /// Transport-agnostic detail payload for a wishlist item.
 /// </summary>
 public class WishlistItemDetailModel
 {
     public string Name { get; set; } = "";
+    [JsonConverter(typeof(SnowflakeUlongJsonConverter))]
     public ulong Owner { get; set; }
     public string OwnerMemberLabel { get; set; } = "";
     public string Price { get; set; } = "";

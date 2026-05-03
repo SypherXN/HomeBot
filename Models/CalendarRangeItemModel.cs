@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 /// <summary>
 /// One occurrence within a calendar range query. Non-recurring rows produce a single
 /// model at the stored start. Daily/weekly recurring rows produce one model per occurrence
@@ -9,6 +11,7 @@ public class CalendarRangeItemModel
     public string Title { get; set; } = "";
     public string Type { get; set; } = "event";
     public bool AllDay { get; set; }
+    [JsonConverter(typeof(SnowflakeUlongNullableJsonConverter))]
     public ulong? AssignedTo { get; set; }
     public string? AssignedToMemberLabel { get; set; }
     public string ReminderText { get; set; } = "";

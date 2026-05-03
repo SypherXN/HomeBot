@@ -27,9 +27,9 @@ function normalizeTagToken(raw: string): string | null {
   return s;
 }
 
-function formatSnowflake(n: number | null | undefined): string {
+function formatSnowflake(n: string | number | null | undefined): string {
   if (n == null) return "—";
-  return String(n);
+  return typeof n === "string" ? n : String(n);
 }
 
 export default function WishlistPage() {

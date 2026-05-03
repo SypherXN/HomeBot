@@ -18,9 +18,9 @@ import {
   type PagedBuyList,
 } from "../api";
 
-function formatSnowflake(n: number | null | undefined): string {
+function formatSnowflake(n: string | number | null | undefined): string {
   if (n == null) return "—";
-  return String(n);
+  return typeof n === "string" ? n : String(n);
 }
 
 const TAG_TOKEN = /^[a-z0-9_-]{1,48}$/;

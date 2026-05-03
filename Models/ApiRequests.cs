@@ -20,6 +20,7 @@ public sealed class BuyItemCreateRequest
     public string Name { get; set; } = "";
     public string? Quantity { get; set; }
     public string? Store { get; set; }
+    [JsonConverter(typeof(SnowflakeUlongNullableJsonConverter))]
     public ulong? AssignedTo { get; set; }
     public string? Tags { get; set; }
     public string? Notes { get; set; }
@@ -30,6 +31,7 @@ public sealed class BuyItemUpdateRequest
     public string? Name { get; set; }
     public string? Quantity { get; set; }
     public string? Store { get; set; }
+    [JsonConverter(typeof(SnowflakeUlongNullableJsonConverter))]
     public ulong? AssignedTo { get; set; }
     public string? Tags { get; set; }
     public string? Notes { get; set; }
@@ -38,6 +40,7 @@ public sealed class BuyItemUpdateRequest
 public sealed class WishlistItemCreateRequest
 {
     public string Name { get; set; } = "";
+    [JsonConverter(typeof(SnowflakeUlongNullableJsonConverter))]
     public ulong? OwnerUserId { get; set; }
     public string? Price { get; set; }
     public string? Link { get; set; }
@@ -50,6 +53,7 @@ public sealed class WishlistItemCreateRequest
 public sealed class WishlistItemUpdateRequest
 {
     public string? Name { get; set; }
+    [JsonConverter(typeof(SnowflakeUlongNullableJsonConverter))]
     public ulong? OwnerUserId { get; set; }
     public string? Price { get; set; }
     public string? Link { get; set; }

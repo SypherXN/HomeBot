@@ -1,11 +1,14 @@
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || "http://localhost:5050";
 
-/** Coerce digit string to JSON number when safe for C# ulong binding; otherwise omit (caller should validate). */
-function jsonUlong(value: string | undefined): number | undefined {
-  if (value == null || value.trim() === "") return undefined;
-  const n = Number(value.trim());
-  if (!Number.isFinite(n) || !Number.isSafeInteger(n) || n <= 0) return undefined;
-  return n;
+/**
+ * Digit-only Discord snowflake for JSON bodies where the API uses Snowflake*JsonConverter on ulong.
+ * Preserves full 64-bit ids (unlike JSON numbers in JavaScript).
+ */
+function jsonSnowflakeDigits(value: string | undefined): string | undefined {
+  if (value == null) return undefined;
+  const t = value.trim();
+  if (!/^\d+$/.test(t) || t === "0") return undefined;
+  return t;
 }
 
 export type ApiJsonOptions = {
@@ -101,11 +104,11 @@ export type BuyListItem = {
   name: string;
   quantity: string;
   store: string;
-  assignedTo?: number | null;
+  assignedTo?: string | null;
   assignedToMemberLabel?: string | null;
   tags: string[];
   notes: string;
-  purchasedBy?: number | null;
+  purchasedBy?: string | null;
   purchasedByMemberLabel?: string | null;
 };
 
@@ -159,14 +162,14 @@ export function getBuy(token: string, page = 0) {
 export type WishlistListItem = {
   id: number;
   name: string;
-  owner: number;
+  owner: string;
   ownerMemberLabel: string;
   price: string;
   link: string;
   notes: string;
   priority: string;
   tags: string[];
-  purchasedBy?: number | null;
+  purchasedBy?: string | null;
   purchasedByMemberLabel?: string | null;
 };
 
@@ -231,9 +234,9 @@ export type MoneyTransactionListItem = {
   id: number;
   name: string;
   amount: number;
-  paidBy: number;
+  paidBy: string;
   paidByMemberLabel: string;
-  owedBy: number;
+  owedBy: string;
   owedByMemberLabel: string;
   type: string;
 };
@@ -247,10 +250,9 @@ export type PagedMoneyTransactions = {
   hasPrev: boolean;
 };
 
-/** `user1Id` / `user2Id` may round in JSON for large snowflakes; use `user*MemberLabel` or query strings for exact ids. */
 export type MoneySummary = {
-  user1Id: number;
-  user2Id: number;
+  user1Id: string;
+  user2Id: string;
   user1Name: string;
   user1MemberLabel: string;
   user2Name: string;
@@ -270,8 +272,8 @@ export function getMoneySummary(token: string, user1: string, user2: string, nam
 }
 
 /**
- * One row from `GET /api/calendar/items` (paged) and `/today` / `/upcoming`. `assignedTo` may
- * round in JSON for large Discord snowflakes — prefer `assignedToMemberLabel` for display.
+ * One row from `GET /api/calendar/items` (paged) and `/today` / `/upcoming`.
+ * `assignedTo` is a digit string from the API when set (safe for large snowflakes).
  */
 export type CalendarListItem = {
   id: number;
@@ -279,7 +281,7 @@ export type CalendarListItem = {
   type: string;
   dateText: string;
   allDay: boolean;
-  assignedTo?: number | null;
+  assignedTo?: string | null;
   assignedToMemberLabel?: string | null;
   reminderText: string;
   recurrenceText: string;
@@ -304,7 +306,7 @@ export type CalendarRangeItem = {
   title: string;
   type: string;
   allDay: boolean;
-  assignedTo?: number | null;
+  assignedTo?: string | null;
   assignedToMemberLabel?: string | null;
   reminderText: string;
   recurrenceText: string;
@@ -395,7 +397,7 @@ export function postBuyItem(
   const payload: Record<string, unknown> = { name: body.name };
   if (body.quantity != null) payload.quantity = body.quantity;
   if (body.store != null) payload.store = body.store;
-  const assigned = jsonUlong(body.assignedTo);
+  const assigned = jsonSnowflakeDigits(body.assignedTo);
   if (assigned !== undefined) payload.assignedTo = assigned;
   if (body.tags != null) payload.tags = body.tags;
   if (body.notes != null) payload.notes = body.notes;
@@ -422,7 +424,7 @@ export function putBuyItem(
   if (body.notes != null) payload.notes = body.notes;
   if (body.assignedTo === null) payload.assignedTo = null;
   else {
-    const a = jsonUlong(body.assignedTo ?? undefined);
+    const a = jsonSnowflakeDigits(body.assignedTo ?? undefined);
     if (a !== undefined) payload.assignedTo = a;
   }
   return apiJson<unknown>(`/api/buy/items/${id}`, { token, method: "PUT", body: payload });
@@ -464,7 +466,7 @@ export function postWishlistItem(
   if (body.notes != null) payload.notes = body.notes;
   if (body.priority != null) payload.priority = body.priority;
   if (body.tags != null) payload.tags = body.tags;
-  const owner = jsonUlong(body.ownerUserId);
+  const owner = jsonSnowflakeDigits(body.ownerUserId);
   if (owner !== undefined) payload.ownerUserId = owner;
   return apiJson<unknown>(path, { token, method: "POST", body: payload });
 }
@@ -493,7 +495,7 @@ export function putWishlistItem(
   if (body.tags != null) payload.tags = body.tags;
   if (body.ownerUserId === null) payload.ownerUserId = null;
   else {
-    const o = jsonUlong(body.ownerUserId ?? undefined);
+    const o = jsonSnowflakeDigits(body.ownerUserId ?? undefined);
     if (o !== undefined) payload.ownerUserId = o;
   }
   return apiJson<unknown>(`/api/wishlist/items/${id}`, { token, method: "PUT", body: payload });

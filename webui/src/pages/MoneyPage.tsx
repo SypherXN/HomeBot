@@ -383,12 +383,15 @@ export default function MoneyPage() {
 
   function exactSnowflakeForMoneyParticipant(
     memberLabel: string,
-    numericId: number,
+    apiUserId: string | number,
     preferredUserId?: string
   ): string {
     const fromForm = preferredUserId?.trim();
     if (fromForm && /^\d+$/.test(fromForm)) return fromForm;
-    return snowflakeDigitsFromHouseholdLabel(memberLabel) ?? String(numericId);
+    const fromLabel = snowflakeDigitsFromHouseholdLabel(memberLabel);
+    if (fromLabel) return fromLabel;
+    if (typeof apiUserId === "string" && /^\d+$/.test(apiUserId)) return apiUserId;
+    return String(apiUserId);
   }
 
   /** Discord display line from roster, or null if not in guild cache. */
@@ -406,8 +409,11 @@ export default function MoneyPage() {
   }
 
   /** Table cell: roster name + exact snowflake subline (never the rounded JSON id alone). */
-  function moneyTableParticipant(memberLabel: string, numericId: number): { primary: string; snowflake: string } {
-    const snowflake = exactSnowflakeForMoneyParticipant(memberLabel, numericId);
+  function moneyTableParticipant(
+    memberLabel: string,
+    apiUserId: string | number
+  ): { primary: string; snowflake: string } {
+    const snowflake = exactSnowflakeForMoneyParticipant(memberLabel, apiUserId);
     const rostered = primaryLabelFromRoster(snowflake);
     return {
       primary: rostered ?? (memberLabel.trim() || `user-${snowflake}`),
@@ -417,7 +423,7 @@ export default function MoneyPage() {
 
   /** Prefer guild roster Discord @username; otherwise API household labels. */
   function balanceDisplayName(
-    userId: number,
+    userId: string | number,
     memberLabel: string,
     name: string,
     requestUserId?: string
