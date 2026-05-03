@@ -1,11 +1,16 @@
+import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import DiscordMemberSelect from "../components/DiscordMemberSelect";
 import TimeZoneSelect from "../components/TimeZoneSelect";
 import { useCalendarZone } from "../calendar/CalendarZoneContext";
+import { getApiBaseUrl, resetApiBaseUrlToDefault, setApiBaseUrl, subscribeApiBaseUrl } from "../api";
 
 export default function SettingsPage() {
   const { token, setToken, actorUserId, setActorUserId, webUsername, clearSession } = useAuth();
   const { viewerTimeZone, setViewerTimeZone } = useCalendarZone();
+  const [apiDraft, setApiDraft] = useState(() => getApiBaseUrl());
+
+  useEffect(() => subscribeApiBaseUrl(() => setApiDraft(getApiBaseUrl())), []);
 
   return (
     <div className="space-y-8">
@@ -14,6 +19,46 @@ export default function SettingsPage() {
         <p className="mt-1 text-slate-400">
           Stored only in this browser (localStorage). Never commit tokens to source control.
         </p>
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/30 p-4">
+        <h2 className="text-sm font-semibold text-white">API server</h2>
+        <p className="max-w-2xl text-sm text-slate-400">
+          Base URL the UI uses for <code className="text-slate-300">/api/…</code> requests. The build default is{" "}
+          <code className="text-slate-300">VITE_API_BASE_URL</code> (often <code className="text-slate-300">localhost</code>
+          ). On a phone or tablet, <code className="text-slate-300">localhost</code> means that device — use your PC’s
+          LAN address instead (example <code className="text-slate-300">http://192.168.1.5:5050</code>), then tap{" "}
+          <strong className="text-slate-300">Save</strong>.
+        </p>
+        <label htmlFor="settings-api-base" className="block text-sm font-medium text-slate-300">
+          API base URL
+        </label>
+        <input
+          id="settings-api-base"
+          type="url"
+          inputMode="url"
+          autoComplete="off"
+          placeholder="http://192.168.1.5:5050"
+          value={apiDraft}
+          onChange={(e) => setApiDraft(e.target.value)}
+          className="w-full max-w-xl rounded-md border border-slate-600 bg-slate-900 px-3 py-2 font-mono text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        />
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setApiBaseUrl(apiDraft)}
+            className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500"
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            onClick={() => resetApiBaseUrlToDefault()}
+            className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
+          >
+            Reset to build default
+          </button>
+        </div>
       </div>
 
       <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/30 p-4">

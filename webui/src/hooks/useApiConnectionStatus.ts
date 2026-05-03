@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { getBuyTagCatalog, getHealth, getMeta } from "../api";
+import { getApiBaseUrl, getBuyTagCatalog, getHealth, getMeta, subscribeApiBaseUrl } from "../api";
 
 export type ApiConnectionStatus =
   | { phase: "checking" }
@@ -11,7 +11,10 @@ export type ApiConnectionStatus =
  */
 export function useApiConnectionStatus(token: string) {
   const [status, setStatus] = useState<ApiConnectionStatus>({ phase: "checking" });
+  const [apiBase, setApiBase] = useState(() => getApiBaseUrl());
   const tok = token.trim();
+
+  useEffect(() => subscribeApiBaseUrl(() => setApiBase(getApiBaseUrl())), []);
 
   const run = useCallback(async () => {
     setStatus({ phase: "checking" });
@@ -35,7 +38,7 @@ export function useApiConnectionStatus(token: string) {
     } catch {
       setStatus({ phase: "up", auth: "bad" });
     }
-  }, [tok]);
+  }, [tok, apiBase]);
 
   useEffect(() => {
     void run();

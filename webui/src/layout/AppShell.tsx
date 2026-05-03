@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
-import { getApiBaseUrl } from "../api";
+import { getApiBaseUrl, subscribeApiBaseUrl } from "../api";
 import { useApiConnectionStatus } from "../hooks/useApiConnectionStatus";
 
 const nav: { to: string; label: string; end?: boolean }[] = [
@@ -66,6 +67,8 @@ export default function AppShell() {
   const hasToken = token.trim().length > 0;
   const { status } = useApiConnectionStatus(token);
   const conn = connectionLabel(status);
+  const [apiBaseDisplay, setApiBaseDisplay] = useState(() => getApiBaseUrl());
+  useEffect(() => subscribeApiBaseUrl(() => setApiBaseDisplay(getApiBaseUrl())), []);
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
@@ -109,7 +112,7 @@ export default function AppShell() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p className="min-w-0 truncate text-xs text-slate-500">
               <span className="text-slate-400">Base URL</span>{" "}
-              <code className="rounded bg-slate-900 px-1.5 py-0.5 text-slate-300">{getApiBaseUrl()}</code>
+              <code className="rounded bg-slate-900 px-1.5 py-0.5 text-slate-300">{apiBaseDisplay}</code>
             </p>
             <div
               className="flex shrink-0 items-center gap-2 text-xs text-slate-300"

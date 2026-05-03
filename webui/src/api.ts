@@ -1,4 +1,4 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || "http://localhost:5050";
+import { getApiBaseUrl } from "./apiBaseUrl";
 
 /**
  * Digit-only Discord snowflake for JSON bodies where the API uses Snowflake*JsonConverter on ulong.
@@ -43,7 +43,7 @@ export async function apiJson<T>(path: string, options: ApiJsonOptions = {}): Pr
     headers["Content-Type"] = "application/json";
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
     method,
     headers,
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
@@ -68,9 +68,7 @@ export async function apiJson<T>(path: string, options: ApiJsonOptions = {}): Pr
   return JSON.parse(text) as T;
 }
 
-export function getApiBaseUrl(): string {
-  return API_BASE_URL;
-}
+export { getApiBaseUrl, setApiBaseUrl, resetApiBaseUrlToDefault, subscribeApiBaseUrl } from "./apiBaseUrl";
 
 export function getHealth() {
   return apiJson<unknown>("/api/health");

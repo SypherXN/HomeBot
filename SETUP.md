@@ -282,7 +282,7 @@ Use this when HomeBot runs on your **Windows PC** and you want the **Web UI** on
 
 7. **On the phone’s browser**, open **`http://192.168.1.42:5173`** (your real IP).
 
-8. **API base URL in the app**: in **Settings**, set the API base to **`http://192.168.1.42:5050`** (same IP, port **5050**) so the phone does not try to call **`localhost`** (that would mean “the phone itself,” not your PC).
+8. **API base URL in the app**: open **Settings** → **API server**, set **API base URL** to **`http://192.168.1.42:5050`** (your PC’s IPv4, port **5050**), then **Save**. The UI stores this in the phone’s browser so it does not use **`localhost`** (which would mean the phone itself). The header **Base URL** line should match after you save.
 
 **If it still fails:** from the phone, try opening **`http://192.168.1.42:5050/api/health`** — if that does not load, fix firewall or IP first before debugging the React app.
 
