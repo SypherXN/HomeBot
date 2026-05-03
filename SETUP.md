@@ -8,7 +8,7 @@ This guide is written for people who have **never** wired up a Discord bot, a sm
 - The **same program** optionally serving an **HTTP API** (default **`http://0.0.0.0:5050`**) and a **SQLite** database (`homebot.db` by default).
 - A **React Web UI** you can run on your PC with `npm run dev`, or build as static files and host (for example on **GitHub Pages**) with your API reachable from the browser.
 
-**Important:** The .NET app reads the **process environment only**. It does **not** load `.env` by itself. On Windows you can set variables in PowerShell, use your editor’s **envFile**, or use the helper script in **[§7](#7-windows-start-automatically)**. On Ubuntu, **systemd** loads `.env` via **`EnvironmentFile=`**.
+**Important:** The .NET app reads the **process environment only**. It does **not** load `.env` by itself. On Windows you can set variables in PowerShell, use your editor’s **envFile**, or use the helper script in **[Section 7](#7-windows-start-automatically-on-sign-in-or-boot)**. On Ubuntu, **systemd** loads `.env` via **`EnvironmentFile=`**.
 
 ---
 
@@ -33,6 +33,7 @@ This guide is written for people who have **never** wired up a Discord bot, a sm
 17. [Troubleshooting](#17-troubleshooting)
 18. [Reference — how configuration works](#18-reference--how-configuration-works)
 19. [Reference — every environment variable](#19-reference--every-environment-variable)
+20. [Backing up SQLite (`homebot.db`)](#20-backing-up-sqlite-homebotdb)
 
 ---
 
@@ -41,14 +42,15 @@ This guide is written for people who have **never** wired up a Discord bot, a sm
 | Step | What | Where |
 |------|------|--------|
 | 1 | Install **Git**, **.NET 10 SDK**, **Node.js (LTS or 20+)** | Your Windows PC or Ubuntu server |
-| 2 | **Clone** this repository (or your fork) | §3 |
-| 3 | Create a **Discord application** and **bot**, copy the **token**, **invite** the bot, copy **Server (guild) ID** | §4 |
-| 4 | Copy **`.env.example`** → **`.env`**, **`webui/.env.example`** → **`webui/.env`**, fill required keys | §5 |
-| 5 | Run **`dotnet run`** (and keep it running) | §6 (Windows) or §8 (Ubuntu) |
-| 6 | Run **`npm run dev`** in **`webui`** | §9 |
-| 7 | In Discord, run **`/setup-set`** to bind features to channels | §10 |
-| 8 | In the browser, open **Sign in** / **New account** and complete setup | §11 |
-| 9 | (Optional) OAuth button, **GitHub Pages**, **HTTPS** for the API | §12–§14 |
+| 2 | **Clone** this repository (or your fork) | [Section 3](#3-github-and-source-code) |
+| 3 | Create a **Discord application** and **bot**, copy the **token**, **invite** the bot, copy **Server (guild) ID** | [Section 4](#4-discord--application-bot-token-invite-server-id) |
+| 4 | Copy **`.env.example`** → **`.env`**, **`webui/.env.example`** → **`webui/.env`**, fill required keys | [Section 5](#5-environment-files-env-and-webuienv) |
+| 5 | Run **`dotnet run`** (and keep it running) | [Section 6](#6-run-homebot-on-windows-first-time) (Windows) or [Section 8](#8-ubuntu-server--install-systemd-auto-start-on-reboot) (Ubuntu) |
+| 6 | Run **`npm run dev`** in **`webui`** | [Section 9](#9-web-ui-on-your-pc) |
+| 7 | In Discord, run **`/setup-set`** to bind features to channels | [Section 10](#10-discord--finish-in-server-setup-setup-set) |
+| 8 | In the browser, open **Sign in** / **New account** and complete setup | [Section 11](#11-web-accounts--sign-in-discord-verify-bootstrap) |
+| 9 | (Optional) OAuth button, **GitHub Pages**, **HTTPS** for the API | [Section 12](#12-optional--discord-oauth-continue-with-discord)–[Section 14](#14-optional--public-https-api-reverse-proxy) |
+| 10 | (Ongoing) **Back up** your SQLite file so you can recover from mistakes or disk loss | [Section 20](#20-backing-up-sqlite-homebotdb) |
 
 ---
 
@@ -92,7 +94,7 @@ cd HomeBot
 git pull
 ```
 
-After pulling on a **server**, rebuild and restart the service (§8.7).
+After pulling on a **server**, rebuild and restart the service ([Section 8.8](#88-updates-after-git-pull)).
 
 ---
 
@@ -130,7 +132,7 @@ You should see the bot join as **offline** until HomeBot runs with a valid token
 
 ### 4.5 OAuth2 client (only if you will use “Continue with Discord”)
 
-Skip until §12. When needed: **OAuth2** → **General** → copy **Client ID** and **Client Secret**; add redirect URLs under **Redirects** (must match **`HOMEBOT_DISCORD_OAUTH_REDIRECT_URI`** exactly).
+Skip until [Section 12](#12-optional--discord-oauth-continue-with-discord). When needed: **OAuth2** → **General** → copy **Client ID** and **Client Secret**; add redirect URLs under **Redirects** (must match **`HOMEBOT_DISCORD_OAUTH_REDIRECT_URI`** exactly).
 
 ---
 
@@ -171,7 +173,7 @@ VITE_API_BASE_URL=http://localhost:5050
 VITE_BASE_PATH=/
 ```
 
-Change **`VITE_API_BASE_URL`** if the API listens elsewhere. For **GitHub Pages** project sites you will set **`VITE_BASE_PATH=/YourRepoName/`** at **build** time (§13).
+Change **`VITE_API_BASE_URL`** if the API listens elsewhere. For **GitHub Pages** project sites you will set **`VITE_BASE_PATH=/YourRepoName/`** at **build** time ([Section 13](#13-optional--github-pages-static-web-ui)).
 
 ---
 
@@ -219,7 +221,7 @@ dotnet run
 
 **B — Cursor / VS Code:** configure **`launch.json`** with **`"envFile": "${workspaceFolder}/.env"`** for F5 debugging (see editor docs).
 
-**C — Helper script (also used for autostart):** see **`scripts/run-homebot.ps1`** and §7.
+**C — Helper script (also used for autostart):** see **`scripts/run-homebot.ps1`** and [Section 7](#7-windows-start-automatically-on-sign-in-or-boot).
 
 You should see logs indicating **Kestrel** listening (for example on **`5050`**) and Discord **Ready** when the token is valid.
 
@@ -311,7 +313,7 @@ As user **`homebot`**:
 nano /opt/homebot/app/.env
 ```
 
-Paste the same **`KEY=value`** lines as on Windows (§5). **No `export` keyword** — one variable per line. Restrict permissions:
+Paste the same **`KEY=value`** lines as on Windows ([Section 5](#5-environment-files-env-and-webuienv)). **No `export` keyword** — one variable per line. Restrict permissions:
 
 ```bash
 chmod 600 /opt/homebot/app/.env
@@ -400,7 +402,7 @@ sudo systemctl restart homebot.service
 
 ### 8.10 Firewall
 
-Prefer **TLS on 443** via a reverse proxy (§14). If you must expose **5050** directly:
+Prefer **TLS on 443** via a reverse proxy ([Section 14](#14-optional--public-https-api-reverse-proxy)). If you must expose **5050** directly:
 
 ```bash
 sudo ufw allow OpenSSH
@@ -412,7 +414,7 @@ sudo ufw enable
 
 ## 9. Web UI on your PC
 
-1. Ensure HomeBot is running with **`HOMEBOT_API_ENABLED=true`** (§6 or §8).
+1. Ensure HomeBot is running with **`HOMEBOT_API_ENABLED=true`** ([Section 6](#6-run-homebot-on-windows-first-time) or [Section 8](#8-ubuntu-server--install-systemd-auto-start-on-reboot)).
 2. Open a **second** terminal:
 
    **Windows:**
@@ -432,7 +434,7 @@ sudo ufw enable
    ```
 
 3. Open the URL Vite prints (usually **`http://localhost:5173`**).
-4. Use **Sign in** or **New account** (§11). The header shows API reachability.
+4. Use **Sign in** or **New account** ([Section 11](#11-web-accounts--sign-in-discord-verify-bootstrap)). The header shows API reachability.
 
 ---
 
@@ -457,7 +459,7 @@ Most feature commands only work in the channel bound for that feature.
 - **Discord verify:** ties a **WebUsers** row to a Discord user without typing snowflakes in the browser.
 - **`actorUserId`:** many mutations need a Discord user id; the Web UI can fill this from your profile after sign-in or from **Settings** when the bot can list members.
 
-If protected **`/api`** routes return **503**, set **`HOMEBOT_API_TOKEN`** and/or **`HOMEBOT_WEB_JWT_SECRET`** (see §19).
+If protected **`/api`** routes return **503**, set **`HOMEBOT_API_TOKEN`** and/or **`HOMEBOT_WEB_JWT_SECRET`** (see [Section 19](#19-reference--every-environment-variable)).
 
 ---
 
@@ -467,7 +469,7 @@ Uses the **same** `WebUsers` row as password login when **`DiscordUserId`** matc
 
 1. Set **all three** in **`.env`**: **`HOMEBOT_DISCORD_OAUTH_CLIENT_ID`**, **`HOMEBOT_DISCORD_OAUTH_CLIENT_SECRET`**, **`HOMEBOT_DISCORD_OAUTH_REDIRECT_URI`** (API URL, not Vite).
 2. In the Developer Portal **OAuth2 → Redirects**, add the **exact** same redirect URI.
-3. Set **`HOMEBOT_WEB_OAUTH_FRONTEND_URL`** to the **origin** where the SPA runs (e.g. **`http://localhost:5173`** or your GitHub Pages SPA root — see §13).
+3. Set **`HOMEBOT_WEB_OAUTH_FRONTEND_URL`** to the **origin** where the SPA runs (e.g. **`http://localhost:5173`** or your GitHub Pages SPA root — see [Section 13](#13-optional--github-pages-static-web-ui)).
 4. **`HOMEBOT_WEB_JWT_SECRET`** must still be set.
 
 In **Production**, partial OAuth env fails startup unless **`HOMEBOT_ALLOW_PARTIAL_OAUTH_ENV=true`**. Details: **[README.md](./README.md)**.
@@ -565,7 +567,7 @@ Set **`HOMEBOT_ALLOWED_ORIGINS`** to every **browser origin** that calls the API
 1. Same Wi‑Fi as the PC; avoid guest/AP isolation.
 2. **`ipconfig`** → note **IPv4** (e.g. **`192.168.1.42`**).
 3. Keep **`HOMEBOT_API_URL`** as default **`http://0.0.0.0:5050`** so the API listens on all interfaces.
-4. Allow **TCP 5050** in Windows Firewall (§6.4).
+4. Allow **TCP 5050** in Windows Firewall ([Section 6.4](#64-firewall-other-devices-on-your-lan)).
 5. Set CORS before **`dotnet run`**:
 
    ```powershell
@@ -671,7 +673,7 @@ A **named value** the process reads at startup (e.g. **`DISCORD_TOKEN`**). You d
 | **`HOMEBOT_DISCORD_OAUTH_CLIENT_ID`** | OAuth2 Client ID. |
 | **`HOMEBOT_DISCORD_OAUTH_CLIENT_SECRET`** | OAuth2 Client Secret. |
 | **`HOMEBOT_DISCORD_OAUTH_REDIRECT_URI`** | API callback URL; must match Discord **Redirects** exactly. |
-| **`HOMEBOT_WEB_OAUTH_FRONTEND_URL`** | SPA origin (or full SPA root for GitHub project Pages — §13). |
+| **`HOMEBOT_WEB_OAUTH_FRONTEND_URL`** | SPA origin (or full SPA root for GitHub project Pages — [Section 13](#13-optional--github-pages-static-web-ui)). |
 
 ### Auth rate limits (optional)
 
@@ -702,6 +704,48 @@ For defaults and comments, see **`webui/.env.example`**.
 
 ---
 
+## 20. Backing up SQLite (`homebot.db`)
+
+HomeBot stores household data in **SQLite**. By default the file is **`homebot.db`** in the process **working directory** (repo root when you run `dotnet run` from there, or **`WorkingDirectory`** in **systemd**), unless **`HOMEBOT_DATABASE_PATH`** points elsewhere.
+
+SQLite may also create **`homebot.db-wal`** and **`homebot.db-shm`** when write-ahead logging is active. **Copy all matching files** for a coherent backup.
+
+### Why stop the app (simplest safe method)
+
+While HomeBot is writing, copying only **`homebot.db`** with a plain file copy can produce a **corrupt or inconsistent** snapshot. The reliable approach for a small household bot:
+
+1. **Stop** the process (close the terminal, stop the Task Scheduler task, or **`sudo systemctl stop homebot.service`** on Ubuntu).
+2. **Copy** the database file(s) to another folder, drive, NAS, or cloud-synced directory.
+3. **Start** HomeBot again.
+
+Keep **multiple dated copies** (for example `homebot-2026-05-03.db`) so you can roll back if a bad restore or bug wipes data.
+
+### Windows (manual)
+
+1. Stop HomeBot (end **`dotnet`** / close the window running **`run-homebot.ps1`**).
+2. In File Explorer, open your repo folder (or the folder set in **`HOMEBOT_DATABASE_PATH`**).
+3. Copy **`homebot.db`** and, if present, **`homebot.db-wal`** and **`homebot.db-shm`**, to a backup location.
+4. Start HomeBot again.
+
+### Ubuntu (`systemd`)
+
+```bash
+sudo systemctl stop homebot.service
+sudo -u homebot cp -a /opt/homebot/app/homebot.db /opt/homebot/backups/homebot-$(date +%F).db
+# If WAL files exist next to the DB, copy them too:
+sudo -u homebot test -f /opt/homebot/app/homebot.db-wal && sudo -u homebot cp -a /opt/homebot/app/homebot.db-wal /opt/homebot/backups/ || true
+sudo -u homebot test -f /opt/homebot/app/homebot.db-shm && sudo -u homebot cp -a /opt/homebot/app/homebot.db-shm /opt/homebot/backups/ || true
+sudo systemctl start homebot.service
+```
+
+Create **`/opt/homebot/backups`** once (`sudo mkdir -p /opt/homebot/backups && sudo chown homebot:homebot /opt/homebot/backups`). For **automation**, use a **weekly `systemd` timer** or **cron** that runs the same **stop → copy → start** sequence (or only **copy** if you accept brief downtime inside a maintenance window).
+
+### Online backup without stopping (advanced)
+
+SQLite supports **online backup** APIs and tools (for example the **`sqlite3`** `.backup` command or application-level backup). HomeBot does not expose a built-in backup endpoint; use official SQLite documentation or a DBA tool if you need zero-downtime copies.
+
+---
+
 ## Final checklist
 
 | Check | Expected |
@@ -711,4 +755,4 @@ For defaults and comments, see **`webui/.env.example`**.
 | **Web UI** | Sign-in works; no CORS errors for your origin. |
 | **GitHub Pages** (if used) | No 404 for assets under **`/REPO/`**; API URL in build matches production. |
 
-Deeper behavior (rate limits, refresh flow, OpenAPI) is summarized in **[README.md](./README.md)**.
+Deeper behavior (rate limits, refresh flow, OpenAPI) is summarized in **[README.md](README.md)**.

@@ -8,11 +8,11 @@ Everything shares one **SQLite** database (`homebot.db` by default), so Discord,
 
 ## Quick start
 
-If you are setting up for the **first time** (Discord application, bot token, `.env`, Windows or **Ubuntu + systemd** auto-start, Web UI, optional **GitHub Pages** and HTTPS), follow **[SETUP.md](./SETUP.md)** end to end.
+If you are setting up for the **first time** (Discord application, bot token, `.env`, Windows or **Ubuntu + systemd** auto-start, Web UI, optional **GitHub Pages** and HTTPS), follow **[SETUP.md](SETUP.md)** end to end.
 
-**Short path (after tools are installed):** copy **`.env.example`** → **`.env`**, **`webui/.env.example`** → **`webui/.env`**, set **`DISCORD_TOKEN`**, **`DISCORD_GUILD_ID`**, **`HOMEBOT_API_ENABLED=true`**, **`HOMEBOT_API_TOKEN`**, **`HOMEBOT_WEB_JWT_SECRET`** (≥ 32 characters). From the repo root run **`dotnet run`**; in a second terminal run **`cd webui && npm install && npm run dev`**. The .NET process **does not read `.env` by itself** — use PowerShell, your editor’s **envFile**, **`scripts/run-homebot.ps1`** (Windows), or **`systemd` `EnvironmentFile=`** (Linux); SETUP documents each.
+**Short path (after tools are installed):** copy **[`.env.example`](.env.example)** → **`.env`**, **[`webui/.env.example`](webui/.env.example)** → **`webui/.env`**, set **`DISCORD_TOKEN`**, **`DISCORD_GUILD_ID`**, **`HOMEBOT_API_ENABLED=true`**, **`HOMEBOT_API_TOKEN`**, **`HOMEBOT_WEB_JWT_SECRET`** (≥ 32 characters). From the repo root run **`dotnet run`**; in a second terminal run **`cd webui && npm install && npm run dev`**. The .NET process **does not read `.env` by itself** — use PowerShell, your editor’s **envFile**, **[`scripts/run-homebot.ps1`](scripts/run-homebot.ps1)** (Windows), or **`systemd`** **`EnvironmentFile=`** (Linux); [SETUP.md](SETUP.md) documents each.
 
-**GitHub Pages:** this repository does **not** include a checked-in Actions deploy workflow. SETUP describes how to add your own and which **`VITE_*`** / CORS / OAuth values must match.
+**GitHub Pages:** this repository does **not** include a checked-in Actions deploy workflow. [SETUP.md — Section 13](SETUP.md#13-optional--github-pages-static-web-ui) describes how to add your own and which **`VITE_*`** / CORS / OAuth values must match.
 
 ---
 
@@ -38,7 +38,7 @@ Optional: after API writes (new item, etc.), the bot can **post a short notice**
 - **Discord half** — Slash commands and button UIs in the channels you bind with **`/setup-set`**. Most commands only work in the channel assigned to that feature (see **`/help topic:setup`**).
 - **Web half** — Open the Web UI in a browser, point it at your API URL, sign in (password, Discord OAuth if configured, or paste the shared **`HOMEBOT_API_TOKEN`** as a bearer), and set **`actorUserId`** when needed for complete / delete / undo / roster flows.
 
-You can run **Discord only**, **API only**, or **both** in the same process (see environment variables below). **Install order, Discord portal clicks, Windows vs Ubuntu, systemd, and GitHub Pages** are in **[SETUP.md](./SETUP.md)**.
+You can run **Discord only**, **API only**, or **both** in the same process (see environment variables below). **Install order, Discord portal clicks, Windows vs Ubuntu, systemd, and GitHub Pages** are in **[SETUP.md](SETUP.md)**.
 
 ### 2. Discord (after the bot is running)
 
@@ -48,7 +48,7 @@ Use **`/setup-set`** to bind **`buy`**, **`wishlist`**, **`money`**, and **`cale
 
 ### 3. Web UI
 
-Start the API (**`HOMEBOT_API_ENABLED=true`**) and set **`HOMEBOT_WEB_JWT_SECRET`** for web logins. From **`webui`**: **`npm install`**, **`npm run dev`** (defaults in **`webui/.env.example`**). **Sign in** issues a short-lived **access JWT** and stores a **refresh token** (opaque, server-side row); **Sign out** revokes the refresh row. **Settings** covers API base URL, optional bearer token, calendar viewer zone, and **`actorUserId`** / roster when the bot can list members.
+Start the API (**`HOMEBOT_API_ENABLED=true`**) and set **`HOMEBOT_WEB_JWT_SECRET`** for web logins. From **`webui`**: **`npm install`**, **`npm run dev`** (defaults in **[`webui/.env.example`](webui/.env.example)**). **Sign in** issues a short-lived **access JWT** and stores a **refresh token** (opaque, server-side row); **Sign out** revokes the refresh row. **Settings** covers API base URL, optional bearer token, calendar viewer zone, and **`actorUserId`** / roster when the bot can list members.
 
 The header shows **API reachability** and token acceptance; the UI refreshes state when the tab becomes visible again.
 
@@ -66,7 +66,7 @@ OpenAPI: **`GET /openapi/v1.json`**.
 
 Values are read from the **process** environment (shell, systemd, Docker, or IDE). The app **does not** load a `.env` file by itself.
 
-**Template:** copy **`.env.example`** → **`.env`** (gitignored), fill in secrets, then load them before **`dotnet run`** — for example Cursor/VS Code **`envFile`** in **`launch.json`**, **`EnvironmentFile=`** in **systemd**, **`scripts/run-homebot.ps1`** on Windows, or **`set -a && source .env`** in an interactive shell. See **[SETUP.md](./SETUP.md)** §5–§8.
+**Template:** copy **[`.env.example`](.env.example)** → **`.env`** (gitignored), fill in secrets, then load them before **`dotnet run`** — for example Cursor/VS Code **`envFile`** in **`launch.json`**, **`EnvironmentFile=`** in **systemd**, **[`scripts/run-homebot.ps1`](scripts/run-homebot.ps1)** on Windows, or **`set -a && source .env`** in an interactive shell. See [SETUP.md — Environment files](SETUP.md#5-environment-files-env-and-webuienv) through [Ubuntu + systemd](SETUP.md#8-ubuntu-server--install-systemd-auto-start-on-reboot).
 
 ### Always decide first
 
@@ -144,7 +144,7 @@ Public auth routes are **rate-limited** separately from the general mutation buc
 | **`VITE_API_BASE_URL`** | `webui/.env` or shell | Base URL for API calls (default **`http://localhost:5050`**). Set at **`npm run dev`** / **`npm run build`** time. |
 | **`VITE_BASE_PATH`** | `webui/.env` | Base path for the SPA (default **`/`**). Use e.g. **`/HomeBot/`** for GitHub Pages project sites. |
 
-See **`webui/.env.example`**.
+See **[`webui/.env.example`](webui/.env.example)**.
 
 ### Running locally (minimal example)
 
@@ -158,9 +158,9 @@ HOMEBOT_API_TOKEN=long-random-shared-secret
 HOMEBOT_WEB_JWT_SECRET=another-long-random-secret-at-least-32-bytes
 ```
 
-For Discord browser sign-in, add the OAuth variables from **`.env.example`** and register the same **`HOMEBOT_DISCORD_OAUTH_REDIRECT_URI`** in the Discord app.
+For Discord browser sign-in, add the OAuth variables from **[`.env.example`](.env.example)** and register the same **`HOMEBOT_DISCORD_OAUTH_REDIRECT_URI`** in the Discord app.
 
-Then run the .NET app from the repo root, and in another terminal run `npm run dev` inside **`webui`** (optionally copy **`webui/.env.example`** to **`webui/.env`** for **`VITE_API_BASE_URL`**).
+Then run the .NET app from the repo root, and in another terminal run `npm run dev` inside **`webui`** (optionally copy **[`webui/.env.example`](webui/.env.example)** to **`webui/.env`** for **`VITE_API_BASE_URL`**).
 
 ---
 
@@ -180,13 +180,17 @@ dotnet run
 dotnet test HomeBot.Tests/HomeBot.Tests.csproj
 ```
 
-The test assembly disables **xUnit parallelization** (`HomeBot.Tests/AssemblyInfo.cs`) because several fixtures set process-global **`HOMEBOT_WEB_JWT_SECRET`**; parallel runs could clear it between `await` calls in another test.
+The test assembly disables **xUnit parallelization** ([`HomeBot.Tests/AssemblyInfo.cs`](HomeBot.Tests/AssemblyInfo.cs)) because several fixtures set process-global **`HOMEBOT_WEB_JWT_SECRET`**; parallel runs could clear it between `await` calls in another test.
 
 Stop any running `HomeBot` process first if the build cannot overwrite `HomeBot.dll` or `HomeBot.exe`.
 
 ### Continuous integration
 
-Pushes and pull requests to **`main`** run **[`.github/workflows/ci.yml`](.github/workflows/ci.yml)`**: **.NET** restore, Release build, **`dotnet test`**, and **Web UI** **`npm ci`**, **`npm run lint`**, and **`npm run build`** (Ubuntu, Node **22**).
+Pushes and pull requests to **`main`** run **[`.github/workflows/ci.yml`](.github/workflows/ci.yml)**: **.NET** restore, Release build, **`dotnet test`**, and **Web UI** **`npm ci`**, **`npm run lint`**, and **`npm run build`** (Ubuntu, Node **22**).
+
+### Dependency updates
+
+**[Dependabot](https://docs.github.com/en/code-security/dependabot/dependabot-version-updates)** is configured in **[`.github/dependabot.yml`](.github/dependabot.yml)** (monthly **NuGet** and **npm** / `webui`). Review and merge its pull requests after **`dotnet test`** / **`npm run build`** as you would any other change.
 
 ### Web UI
 
@@ -209,12 +213,14 @@ Output is in **`webui/dist`**. Set **`VITE_API_BASE_URL`** at build time if the 
 
 ## Data and safety
 
-- **SQLite** holds items, settings, channel bindings, action log (undo), **`WebUsers`**, Discord verify sessions, and **opaque refresh tokens** (`WebRefreshTokens`) for browser sessions.
+- **SQLite** holds items, settings, channel bindings, action log (undo), **`WebUsers`**, Discord verify sessions, and **opaque refresh tokens** (`WebRefreshTokens`) for browser sessions. **Backups:** copy the DB when the process is stopped, and include **`-wal`** / **`-shm`** files if present — see [SETUP.md — Section 20](SETUP.md#20-backing-up-sqlite-homebotdb).
 - **Snowflakes:** Large Discord ids are handled as **strings** in JSON where it matters (money, calendar assignee, list API responses, buy/wishlist writes). Prefer roster picks or member labels when the UI offers them.
 - **Secrets:** Do not commit tokens or **`HOMEBOT_WEB_JWT_SECRET`**. The Web UI stores access JWT, optional API bearer, and refresh token in **browser localStorage**; **Sign out** clears client storage and **`POST /api/auth/logout`** revokes the refresh row on the server.
 
 ---
 
-## License / project notes
+## License
 
-This repository is a private household project; add a `LICENSE` file if you redistribute.
+This project is licensed under the **MIT License** — see **[LICENSE](LICENSE)** for the full text.
+
+HomeBot is a **single-household** project; you may still customize deployment and ops for your own servers (see [SETUP.md](SETUP.md)).
