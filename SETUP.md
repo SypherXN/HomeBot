@@ -2,7 +2,164 @@
 
 This guide walks through installing prerequisites, running the **.NET** process (Discord bot + optional API), running the **Web UI** locally, running **tests**, and publishing the Web UI to **GitHub Pages** with the API reachable from the browser.
 
-For full environment variable reference, see **README.md** and **`.env.example`**. The .NET app reads the **process environment only**; it does **not** auto-load a `.env` file. Use your shell, IDE **envFile**, **systemd**, or **Docker** to inject variables.
+**New to “environment variables”?** Read **[How configuration works](#how-configuration-works)** and **[Environment variable reference](#environment-variable-reference)** before editing **`.env`**. The rest of this document assumes you have filled in those values (or left optional ones blank).
+
+---
+
+## Table of contents
+
+1. [How configuration works](#how-configuration-works)
+2. [Environment variable reference](#environment-variable-reference)
+3. [Prerequisites](#prerequisites-all-platforms)
+4. Windows — search **§1. Windows**
+5. Ubuntu — search **§2. Ubuntu**
+6. Local testing — search **§3. Local testing**
+7. GitHub Pages (build) — search **§4. GitHub Pages**
+8. GitHub Pages (Actions) — search **§5. GitHub Pages**
+9. Checklist — search **§6. Checklist**
+10. Quick reference — search **§7. Quick reference**
+
+---
+
+## How configuration works
+
+**Start here if you have never set server secrets before.**
+
+### What is an “environment variable”?
+
+Think of it as a **named setting** the program reads when it starts — like a hidden form filled out before HomeBot runs. Examples: `DISCORD_TOKEN`, `HOMEBOT_API_ENABLED`.
+
+- You do **not** paste secrets into the HomeBot source code.
+- You **do** put them in a **`.env`** file on your machine (or in systemd / Docker / your host’s panel). HomeBot’s **.NET process does not read `.env` by itself**; your shell, IDE, or process manager must **load those names into the environment** before `dotnet run` (see **`.env.example`** comments).
+
+### What should I copy first?
+
+1. Copy **`.env.example`** → **`.env`** in the **repo root** (same folder as `HomeBot.csproj`).
+2. Optionally copy **`webui/.env.example`** → **`webui/.env`** if you build or run the React app (different variables — see [Web UI (Vite) variables](#web-ui-vite-variables)).
+
+Fill **`.env`** using the **[Environment variable reference](#environment-variable-reference)** section below. **Never commit `.env`** — it is gitignored so secrets stay off GitHub.
+
+### Words that confuse beginners
+
+| Term | Plain meaning |
+|------|----------------|
+| **Origin** | The first part of a website address: **`https://example.com`** (scheme + host, **no** path). Used for CORS (“which websites may call my API from a browser?”). |
+| **Guild** | Your **Discord server** (the place with channels). HomeBot needs its numeric **ID**. |
+| **Bearer token** | A secret string sent as `Authorization: Bearer <secret>` to the API. **`HOMEBOT_API_TOKEN`** is one kind of bearer; a **JWT** from web login is another. |
+| **`0.0.0.0`** | “Listen on every network interface.” You still open **`http://localhost:5050`** on the **same computer**; other PCs use your machine’s **IP or hostname**. |
+| **CORS** | A browser safety rule. If your Web UI is at `https://you.github.io` but the API is elsewhere, the API must **allow that origin** or the browser blocks JavaScript requests. |
+
+---
+
+## Environment variable reference
+
+**Use this as a checklist** while copying **`.env.example`** → **`.env`**. “Required” means **for that mode** (Discord on, API on, web login on, etc.).
+
+### Mode switches
+
+| Variable | Required? | What to put | Where the value comes from |
+|----------|-----------|-------------|----------------------------|
+| **`HOMEBOT_DISCORD_ENABLED`** | No | Omit, `true`, or **`false`** | **You choose.** Default behavior = Discord **on**. Set **`false`** only for **API-only** (no Discord bot in this process). |
+| **`HOMEBOT_API_ENABLED`** | For Web UI / HTTP | Must be exactly **`true`** (any case) to start the API | **You choose.** Without this, `dotnet run` only runs Discord (if enabled). The React app needs the API. |
+
+---
+
+### Discord bot (when Discord is on)
+
+| Variable | Required? | What to put | Where the value comes from |
+|----------|-----------|-------------|----------------------------|
+| **`DISCORD_TOKEN`** | Yes (if Discord on) | One long string (bot token) | **Discord Developer Portal** → [https://discord.com/developers/applications](https://discord.com/developers/applications) → **Your application** → **Bot** → **Reset Token** / **Copy**. Treat it like a password; anyone with it controls your bot. |
+| **`DISCORD_GUILD_ID`** | Yes (if Discord on) | Digits only, e.g. `123456789012345678` | **Discord app** (user settings) → **App Settings** → **Advanced** → turn **Developer Mode** **On**. Then in the server list, **right‑click your server icon** (your household server) → **Copy Server ID**. Paste only the number. |
+
+**First-time Discord app (short path):**
+
+1. Developer Portal → **Applications** → **New Application** → name it (e.g. “HomeBot”).
+2. Open **Bot** → **Add Bot** → enable **Privileged Gateway Intents** only if Discord’s docs say you need them for what you use.
+3. **Reset Token** → copy → that is **`DISCORD_TOKEN`**.
+4. Open **OAuth2** → **URL Generator** only for **inviting** the bot (scopes `bot` + `applications.commands`, pick permissions). Invite URL is **not** an env var — use it once in a browser.
+5. **`DISCORD_GUILD_ID`** = your server’s ID (steps above).
+
+---
+
+### HTTP API and networking
+
+| Variable | Required? | What to put | Where the value comes from |
+|----------|-----------|-------------|----------------------------|
+| **`HOMEBOT_API_URL`** | No | Default **`http://0.0.0.0:5050`** | **You choose** the bind URL. **`0.0.0.0`** = all interfaces. For “API only on this machine,” some people use **`http://127.0.0.1:5050`**. Must match how you reverse‑proxy (nginx/Caddy) if you use one. |
+| **`HOMEBOT_API_TOKEN`** | Strongly recommended | A long random string **you invent** (or generate in a password manager) | **Not from Discord.** Same value goes wherever you need **`Authorization: Bearer …`** (scripts, curl). Optional **only** if you use **only** JWT web login and never the shared token — but then you still need **`HOMEBOT_WEB_JWT_SECRET`** or protected `/api` returns **503**. |
+| **`HOMEBOT_ALLOWED_ORIGINS`** | If browsers hit the API from non-default origins | Comma‑separated **origins** (no path): `http://localhost:5173,https://youruser.github.io` | **List every place the Web UI is opened in a browser.** If unset, only **`http://localhost:5173`** is allowed (Vite default). **Do not** put your **API** URL here — put the **page** that runs JavaScript (GitHub Pages, your domain, etc.). |
+| **`HOMEBOT_DATABASE_PATH`** | No | File path or full SQLite connection string | **You choose** where the SQLite file lives. Empty → **`homebot.db`** next to the process working directory. Can be `C:\Data\homebot.db` or `/var/lib/homebot/db.sqlite` or `Data Source=…`. |
+
+---
+
+### Web login (JWT)
+
+| Variable | Required? | What to put | Where the value comes from |
+|----------|-----------|-------------|----------------------------|
+| **`HOMEBOT_WEB_JWT_SECRET`** | Yes for web **Sign in**, setup, OAuth | **At least 32 characters** (UTF‑8); longer is fine | **You invent** it (password manager “generate password” is ideal). **Never** put this in the React app or GitHub — **server only**. Used to sign JWTs. |
+| **`HOMEBOT_WEB_SETUP_TOKEN`** | No | Any secret string **you invent** | Optional “extra password” for **first** web user bootstrap when set. If unset, that flow may not require it (see README). |
+| **`HOMEBOT_WEB_INVITE_TOKEN`** | No | Any secret string **you invent** | Optional extra gate for **additional** user registration when set. |
+
+---
+
+### Discord OAuth (optional — “Continue with Discord” on Sign in)
+
+All **three** must be set together, or leave **all** unset. In **Production** (non‑Development), **partial** OAuth env fails startup unless **`HOMEBOT_ALLOW_PARTIAL_OAUTH_ENV=true`**.
+
+| Variable | What to put | Where the value comes from |
+|----------|-------------|----------------------------|
+| **`HOMEBOT_DISCORD_OAUTH_CLIENT_ID`** | Numeric **Application** ID | Developer Portal → **Your application** → **OAuth2** → **Client information** → **Client ID**. |
+| **`HOMEBOT_DISCORD_OAUTH_CLIENT_SECRET`** | Short secret string | Same page → **Client secret** → **Reset** / **Copy**. |
+| **`HOMEBOT_DISCORD_OAUTH_REDIRECT_URI`** | Full URL, **exactly** one registered redirect | **Must match** Developer Portal → **OAuth2** → **Redirects** character‑for‑character (`http` vs `https`, port, path, trailing slash). Points to the **API**, not Vite, e.g. **`http://localhost:5050/api/auth/discord/oauth/callback`** or **`https://api.yourdomain.com/api/auth/discord/oauth/callback`**. |
+| **`HOMEBOT_WEB_OAUTH_FRONTEND_URL`** | Where the React app lives | After Discord, the API redirects the browser here + **`/oauth/callback`**. **Local:** `http://localhost:5173`. **GitHub Pages project site:** include the repo path, e.g. **`https://youruser.github.io/HomeBot`** (details in **§4.3 — API + CORS + OAuth for Pages** later in this file). |
+
+**Discord portal checklist for OAuth:**
+
+1. **OAuth2** → **Redirects** → **Add Redirect** → paste the same string as **`HOMEBOT_DISCORD_OAUTH_REDIRECT_URI`**.
+2. Scopes used by HomeBot include **`identify`** (the app requests it in code).
+
+---
+
+### Optional tuning (limits, body size, staging)
+
+| Variable | What to put | Where the value comes from |
+|----------|-------------|----------------------------|
+| **`HOMEBOT_API_MAX_BODY_BYTES`** | Positive integer (bytes) | **You choose** a cap; unset = default from Phase 3. |
+| **`HOMEBOT_API_MUTATION_PER_MINUTE`** | Requests per IP per minute | **You choose**; README lists default (**200**). |
+| **`HOMEBOT_API_AUTH_LOGIN_PER_MINUTE`** | Same idea | Default **30**; tune if you hit **429** on login. |
+| **`HOMEBOT_API_OAUTH_CONSUME_PER_MINUTE`** | Same | Default **15**. |
+| **`HOMEBOT_API_OAUTH_BROWSER_PER_MINUTE`** | Same | Default **48**. |
+| **`HOMEBOT_API_AUTH_ACCOUNT_WRITE_PER_MINUTE`** | Same | Default **24**. |
+| **`HOMEBOT_API_DISCORD_STATUS_POLL_PER_MINUTE`** | Same | Default **120**. |
+| **`HOMEBOT_ALLOW_PARTIAL_OAUTH_ENV`** | **`true`** or omit | **Rare.** Set **`true`** only if you intentionally run **non‑Development** with **incomplete** OAuth client id/secret/redirect (staging). |
+| **`ASPNETCORE_ENVIRONMENT`** | **`Development`** or **`Production`** | Standard .NET. **Development** relaxes some OAuth startup checks; **Production** enables stricter behavior (see README). If unset, tooling may default to **Production** on Linux servers. |
+
+---
+
+### Web UI (Vite) variables
+
+These are **not** read by the .NET bot. They are baked in when you run **`npm run dev`** or **`npm run build`** (Vite).
+
+| Variable | File | What to put | Where the value comes from |
+|----------|------|-------------|----------------------------|
+| **`VITE_API_BASE_URL`** | `webui/.env` | Base URL of the API **as the browser sees it** | Usually **`http://localhost:5050`** on your PC. In production / GitHub Pages, use your **public API** URL, e.g. **`https://api.example.com`** — **no** trailing slash. |
+| **`VITE_BASE_PATH`** | `webui/.env` | URL path prefix for the SPA | **`/`** for root hosting. For GitHub **project** Pages use **`/YourRepoName/`** (slash at start and end). Must match how the site is served. |
+
+**GitHub Actions:** set `VITE_API_BASE_URL` from a repository **variable** (see **§5.2 — Add a GitHub Actions workflow** later in this file) so you do not commit secrets.
+
+---
+
+### Quick “am I missing something?” table
+
+| Symptom | Likely fix |
+|---------|------------|
+| API **503** on protected routes | Set **`HOMEBOT_API_TOKEN`** and/or **`HOMEBOT_WEB_JWT_SECRET`** (JWT min 32 chars). |
+| Browser says **CORS** / blocked fetch | Add your site’s **origin** to **`HOMEBOT_ALLOWED_ORIGINS`** (and/or fix OAuth frontend URL so auto‑merge helps). |
+| Discord OAuth redirect error | **`HOMEBOT_DISCORD_OAUTH_REDIRECT_URI`** must **exactly** match a redirect in the Discord portal. |
+| OAuth works locally but not on server | **`HOMEBOT_WEB_OAUTH_FRONTEND_URL`** must match where the React app really is (including **`/RepoName`** on GitHub project Pages). |
+| `dotnet run` says Discord token missing | Set **`DISCORD_TOKEN`** (and **`DISCORD_GUILD_ID`**) or set **`HOMEBOT_DISCORD_ENABLED=false`**. |
+
+For one-line reminders of defaults, keep **README.md** open alongside this file.
 
 ---
 
@@ -55,13 +212,13 @@ cd HomeBot
 ```
 
 1. Copy **`.env.example`** → **`.env`** in the repo root (`.env` is gitignored).
-2. Copy **`webui/.env.example`** → **`webui/.env`** for Vite (optional for defaults).
+2. Copy **`webui/.env.example`** → **`webui/.env`** if you will run or build the Web UI (optional if defaults are fine).
 
-Edit **`.env`** with at least:
+Fill **`.env`** using **[Environment variable reference](#environment-variable-reference)** above. For a first working machine you usually need at least:
 
-- **`DISCORD_TOKEN`** / **`DISCORD_GUILD_ID`** if you run with Discord (default).
-- **`HOMEBOT_API_ENABLED=true`** if you want the HTTP API (needed for the Web UI).
-- **`HOMEBOT_API_TOKEN`** and/or **`HOMEBOT_WEB_JWT_SECRET`** (JWT secret **≥ 32 UTF-8 bytes**) so protected `/api` routes are not **503**. Web login requires **`HOMEBOT_WEB_JWT_SECRET`**.
+- **`DISCORD_TOKEN`** and **`DISCORD_GUILD_ID`** (if Discord is on — default).
+- **`HOMEBOT_API_ENABLED=true`** for the Web UI.
+- **`HOMEBOT_WEB_JWT_SECRET`** (32+ characters) for web sign-in, and usually **`HOMEBOT_API_TOKEN`** (or rely on JWT only once you understand [README](README.md) **503** behavior).
 
 PowerShell (current session) example before `dotnet run`:
 
