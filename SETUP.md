@@ -11,7 +11,8 @@ This guide walks through installing prerequisites, running the **.NET** process 
 1. [How configuration works](#how-configuration-works)
 2. [Environment variable reference](#environment-variable-reference)
 3. [Prerequisites](#prerequisites-all-platforms)
-4. [Windows: install and run](#windows-install-and-run)
+4. [Windows: install and run](#windows-install-and-run)  
+   - [Phone / another PC on your LAN](#phone-or-another-pc-on-your-lan-windows)
 5. [Ubuntu: install and run](#ubuntu-install-and-run)  
    - [Start on every reboot (systemd)](#ubuntu-start-on-boot-systemd)
 6. [Local testing](#local-testing)
@@ -246,6 +247,44 @@ Open the URL Vite prints (usually **`http://localhost:5173`**). The UI calls **`
 ### 1.6 Windows firewall (optional)
 
 If other machines on your LAN need the API, allow inbound **TCP 5050** (or the port you set in **`HOMEBOT_API_URL`**) in Windows Defender Firewall.
+
+<a id="phone-or-another-pc-on-your-lan-windows"></a>
+
+### 1.7 Phone or another PC on your LAN (same Wi‑Fi)
+
+Use this when HomeBot runs on your **Windows PC** and you want the **Web UI** on your **phone** (or a laptop) on the **same home network**.
+
+1. **Put the phone on the same Wi‑Fi** as the PC (not guest isolation / “AP isolation” if your router offers it — that blocks device-to-device traffic).
+
+2. **Find your PC’s LAN address** (something like `192.168.1.42`):
+   - Open **PowerShell** and run: **`ipconfig`**
+   - Under your active adapter (often **Wi‑Fi** or **Ethernet**), copy the **IPv4 Address**.
+
+3. **API must listen on the whole network** (default is already correct): **`HOMEBOT_API_URL`** should be **`http://0.0.0.0:5050`** or unset (same default). That is **not** the URL you type in the browser — it means “listen on every interface.”
+
+4. **Windows Firewall**: allow **inbound TCP 5050** for **Private** networks (see **§1.6**). Without this, the phone cannot reach the API.
+
+5. **CORS** (browser security): the API only trusts certain **origins** by default. Add your PC’s dev UI origin. Before **`dotnet run`**, set for example (replace **`192.168.1.42`** with your IPv4):
+
+   ```powershell
+   $env:HOMEBOT_ALLOWED_ORIGINS = "http://localhost:5173,http://192.168.1.42:5173"
+   ```
+
+   Then start (or restart) **`dotnet run`**. If you use a **`.env`**, put the same comma‑separated value there and load it the way you usually do.
+
+6. **Vite dev server must listen on the LAN**, not only `localhost`. From **`webui`**:
+
+   ```powershell
+   npm run dev -- --host 0.0.0.0
+   ```
+
+   Vite will print **Network:** URLs — use the one that shows your **`192.168.x.x`** address.
+
+7. **On the phone’s browser**, open **`http://192.168.1.42:5173`** (your real IP).
+
+8. **API base URL in the app**: in **Settings**, set the API base to **`http://192.168.1.42:5050`** (same IP, port **5050**) so the phone does not try to call **`localhost`** (that would mean “the phone itself,” not your PC).
+
+**If it still fails:** from the phone, try opening **`http://192.168.1.42:5050/api/health`** — if that does not load, fix firewall or IP first before debugging the React app.
 
 ---
 
