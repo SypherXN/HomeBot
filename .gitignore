@@ -90,6 +90,9 @@ _NCrunch_*/
 # --- Local SQLite backups (scripts may write here; never commit) ---
 backups/
 
+# --- Private operator-only docs (never push) ---
+PRIVATE_Headless_Ubuntu_From_Windows.md
+
 # --- Optional ops / planning docs (not required to build or run the bot) ---
 docs/OPS.md
 docs/HomeBot_Base_Design.md
