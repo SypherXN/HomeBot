@@ -1,8 +1,20 @@
 # WebUI and API — possible next work
 
-**Purpose:** Optional enhancements beyond what [Refined_WebUI_Adaptation_Plan.md](./Refined_WebUI_Adaptation_Plan.md) already marks as shipped. Each item states **what implementing it does** for users and the codebase.
+**Purpose:** Optional enhancements beyond what [Refined_WebUI_Adaptation_Plan.md](./Refined_WebUI_Adaptation_Plan.md) marks as shipped. Each backlog item states **what implementing it does** for users and the codebase.
 
-**Related:** Implementation snapshot, routes, and patterns live in the adaptation plan; treat that document as the shipped baseline.
+**Related:** Implementation snapshot, routes, and patterns live in the adaptation plan. Step-by-step install, env vars, LAN, GitHub Pages, and Ubuntu boot are in **[SETUP.md](../SETUP.md)** at the repo root.
+
+---
+
+## Recently addressed (no longer “future”)
+
+These are **already in the repo**; they stay out of the backlog below.
+
+| Topic | What was added |
+|--------|------------------|
+| **API URL from the phone / LAN** | **Auto-detection:** on Vite **dev (5173)** or **preview (4173)**, the UI uses **same hostname + port 5050** unless you save an override. **Settings → API server** still allows a manual URL and **Reset to build default**. See `webui/src/apiBaseUrl.ts`. |
+| **Setup documentation** | **[SETUP.md](../SETUP.md)** — Windows and Ubuntu, env var “where to get each value,” **systemd start on reboot**, **LAN / phone** (CORS, firewall, `--host`), GitHub Pages + Actions workflow example. |
+| **Repo hygiene** | **`.gitignore`** expanded for build outputs, logs, SQLite sidecars, local `appsettings.*.local.json`, etc. |
 
 ---
 
@@ -36,9 +48,18 @@
 
 ## WebUI — rate limiting (`429`) UX
 
-**Today:** Auth and other routes can return **`429`** with `Retry-After` (see README / Phase 3). The SPA does not specialize handling for those responses.
+**Today:** Auth and other routes can return **`429`** with `Retry-After` (see README / Phase 3). The SPA still treats most failures as a generic **`fetch`** / **`apiJson`** error unless you read the status elsewhere.
 
-**What implementing it does:** Surfaces **clear, actionable messages** (“Too many attempts, try again in …”) on login, setup, OAuth callback, and optionally global fetch—reduces confusion when IP-based limits trigger; **no server change** required.
+**What implementing it does:** Surfaces **clear, actionable messages** (“Too many attempts, try again in …”) on login, setup, OAuth callback, and optionally a shared **`apiJson`** wrapper—reduces confusion when IP-based limits trigger; **no server change** required.
+
+---
+
+## WebUI — LAN / dev edge cases (optional polish)
+
+| Item | What implementing it does |
+|------|---------------------------|
+| **Custom Vite port** | Today auto API base only runs when the page is on port **5173** or **4173**. If you always use e.g. **`--port 3000`**, you could read a **`VITE_DEV_CLIENT_PORT`** or map `location.port`—**less manual Settings use** for odd ports. |
+| **`fetch` / offline banner** | Detect `navigator.onLine` and failed health checks to show “You’re offline” or “Cannot reach API”—clearer than only the red **API unreachable** dot. |
 
 ---
 
@@ -62,7 +83,7 @@
 
 **Today:** Regression coverage is mainly **.NET** integration tests (`ApiWebAuthTests`, `ApiAuthRateLimitTests`, mutation tests, etc.).
 
-**What implementing it does:** **Playwright**, **Vitest**, and/or **MSW** against a test API catches **routing, auth, calendar time zones, and form** regressions before manual QA; complements but does not replace API tests.
+**What implementing it does:** **Playwright**, **Vitest**, and/or **MSW** against a test API catches **routing, auth, calendar time zones, API base URL logic, and forms** regressions before manual QA; complements but does not replace API tests.
 
 ---
 
@@ -71,14 +92,14 @@
 | Item | What implementing it does |
 |------|---------------------------|
 | **Dedicated `/health` page** | Bookmarkable full-page health view; **superseded** for most users by `AppShell` connection status—only adds value if you want a shareable diagnostics URL. |
-| **`.gitignore` / CI hygiene** | Keeps `bin`, `obj`, `.build-out`, `webui/dist`, coverage outputs, and local DB files **out of commits**; `git status` stays readable. |
-| **Deployment runbooks** | Document reverse proxy, HTTPS, `HOMEBOT_ALLOWED_ORIGINS`, and `HOMEBOT_WEB_OAUTH_FRONTEND_URL` for non-local hosts—fewer production misconfigurations; no code change. |
+| **Deployment runbooks** | [SETUP.md](../SETUP.md) already covers a lot; extra runbooks would add **host-specific** examples (nginx, Caddy, TLS renewal)—fewer mistakes for operators; mostly **docs**, not product code. |
+| **GitHub Actions workflow file in repo** | SETUP describes a **Pages deploy** workflow; committing **`.github/workflows/deploy-webui.yml`** turns that into **one-click** deploys from `main` instead of copy-paste. |
 
 ---
 
 ## Suggested order (when you are not sure where to start)
 
-1. **Quick wins:** `429` UX in the WebUI; confirm `.gitignore` covers all local build outputs.  
-2. **Product breadth:** Money non-split UI if your household uses that flow.  
-3. **Correctness:** Snowflake audit if you use **real** Discord IDs everywhere.  
-4. **Large bets:** Per-instance calendar recurrence; Phase 5 identity expansion; SPA E2E suite.
+1. **Quick wins:** **`429` UX** in the WebUI; optional **offline / fetch** messaging; **Playwright smoke** for login + Settings API URL.  
+2. **Product breadth:** **Money non-split** UI if your household uses that flow.  
+3. **Correctness:** **Snowflake audit** if you use **real** Discord IDs everywhere.  
+4. **Large bets:** **Per-instance calendar** recurrence; **Phase 5** identity expansion; deeper **SPA E2E** suite.
