@@ -1,309 +1,278 @@
-# HomeBot setup guide
+# HomeBot — complete setup guide
 
-This guide walks through installing prerequisites, running the **.NET** process (Discord bot + optional API), running the **Web UI** locally, running **tests**, and publishing the Web UI to **GitHub Pages** with the API reachable from the browser.
+This guide is written for people who have **never** wired up a Discord bot, a small web API, or GitHub Pages before. Follow the parts **in order** unless a heading says “optional.”
 
-**New to “environment variables”?** Read **[How configuration works](#how-configuration-works)** and **[Environment variable reference](#environment-variable-reference)** before editing **`.env`**. The rest of this document assumes you have filled in those values (or left optional ones blank).
+**What you will have when you are done**
+
+- A **Discord bot** in your server, with slash commands and channel bindings for lists, money, and calendar.
+- The **same program** optionally serving an **HTTP API** (default **`http://0.0.0.0:5050`**) and a **SQLite** database (`homebot.db` by default).
+- A **React Web UI** you can run on your PC with `npm run dev`, or build as static files and host (for example on **GitHub Pages**) with your API reachable from the browser.
+
+**Important:** The .NET app reads the **process environment only**. It does **not** load `.env` by itself. On Windows you can set variables in PowerShell, use your editor’s **envFile**, or use the helper script in **[§7](#7-windows-start-automatically)**. On Ubuntu, **systemd** loads `.env` via **`EnvironmentFile=`**.
 
 ---
 
 ## Table of contents
 
-1. [How configuration works](#how-configuration-works)
-2. [Environment variable reference](#environment-variable-reference)
-3. [Prerequisites](#prerequisites-all-platforms)
-4. [Windows: install and run](#windows-install-and-run)  
-   - [Phone / another PC on your LAN](#phone-or-another-pc-on-your-lan-windows)
-5. [Ubuntu: install and run](#ubuntu-install-and-run)  
-   - [Start on every reboot (systemd)](#ubuntu-start-on-boot-systemd)
-6. [Local testing](#local-testing)
-7. [GitHub Pages: static build](#github-pages-static-build)
-8. [GitHub Pages: Actions and hosting](#github-pages-actions-and-hosting)
-9. [Checklist](#checklist-after-everything-is-up)
-10. [Quick reference](#quick-reference-same-machine-dev-copy-paste)
+1. [Overview — what to do in what order](#1-overview--what-to-do-in-what-order)
+2. [Prerequisites](#2-prerequisites)
+3. [GitHub and source code](#3-github-and-source-code)
+4. [Discord — application, bot token, invite, server ID](#4-discord--application-bot-token-invite-server-id)
+5. [Environment files: `.env` and `webui/.env`](#5-environment-files-env-and-webuienv)
+6. [Run HomeBot on Windows (first time)](#6-run-homebot-on-windows-first-time)
+7. [Windows — start automatically on sign-in or boot](#7-windows-start-automatically-on-sign-in-or-boot)
+8. [Ubuntu server — install, `systemd`, auto-start on reboot](#8-ubuntu-server--install-systemd-auto-start-on-reboot)
+9. [Web UI on your PC](#9-web-ui-on-your-pc)
+10. [Discord — finish in-server setup (`/setup-set`)](#10-discord--finish-in-server-setup-setup-set)
+11. [Web accounts — sign in, Discord verify, bootstrap](#11-web-accounts--sign-in-discord-verify-bootstrap)
+12. [Optional — Discord OAuth (“Continue with Discord”)](#12-optional--discord-oauth-continue-with-discord)
+13. [Optional — GitHub Pages (static Web UI)](#13-optional--github-pages-static-web-ui)
+14. [Optional — public HTTPS API (reverse proxy)](#14-optional--public-https-api-reverse-proxy)
+15. [Phone or another PC on your LAN (Windows dev)](#15-phone-or-another-pc-on-your-lan-windows-dev)
+16. [Tests and lint](#16-tests-and-lint)
+17. [Troubleshooting](#17-troubleshooting)
+18. [Reference — how configuration works](#18-reference--how-configuration-works)
+19. [Reference — every environment variable](#19-reference--every-environment-variable)
 
 ---
 
-## How configuration works
+## 1. Overview — what to do in what order
 
-**Start here if you have never set server secrets before.**
-
-### What is an “environment variable”?
-
-Think of it as a **named setting** the program reads when it starts — like a hidden form filled out before HomeBot runs. Examples: `DISCORD_TOKEN`, `HOMEBOT_API_ENABLED`.
-
-- You do **not** paste secrets into the HomeBot source code.
-- You **do** put them in a **`.env`** file on your machine (or in systemd / Docker / your host’s panel). HomeBot’s **.NET process does not read `.env` by itself**; your shell, IDE, or process manager must **load those names into the environment** before `dotnet run` (see **`.env.example`** comments).
-
-### What should I copy first?
-
-1. Copy **`.env.example`** → **`.env`** in the **repo root** (same folder as `HomeBot.csproj`).
-2. Optionally copy **`webui/.env.example`** → **`webui/.env`** if you build or run the React app (different variables — see [Web UI (Vite) variables](#web-ui-vite-variables)).
-
-Fill **`.env`** using the **[Environment variable reference](#environment-variable-reference)** section below. **Never commit `.env`** — it is gitignored so secrets stay off GitHub.
-
-### Words that confuse beginners
-
-| Term | Plain meaning |
-|------|----------------|
-| **Origin** | The first part of a website address: **`https://example.com`** (scheme + host, **no** path). Used for CORS (“which websites may call my API from a browser?”). |
-| **Guild** | Your **Discord server** (the place with channels). HomeBot needs its numeric **ID**. |
-| **Bearer token** | A secret string sent as `Authorization: Bearer <secret>` to the API. **`HOMEBOT_API_TOKEN`** is one kind of bearer; a **JWT** from web login is another. |
-| **`0.0.0.0`** | “Listen on every network interface.” You still open **`http://localhost:5050`** on the **same computer**; other PCs use your machine’s **IP or hostname**. |
-| **CORS** | A browser safety rule. If your Web UI is at `https://you.github.io` but the API is elsewhere, the API must **allow that origin** or the browser blocks JavaScript requests. |
+| Step | What | Where |
+|------|------|--------|
+| 1 | Install **Git**, **.NET 10 SDK**, **Node.js (LTS or 20+)** | Your Windows PC or Ubuntu server |
+| 2 | **Clone** this repository (or your fork) | §3 |
+| 3 | Create a **Discord application** and **bot**, copy the **token**, **invite** the bot, copy **Server (guild) ID** | §4 |
+| 4 | Copy **`.env.example`** → **`.env`**, **`webui/.env.example`** → **`webui/.env`**, fill required keys | §5 |
+| 5 | Run **`dotnet run`** (and keep it running) | §6 (Windows) or §8 (Ubuntu) |
+| 6 | Run **`npm run dev`** in **`webui`** | §9 |
+| 7 | In Discord, run **`/setup-set`** to bind features to channels | §10 |
+| 8 | In the browser, open **Sign in** / **New account** and complete setup | §11 |
+| 9 | (Optional) OAuth button, **GitHub Pages**, **HTTPS** for the API | §12–§14 |
 
 ---
 
-## Environment variable reference
-
-**Use this as a checklist** while copying **`.env.example`** → **`.env`**. “Required” means **for that mode** (Discord on, API on, web login on, etc.).
-
-### Mode switches
-
-| Variable | Required? | What to put | Where the value comes from |
-|----------|-----------|-------------|----------------------------|
-| **`HOMEBOT_DISCORD_ENABLED`** | No | Omit, `true`, or **`false`** | **You choose.** Default behavior = Discord **on**. Set **`false`** only for **API-only** (no Discord bot in this process). |
-| **`HOMEBOT_API_ENABLED`** | For Web UI / HTTP | Must be exactly **`true`** (any case) to start the API | **You choose.** Without this, `dotnet run` only runs Discord (if enabled). The React app needs the API. |
-
-### Discord bot (when Discord is on)
-
-| Variable | Required? | What to put | Where the value comes from |
-|----------|-----------|-------------|----------------------------|
-| **`DISCORD_TOKEN`** | Yes (if Discord on) | One long string (bot token) | **Discord Developer Portal** → [https://discord.com/developers/applications](https://discord.com/developers/applications) → **Your application** → **Bot** → **Reset Token** / **Copy**. Treat it like a password; anyone with it controls your bot. |
-| **`DISCORD_GUILD_ID`** | Yes (if Discord on) | Digits only, e.g. `123456789012345678` | **Discord app** (user settings) → **App Settings** → **Advanced** → turn **Developer Mode** **On**. Then in the server list, **right‑click your server icon** (your household server) → **Copy Server ID**. Paste only the number. |
-
-**First-time Discord app (short path):**
-
-1. Developer Portal → **Applications** → **New Application** → name it (e.g. “HomeBot”).
-2. Open **Bot** → **Add Bot** → enable **Privileged Gateway Intents** only if Discord’s docs say you need them for what you use.
-3. **Reset Token** → copy → that is **`DISCORD_TOKEN`**.
-4. Open **OAuth2** → **URL Generator** only for **inviting** the bot (scopes `bot` + `applications.commands`, pick permissions). Invite URL is **not** an env var — use it once in a browser.
-5. **`DISCORD_GUILD_ID`** = your server’s ID (steps above).
-
-### HTTP API and networking
-
-| Variable | Required? | What to put | Where the value comes from |
-|----------|-----------|-------------|----------------------------|
-| **`HOMEBOT_API_URL`** | No | Default **`http://0.0.0.0:5050`** | **You choose** the bind URL. **`0.0.0.0`** = all interfaces. For “API only on this machine,” some people use **`http://127.0.0.1:5050`**. Must match how you reverse‑proxy (nginx/Caddy) if you use one. |
-| **`HOMEBOT_API_TOKEN`** | Strongly recommended | A long random string **you invent** (or generate in a password manager) | **Not from Discord.** Same value goes wherever you need **`Authorization: Bearer …`** (scripts, curl). Optional **only** if you use **only** JWT web login and never the shared token — but then you still need **`HOMEBOT_WEB_JWT_SECRET`** or protected `/api` returns **503**. |
-| **`HOMEBOT_ALLOWED_ORIGINS`** | If browsers hit the API from non-default origins | Comma‑separated **origins** (no path): `http://localhost:5173,https://youruser.github.io` | **List every place the Web UI is opened in a browser.** If unset, only **`http://localhost:5173`** is allowed (Vite default). **Do not** put your **API** URL here — put the **page** that runs JavaScript (GitHub Pages, your domain, etc.). |
-| **`HOMEBOT_DATABASE_PATH`** | No | File path or full SQLite connection string | **You choose** where the SQLite file lives. Empty → **`homebot.db`** next to the process working directory. Can be `C:\Data\homebot.db` or `/var/lib/homebot/db.sqlite` or `Data Source=…`. |
-
-### Web login (JWT)
-
-| Variable | Required? | What to put | Where the value comes from |
-|----------|-----------|-------------|----------------------------|
-| **`HOMEBOT_WEB_JWT_SECRET`** | Yes for web **Sign in**, setup, OAuth | **At least 32 characters** (UTF‑8); longer is fine | **You invent** it (password manager “generate password” is ideal). **Never** put this in the React app or GitHub — **server only**. Used to sign JWTs. |
-| **`HOMEBOT_WEB_SETUP_TOKEN`** | No | Any secret string **you invent** | Optional “extra password” for **first** web user bootstrap when set. If unset, that flow may not require it (see README). |
-| **`HOMEBOT_WEB_INVITE_TOKEN`** | No | Any secret string **you invent** | Optional extra gate for **additional** user registration when set. |
-
-### Discord OAuth (optional — “Continue with Discord” on Sign in)
-
-All **three** must be set together, or leave **all** unset. In **Production** (non‑Development), **partial** OAuth env fails startup unless **`HOMEBOT_ALLOW_PARTIAL_OAUTH_ENV=true`**.
-
-| Variable | What to put | Where the value comes from |
-|----------|-------------|----------------------------|
-| **`HOMEBOT_DISCORD_OAUTH_CLIENT_ID`** | Numeric **Application** ID | Developer Portal → **Your application** → **OAuth2** → **Client information** → **Client ID**. |
-| **`HOMEBOT_DISCORD_OAUTH_CLIENT_SECRET`** | Short secret string | Same page → **Client secret** → **Reset** / **Copy**. |
-| **`HOMEBOT_DISCORD_OAUTH_REDIRECT_URI`** | Full URL, **exactly** one registered redirect | **Must match** Developer Portal → **OAuth2** → **Redirects** character‑for‑character (`http` vs `https`, port, path, trailing slash). Points to the **API**, not Vite, e.g. **`http://localhost:5050/api/auth/discord/oauth/callback`** or **`https://api.yourdomain.com/api/auth/discord/oauth/callback`**. |
-| **`HOMEBOT_WEB_OAUTH_FRONTEND_URL`** | Where the React app lives | After Discord, the API redirects the browser here + **`/oauth/callback`**. **Local:** `http://localhost:5173`. **GitHub Pages project site:** include the repo path, e.g. **`https://youruser.github.io/HomeBot`** (see [API + CORS + OAuth for Pages](#api-cors-oauth-for-pages)). |
-
-**Discord portal checklist for OAuth:**
-
-1. **OAuth2** → **Redirects** → **Add Redirect** → paste the same string as **`HOMEBOT_DISCORD_OAUTH_REDIRECT_URI`**.
-2. Scopes used by HomeBot include **`identify`** (the app requests it in code).
-
-### Optional tuning (limits, body size, staging)
-
-| Variable | What to put | Where the value comes from |
-|----------|-------------|----------------------------|
-| **`HOMEBOT_API_MAX_BODY_BYTES`** | Positive integer (bytes) | **You choose** a cap; unset = default from Phase 3. |
-| **`HOMEBOT_API_MUTATION_PER_MINUTE`** | Requests per IP per minute | **You choose**; README lists default (**200**). |
-| **`HOMEBOT_API_AUTH_LOGIN_PER_MINUTE`** | Same idea | Default **30**; tune if you hit **429** on login. |
-| **`HOMEBOT_API_OAUTH_CONSUME_PER_MINUTE`** | Same | Default **15**. |
-| **`HOMEBOT_API_OAUTH_BROWSER_PER_MINUTE`** | Same | Default **48**. |
-| **`HOMEBOT_API_AUTH_ACCOUNT_WRITE_PER_MINUTE`** | Same | Default **24**. |
-| **`HOMEBOT_API_DISCORD_STATUS_POLL_PER_MINUTE`** | Same | Default **120**. |
-| **`HOMEBOT_ALLOW_PARTIAL_OAUTH_ENV`** | **`true`** or omit | **Rare.** Set **`true`** only if you intentionally run **non‑Development** with **incomplete** OAuth client id/secret/redirect (staging). |
-| **`ASPNETCORE_ENVIRONMENT`** | **`Development`** or **`Production`** | Standard .NET. **Development** relaxes some OAuth startup checks; **Production** enables stricter behavior (see README). If unset, tooling may default to **Production** on Linux servers. |
-
-<a id="web-ui-vite-variables"></a>
-
-### Web UI (Vite) variables
-
-These are **not** read by the .NET bot. They are baked in when you run **`npm run dev`** or **`npm run build`** (Vite).
-
-| Variable | File | What to put | Where the value comes from |
-|----------|------|-------------|----------------------------|
-| **`VITE_API_BASE_URL`** | `webui/.env` | Base URL of the API **as the browser sees it** | Usually **`http://localhost:5050`** on your PC. In production / GitHub Pages, use your **public API** URL, e.g. **`https://api.example.com`** — **no** trailing slash. |
-| **`VITE_BASE_PATH`** | `webui/.env` | URL path prefix for the SPA | **`/`** for root hosting. For GitHub **project** Pages use **`/YourRepoName/`** (slash at start and end). Must match how the site is served. |
-
-**GitHub Actions:** set `VITE_API_BASE_URL` from a repository **variable** (see [Add a GitHub Actions workflow](#add-a-github-actions-workflow)) so you do not commit secrets.
-
-### Quick “am I missing something?” table
-
-| Symptom | Likely fix |
-|---------|------------|
-| API **503** on protected routes | Set **`HOMEBOT_API_TOKEN`** and/or **`HOMEBOT_WEB_JWT_SECRET`** (JWT min 32 chars). |
-| Browser says **CORS** / blocked fetch | Add your site’s **origin** to **`HOMEBOT_ALLOWED_ORIGINS`** (and/or fix OAuth frontend URL so auto‑merge helps). |
-| Discord OAuth redirect error | **`HOMEBOT_DISCORD_OAUTH_REDIRECT_URI`** must **exactly** match a redirect in the Discord portal. |
-| OAuth works locally but not on server | **`HOMEBOT_WEB_OAUTH_FRONTEND_URL`** must match where the React app really is (including **`/RepoName`** on GitHub project Pages). |
-| `dotnet run` says Discord token missing | Set **`DISCORD_TOKEN`** (and **`DISCORD_GUILD_ID`**) or set **`HOMEBOT_DISCORD_ENABLED=false`**. |
-
-For one-line reminders of defaults, keep **[README.md](./README.md)** open alongside this file.
-
----
-
-## Prerequisites (all platforms)
+## 2. Prerequisites
 
 | Requirement | Notes |
 |-------------|--------|
-| **.NET SDK 10** | Matches `HomeBot.csproj` (`net10.0`). Verify with `dotnet --version`. |
-| **Node.js** | **20+** recommended for the Web UI (Vite 8). Verify with `node --version`. |
-| **npm** | Ships with Node or install separately. |
-| **Git** | To clone the repository. |
-
-Optional for production-style hosting:
-
-- A **public HTTPS URL** for the API (reverse proxy + TLS certificate).
-- A **Discord application** (bot token, guild id, and optionally OAuth2 client id/secret for “Continue with Discord”).
+| **A Discord account** and permission to **manage** a server (or your own test server). |
+| **A GitHub account** (optional until you use GitHub Pages or clone from GitHub). |
+| **.NET SDK 10** | Matches `HomeBot.csproj` (`net10.0`). Check with **`dotnet --version`**. |
+| **Node.js** | **20+** recommended (Vite 8). Check with **`node --version`** and **`npm --version`**. |
+| **Git** | To clone updates. |
 
 ---
 
-<a id="windows-install-and-run"></a>
+## 3. GitHub and source code
 
-## 1. Windows — install toolchain
+### 3.1 Clone the repository
 
-### 1.1 .NET 10 SDK
+**Windows (PowerShell):**
 
-1. Open **[.NET downloads](https://dotnet.microsoft.com/download)**.
-2. Download and install the **.NET 10 SDK** for Windows (x64).
-3. Open a **new** PowerShell window and run:
+```powershell
+cd $HOME\Desktop
+git clone https://github.com/OWNER/HomeBot.git
+cd HomeBot
+```
+
+Replace **`OWNER/HomeBot`** with the real path (your fork or upstream).
+
+**Ubuntu:**
+
+```bash
+cd ~
+git clone https://github.com/OWNER/HomeBot.git
+cd HomeBot
+```
+
+### 3.2 Stay up to date
+
+```bash
+git pull
+```
+
+After pulling on a **server**, rebuild and restart the service (§8.7).
+
+---
+
+## 4. Discord — application, bot token, invite, server ID
+
+Do this **once** per Discord “application” (your HomeBot identity).
+
+### 4.1 Create the application
+
+1. Open **[Discord Developer Portal — Applications](https://discord.com/developers/applications)** and sign in.
+2. Click **New Application**, choose a name (e.g. **HomeBot**), create it.
+3. Open the **Bot** tab on the left.
+4. Click **Add Bot** (confirm if asked).
+5. Under **Token**, click **Reset Token** (or **View Token**), confirm, and **copy** the token.  
+   - This string is your **`DISCORD_TOKEN`**. **Never** paste it into GitHub or the Web UI bundle; only into **`.env`** on machines that run HomeBot.
+
+### 4.2 Gateway intents (recommended)
+
+HomeBot’s code requests **broad gateway intents**. In the same **Bot** tab, under **Privileged Gateway Intents**, enable at least what your server needs (often **Server Members Intent** and **Message Content Intent** if Discord warns on connect). If the bot fails to start or misbehaves, compare the portal toggles with Discord’s current documentation.
+
+### 4.3 Invite URL (add the bot to your server)
+
+1. Open **OAuth2** → **URL Generator**.
+2. Under **Scopes**, check **`bot`** and **`applications.commands`** (slash commands require the latter).
+3. Under **Bot Permissions**, a practical starting set includes: **View Channels**, **Send Messages**, **Embed Links**, **Attach Files**, **Read Message History**, **Add Reactions**, **Use Slash Commands** (exact names may vary slightly in the UI).
+4. Copy the generated **URL** at the bottom, paste it into your browser, pick your **household server**, authorize.
+
+You should see the bot join as **offline** until HomeBot runs with a valid token.
+
+### 4.4 Copy your **Server (guild) ID** — `DISCORD_GUILD_ID`
+
+1. In the Discord **desktop or web** app: **User Settings** → **App Settings** → **Advanced** → enable **Developer Mode**.
+2. In the server list, **right‑click your server icon** → **Copy Server ID**.
+3. That number (digits only) is **`DISCORD_GUILD_ID`**. Slash commands register to **this** server.
+
+### 4.5 OAuth2 client (only if you will use “Continue with Discord”)
+
+Skip until §12. When needed: **OAuth2** → **General** → copy **Client ID** and **Client Secret**; add redirect URLs under **Redirects** (must match **`HOMEBOT_DISCORD_OAUTH_REDIRECT_URI`** exactly).
+
+---
+
+## 5. Environment files: `.env` and `webui/.env`
+
+### 5.1 Create the files
+
+From the **repository root** (same folder as `HomeBot.csproj`):
+
+1. Copy **`.env.example`** → **`.env`**.
+2. Copy **`webui/.env.example`** → **`webui/.env`**.
+
+**`.env` is gitignored** — it must never be committed.
+
+### 5.2 Minimum values for “Discord + API + Web sign-in”
+
+Edit **`.env`** and set at least:
+
+```env
+DISCORD_TOKEN=paste-bot-token-here
+DISCORD_GUILD_ID=paste-numeric-server-id-here
+HOMEBOT_API_ENABLED=true
+HOMEBOT_API_TOKEN=make-up-a-long-random-string
+HOMEBOT_WEB_JWT_SECRET=another-long-random-secret-at-least-32-characters
+```
+
+- **`HOMEBOT_API_TOKEN`**: any long random string **you invent** (password manager). Used as **`Authorization: Bearer …`** for scripts and optional API access.
+- **`HOMEBOT_WEB_JWT_SECRET`**: **at least 32 characters**; **server only**; signs web login JWTs.
+
+Leave optional sections in **`.env.example`** commented until you need OAuth or custom URLs.
+
+### 5.3 Web UI build-time defaults (`webui/.env`)
+
+For local development, defaults are usually fine:
+
+```env
+VITE_API_BASE_URL=http://localhost:5050
+VITE_BASE_PATH=/
+```
+
+Change **`VITE_API_BASE_URL`** if the API listens elsewhere. For **GitHub Pages** project sites you will set **`VITE_BASE_PATH=/YourRepoName/`** at **build** time (§13).
+
+---
+
+## 6. Run HomeBot on Windows (first time)
+
+### 6.1 Install .NET 10 SDK
+
+1. **[Download .NET 10](https://dotnet.microsoft.com/download)** → install the **SDK** for Windows x64.
+2. Open a **new** PowerShell window:
 
    ```powershell
    dotnet --version
    ```
 
-   You should see a `10.x.x` SDK version.
+   Expect **`10.x.x`**.
 
-### 1.2 Node.js (LTS)
+### 6.2 Install Node.js
 
-1. Open **[nodejs.org](https://nodejs.org)** and install the **LTS** Windows installer.
-2. Open a **new** PowerShell window:
+1. **[nodejs.org](https://nodejs.org)** → install **LTS**.
+2. New PowerShell:
 
    ```powershell
    node --version
    npm --version
    ```
 
-### 1.3 Clone and configure env
+### 6.3 Load environment variables and run
+
+The app **does not** read `.env` automatically. Pick **one** approach:
+
+**A — PowerShell for this session only** (good for testing):
 
 ```powershell
-cd $HOME\Desktop
-git clone <your-fork-or-repo-url> HomeBot
-cd HomeBot
+cd C:\path\to\HomeBot
+Get-Content .env | ForEach-Object {
+  if ($_ -match '^\s*#' -or $_ -match '^\s*$') { return }
+  $i = $_.IndexOf('=')
+  if ($i -gt 0) {
+    $n = $_.Substring(0, $i).Trim(); $v = $_.Substring($i + 1).Trim()
+    Set-Item -Path "Env:$n" -Value $v
+  }
+}
+dotnet run
 ```
 
-1. Copy **`.env.example`** → **`.env`** in the repo root (`.env` is gitignored).
-2. Copy **`webui/.env.example`** → **`webui/.env`** if you will run or build the Web UI (optional if defaults are fine).
+**B — Cursor / VS Code:** configure **`launch.json`** with **`"envFile": "${workspaceFolder}/.env"`** for F5 debugging (see editor docs).
 
-Fill **`.env`** using **[Environment variable reference](#environment-variable-reference)** above. For a first working machine you usually need at least:
+**C — Helper script (also used for autostart):** see **`scripts/run-homebot.ps1`** and §7.
 
-- **`DISCORD_TOKEN`** and **`DISCORD_GUILD_ID`** (if Discord is on — default).
-- **`HOMEBOT_API_ENABLED=true`** for the Web UI.
-- **`HOMEBOT_WEB_JWT_SECRET`** (32+ characters) for web sign-in, and usually **`HOMEBOT_API_TOKEN`** (or rely on JWT only once you understand [README.md](./README.md) **503** behavior).
+You should see logs indicating **Kestrel** listening (for example on **`5050`**) and Discord **Ready** when the token is valid.
 
-PowerShell (current session) example before `dotnet run`:
+### 6.4 Firewall (other devices on your LAN)
 
-```powershell
-$env:DISCORD_TOKEN = "your-bot-token"
-$env:DISCORD_GUILD_ID = "your-guild-id"
-$env:HOMEBOT_API_ENABLED = "true"
-$env:HOMEBOT_WEB_JWT_SECRET = "use-a-long-random-secret-at-least-32-chars"
-$env:HOMEBOT_API_TOKEN = "optional-shared-bearer-for-scripts"
-```
+If phones or other PCs must reach the API on port **5050**, allow **inbound TCP 5050** for **Private** networks in **Windows Defender Firewall** → **Advanced settings** → **Inbound Rules**.
 
-Or use **Cursor / VS Code** `launch.json` with `"envFile": "${workspaceFolder}/.env"`.
+---
 
-### 1.4 Run the bot + API
+## 7. Windows — start automatically on sign-in or boot
 
-From the **repository root**:
+HomeBot is a normal console app — Windows does not “install” it as a service unless you add tooling (NSSM, WinSW, etc.). Two simple patterns:
+
+### 7.1 Task Scheduler (recommended)
+
+1. Open **Task Scheduler** → **Create Task…** (not “Create Basic Task” if you want full control).
+2. **General:** name **`HomeBot`**; select **Run whether user is logged on or not** *or* **only when user is logged on** depending on whether you need a desktop session. Check **Run with highest privileges** only if required.
+3. **Triggers:** **New…** → **At startup** (or **At log on** for your user). Optional: **Delay task for** **30 seconds** so the network is up.
+4. **Actions:** **New…**  
+   - **Program/script:** **`pwsh`** (PowerShell 7) or **`powershell`**  
+   - **Add arguments:** **`-NoProfile -ExecutionPolicy Bypass -File "C:\full\path\to\HomeBot\scripts\run-homebot.ps1"`**  
+   - **Start in:** **`C:\full\path\to\HomeBot`**
+5. **Conditions / Settings:** disable **Start only on AC power** if this is a laptop on battery.
+6. Save; enter your Windows password if prompted for a stored credential.
+
+The repo includes **`scripts/run-homebot.ps1`**, which loads **repo-root `.env`** into the process and runs **`dotnet run`**. Edit paths in Task Scheduler if your clone lives elsewhere.
+
+### 7.2 After `git pull` on Windows
+
+Stop the running process (or end the scheduled task run), then from the repo root:
 
 ```powershell
 dotnet run
 ```
 
-By default the API listens on **`http://0.0.0.0:5050`** (see **`HOMEBOT_API_URL`** in README). Discord slash commands register to **`DISCORD_GUILD_ID`**.
-
-### 1.5 Run the Web UI (second terminal)
-
-```powershell
-cd webui
-npm install
-npm run dev
-```
-
-Open the URL Vite prints (usually **`http://localhost:5173`**). The UI calls **`VITE_API_BASE_URL`** (default **`http://localhost:5050`** in **`webui/.env.example`**).
-
-### 1.6 Windows firewall (optional)
-
-If other machines on your LAN need the API, allow inbound **TCP 5050** (or the port you set in **`HOMEBOT_API_URL`**) in Windows Defender Firewall.
-
-<a id="phone-or-another-pc-on-your-lan-windows"></a>
-
-### 1.7 Phone or another PC on your LAN (same Wi‑Fi)
-
-Use this when HomeBot runs on your **Windows PC** and you want the **Web UI** on your **phone** (or a laptop) on the **same home network**.
-
-1. **Put the phone on the same Wi‑Fi** as the PC (not guest isolation / “AP isolation” if your router offers it — that blocks device-to-device traffic).
-
-2. **Find your PC’s LAN address** (something like `192.168.1.42`):
-   - Open **PowerShell** and run: **`ipconfig`**
-   - Under your active adapter (often **Wi‑Fi** or **Ethernet**), copy the **IPv4 Address**.
-
-3. **API must listen on the whole network** (default is already correct): **`HOMEBOT_API_URL`** should be **`http://0.0.0.0:5050`** or unset (same default). That is **not** the URL you type in the browser — it means “listen on every interface.”
-
-4. **Windows Firewall**: allow **inbound TCP 5050** for **Private** networks (see **§1.6**). Without this, the phone cannot reach the API.
-
-5. **CORS** (browser security): the API only trusts certain **origins** by default. Add your PC’s dev UI origin. Before **`dotnet run`**, set for example (replace **`192.168.1.42`** with your IPv4):
-
-   ```powershell
-   $env:HOMEBOT_ALLOWED_ORIGINS = "http://localhost:5173,http://192.168.1.42:5173"
-   ```
-
-   Then start (or restart) **`dotnet run`**. If you use a **`.env`**, put the same comma‑separated value there and load it the way you usually do.
-
-6. **Vite dev server must listen on the LAN**, not only `localhost`. From **`webui`**:
-
-   ```powershell
-   npm run dev -- --host 0.0.0.0
-   ```
-
-   Vite will print **Network:** URLs — use the one that shows your **`192.168.x.x`** address.
-
-7. **On the phone’s browser**, open **`http://192.168.1.42:5173`** (your real IP).
-
-8. **API base URL**: with the default Vite dev port (**5173**), the Web UI **automatically** uses the same hostname as the page with port **5050** (e.g. phone opens **`http://192.168.1.42:5173`** → API **`http://192.168.1.42:5050`**). You only need **Settings → API server** if your API is on another host or port. The header **Base URL** line shows what is in use.
-
-**If it still fails:** from the phone, try opening **`http://192.168.1.42:5050/api/health`** — if that does not load, fix firewall or IP first before debugging the React app.
+to verify, or let the next scheduled start pick up changes.
 
 ---
 
-<a id="ubuntu-install-and-run"></a>
+## 8. Ubuntu server — install, `systemd`, auto-start on reboot
 
-## 2. Ubuntu (headless Linux) — install toolchain
+These steps fit a **headless Ubuntu 22.04 or 24.04** server (SSH). Adjust URLs if Microsoft’s docs change: **[Install .NET on Ubuntu](https://learn.microsoft.com/dotnet/core/install/linux-ubuntu)**.
 
-These steps assume a minimal **Ubuntu 22.04 or 24.04** server (SSH only). Adjust package URLs for your Ubuntu version using Microsoft’s current docs: **[Install .NET on Ubuntu](https://learn.microsoft.com/dotnet/core/install/linux-ubuntu)**.
-
-### 2.1 Base packages
+### 8.1 Base packages
 
 ```bash
 sudo apt update
 sudo apt install -y curl git ca-certificates
 ```
 
-### 2.2 .NET 10 SDK (Microsoft package feed)
+### 8.2 .NET 10 SDK (Microsoft package feed)
 
-Example for Ubuntu 22.04 (replace the `.deb` URL with the one matching your release from the Microsoft doc above):
+**Ubuntu 22.04:**
 
 ```bash
 wget https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb -O /tmp/packages-microsoft-prod.deb
@@ -313,33 +282,42 @@ sudo apt install -y dotnet-sdk-10.0
 dotnet --version
 ```
 
-### 2.3 Node.js 22.x (NodeSource — avoids very old distro `nodejs`)
+**Ubuntu 24.04** — use **`24.04`** in the `wget` URL instead of **`22.04`**, then the same **`dpkg`** / **`apt install dotnet-sdk-10.0`** steps.
+
+### 8.3 Node.js (only if you build the Web UI on this server)
 
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs
 node --version
-npm --version
 ```
 
-### 2.4 Clone the repo
+### 8.4 Dedicated user and clone
 
 ```bash
 sudo adduser --disabled-password --gecos "" homebot
 sudo mkdir -p /opt/homebot && sudo chown homebot:homebot /opt/homebot
 sudo -u homebot -i
 cd /opt/homebot
-git clone <your-fork-or-repo-url> app
+git clone https://github.com/OWNER/HomeBot.git app
 cd app
 ```
 
-### 2.5 Environment file for systemd (recommended)
+### 8.5 Create `/opt/homebot/app/.env`
 
-Create **`/opt/homebot/app/.env`** (mode `600`, owned by `homebot`) with the same variables as on Windows (see **`.env.example`**). systemd can load it with **`EnvironmentFile=`** (see below).
+As user **`homebot`**:
 
-**Never** commit `.env`; it is gitignored.
+```bash
+nano /opt/homebot/app/.env
+```
 
-### 2.6 Run once manually (smoke test)
+Paste the same **`KEY=value`** lines as on Windows (§5). **No `export` keyword** — one variable per line. Restrict permissions:
+
+```bash
+chmod 600 /opt/homebot/app/.env
+```
+
+### 8.6 Smoke test (manual)
 
 ```bash
 cd /opt/homebot/app
@@ -347,69 +325,82 @@ set -a && source .env && set +a
 dotnet run
 ```
 
-Confirm logs show Discord connecting (if enabled) and **Kestrel** listening. Stop with **Ctrl+C**.
+Confirm Discord (if enabled) and API logs. Stop with **Ctrl+C**.
 
-### 2.7 systemd service (API + Discord, production-style)
+### 8.7 Publish and install the `systemd` unit
 
-**systemd** is Ubuntu’s service manager. A **unit file** tells it **which command to run**, **as which user**, and **when** (including **at boot**).
+**Publish** (builds **`publish/HomeBot.dll`**):
 
-1. **Publish** the app once (builds a self-contained folder with **`HomeBot.dll`**):
+```bash
+sudo -u homebot bash -c 'cd /opt/homebot/app && dotnet publish -c Release -o /opt/homebot/app/publish'
+```
 
-   ```bash
-   sudo -u homebot bash -c 'cd /opt/homebot/app && dotnet publish -c Release -o /opt/homebot/app/publish'
-   ```
+Create **`/etc/systemd/system/homebot.service`** (use **`sudo nano`**):
 
-2. Create **`/etc/systemd/system/homebot.service`** with `sudo` and an editor (e.g. **`sudo nano /etc/systemd/system/homebot.service`**):
+```ini
+[Unit]
+Description=HomeBot Discord + API
+After=network-online.target
+Wants=network-online.target
 
-   ```ini
-   [Unit]
-   Description=HomeBot Discord + API
-   After=network-online.target
-   Wants=network-online.target
+[Service]
+Type=simple
+User=homebot
+Group=homebot
+WorkingDirectory=/opt/homebot/app
+EnvironmentFile=/opt/homebot/app/.env
+ExecStart=/usr/bin/dotnet /opt/homebot/app/publish/HomeBot.dll
+Restart=on-failure
+RestartSec=10
 
-   [Service]
-   Type=simple
-   User=homebot
-   Group=homebot
-   WorkingDirectory=/opt/homebot/app
-   EnvironmentFile=/opt/homebot/app/.env
-   ExecStart=/usr/bin/dotnet /opt/homebot/app/publish/HomeBot.dll
-   Restart=on-failure
-   RestartSec=10
+[Install]
+WantedBy=multi-user.target
+```
 
-   [Install]
-   WantedBy=multi-user.target
-   ```
+- **`WorkingDirectory`**: default SQLite **`homebot.db`** appears here unless **`HOMEBOT_DATABASE_PATH`** overrides.
+- **`EnvironmentFile`**: systemd reads **`KEY=value`** lines. If a value contains special characters, see systemd documentation or switch to **`Environment=`** lines.
 
-   - **`WorkingDirectory=/opt/homebot/app`** — default SQLite file **`homebot.db`** is created next to this folder unless you set **`HOMEBOT_DATABASE_PATH`** in **`.env`**.
-   - **`EnvironmentFile=`** — each line should look like **`NAME=value`** (no `export` keyword). Use your real **`.env`** path if different.
+**Enable start on every boot and start now:**
 
-3. **Reload** systemd, **enable** start-on-boot, and **start** now:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now homebot.service
+sudo systemctl status homebot.service
+```
 
-   ```bash
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now homebot.service
-   sudo systemctl status homebot.service
-   ```
+**Logs:**
 
-4. **Logs** (follow live):
+```bash
+journalctl -u homebot.service -f
+```
 
-   ```bash
-   journalctl -u homebot.service -f
-   ```
+**Verify boot registration:**
 
-If **`status`** shows **failed**, scroll up in **`journalctl`** for the error (often a missing env var or bad path).
+```bash
+systemctl is-enabled homebot.service
+```
 
-### 2.8 Reverse proxy + TLS (typical production)
+Expect **`enabled`**. After **`sudo reboot`**, run **`systemctl status homebot.service`** again.
 
-Expose **`https://api.yourdomain.com`** → Kestrel **`http://127.0.0.1:5050`** with **nginx** or **Caddy**, and obtain certificates (e.g. **Let’s Encrypt**). Set:
+### 8.8 Updates after `git pull`
 
-- **`HOMEBOT_API_URL`** if you need a different bind (e.g. `http://127.0.0.1:5050`).
-- **`HOMEBOT_ALLOWED_ORIGINS`** to every browser origin that will call the API (GitHub Pages URL, your SPA domain).
+```bash
+sudo -u homebot bash -c 'cd /opt/homebot/app && git pull && dotnet publish -c Release -o /opt/homebot/app/publish'
+sudo systemctl restart homebot.service
+```
 
-### 2.9 Firewall
+### 8.9 Optional: restart on any crash
 
-If the API must be reached from the internet **without** a reverse proxy on the same host:
+In the unit file, change **`Restart=on-failure`** to **`Restart=always`**, then:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart homebot.service
+```
+
+### 8.10 Firewall
+
+Prefer **TLS on 443** via a reverse proxy (§14). If you must expose **5050** directly:
 
 ```bash
 sudo ufw allow OpenSSH
@@ -417,105 +408,84 @@ sudo ufw allow 5050/tcp
 sudo ufw enable
 ```
 
-Prefer TLS on **443** via a proxy instead of exposing **5050** publicly.
+---
 
-<a id="ubuntu-start-on-boot-systemd"></a>
+## 9. Web UI on your PC
 
-### 2.10 Start on every reboot (systemd)
+1. Ensure HomeBot is running with **`HOMEBOT_API_ENABLED=true`** (§6 or §8).
+2. Open a **second** terminal:
 
-**Goal:** after a power cycle or `sudo reboot`, HomeBot comes back **without** you SSHing in to run `dotnet` by hand.
+   **Windows:**
 
-**What `systemctl enable` does:** it registers the unit under the default boot target (**`multi-user.target`**, normal text-only server). The line **`WantedBy=multi-user.target`** in **`[Install]`** is what makes that registration work. **`systemctl enable --now homebot.service`** both **registers for boot** and **starts the service immediately**.
+   ```powershell
+   cd C:\path\to\HomeBot\webui
+   npm install
+   npm run dev
+   ```
 
-**Check that start-on-boot is on:**
+   **Ubuntu:**
 
-```bash
-systemctl is-enabled homebot.service
-```
+   ```bash
+   cd ~/HomeBot/webui   # or /opt/homebot/app/webui
+   npm install
+   npm run dev
+   ```
 
-You should see **`enabled`**.
-
-**Simulate a reboot** (optional): **`sudo reboot`**, wait for SSH to return, then:
-
-```bash
-sudo systemctl status homebot.service
-```
-
-It should be **active (running)**. If it is **inactive**, run **`journalctl -u homebot.service -b`** to see this boot’s logs.
-
-**After you `git pull` or change code**, publish again and restart:
-
-```bash
-sudo -u homebot bash -c 'cd /opt/homebot/app && dotnet publish -c Release -o /opt/homebot/app/publish'
-sudo systemctl restart homebot.service
-```
-
-**Turn off start-on-boot** (service stays installed but does not run at boot):
-
-```bash
-sudo systemctl disable homebot.service
-```
-
-**If you want the process to restart after any crash** (not only on boot), change **`Restart=on-failure`** to **`Restart=always`** in the unit file, then **`sudo systemctl daemon-reload`** and **`sudo systemctl restart homebot.service`**.
+3. Open the URL Vite prints (usually **`http://localhost:5173`**).
+4. Use **Sign in** or **New account** (§11). The header shows API reachability.
 
 ---
 
-<a id="local-testing"></a>
+## 10. Discord — finish in-server setup (`/setup-set`)
 
-## 3. Local testing
+Slash commands are registered to **`DISCORD_GUILD_ID`**. After the bot is **online**:
 
-### 3.1 .NET unit / integration tests
+1. In a channel where the bot can read messages, run **`/help`** (use the **topic** option for details).
+2. Run **`/setup-set`** to bind each feature to a text channel, for example:
+   - **`buy`**, **`wishlist`**, **`money`**, **`calendar`**
+   - Optional: **`audit`** — logs web sign-ins to a mod channel.
 
-From the **repository root**:
+Most feature commands only work in the channel bound for that feature.
 
-```bash
-dotnet test HomeBot.Tests/HomeBot.Tests.csproj
-```
-
-On Windows (PowerShell):
-
-```powershell
-dotnet test HomeBot.Tests/HomeBot.Tests.csproj
-```
-
-**Note:** The test project disables xUnit parallelization because tests set process-global **`HOMEBOT_WEB_JWT_SECRET`**. If the build fails because **`HomeBot.dll`** is locked, stop any running **`dotnet run`** / debugger session for HomeBot, then run **`dotnet test`** again.
-
-### 3.2 Web UI (manual)
-
-1. Start the API (**`HOMEBOT_API_ENABLED=true`**) via **`dotnet run`**.
-2. In **`webui`**: **`npm install`** then **`npm run dev`**.
-3. Exercise **Sign in**, **Setup**, and feature pages; confirm **`AppShell`** shows API health/meta.
-
-### 3.3 Lint (Web UI)
-
-```bash
-cd webui
-npm run lint
-```
+**Web sign-up via Discord:** if someone uses **Discord verify** on the web, they complete **`/webui-verify`** in your server with the code from the setup page.
 
 ---
 
-<a id="github-pages-static-build"></a>
+## 11. Web accounts — sign in, Discord verify, bootstrap
 
-## 4. GitHub Pages — build the static Web UI
+- **Password sign-in:** create users according to your server’s policy (first user may require **`HOMEBOT_WEB_SETUP_TOKEN`** if set in `.env`).
+- **Discord verify:** ties a **WebUsers** row to a Discord user without typing snowflakes in the browser.
+- **`actorUserId`:** many mutations need a Discord user id; the Web UI can fill this from your profile after sign-in or from **Settings** when the bot can list members.
 
-GitHub Pages serves **static files** from **`webui/dist`**. You must:
+If protected **`/api`** routes return **503**, set **`HOMEBOT_API_TOKEN`** and/or **`HOMEBOT_WEB_JWT_SECRET`** (see §19).
 
-1. Build with the correct **base path** for your Pages URL.
-2. Set **`VITE_API_BASE_URL`** at **build time** to wherever the browser will reach your API (often **HTTPS**, not `localhost`).
+---
 
-### 4.1 URLs to know
+## 12. Optional — Discord OAuth (“Continue with Discord”)
 
-| Site type | Example SPA URL | `VITE_BASE_PATH` |
-|-----------|-----------------|------------------|
-| **Project** repository `Owner/HomeBot` | `https://OWNER.github.io/HomeBot/` | **`/HomeBot/`** (leading and trailing slash as in **`webui/.env.example`**) |
-| **User** site repo `Owner/owner.github.io` at root | `https://OWNER.github.io/` | **`/`** |
+Uses the **same** `WebUsers` row as password login when **`DiscordUserId`** matches. There is **no** account creation from OAuth alone.
 
-In **`vite.config.ts`**, the `base` option defaults to **`/`** or uses **`VITE_BASE_PATH`** from the environment. The React router **`basename`** comes from Vite’s **`import.meta.env.BASE_URL`**, so it must match this base.
+1. Set **all three** in **`.env`**: **`HOMEBOT_DISCORD_OAUTH_CLIENT_ID`**, **`HOMEBOT_DISCORD_OAUTH_CLIENT_SECRET`**, **`HOMEBOT_DISCORD_OAUTH_REDIRECT_URI`** (API URL, not Vite).
+2. In the Developer Portal **OAuth2 → Redirects**, add the **exact** same redirect URI.
+3. Set **`HOMEBOT_WEB_OAUTH_FRONTEND_URL`** to the **origin** where the SPA runs (e.g. **`http://localhost:5173`** or your GitHub Pages SPA root — see §13).
+4. **`HOMEBOT_WEB_JWT_SECRET`** must still be set.
 
-### 4.2 Local production build (smoke test before Pages)
+In **Production**, partial OAuth env fails startup unless **`HOMEBOT_ALLOW_PARTIAL_OAUTH_ENV=true`**. Details: **[README.md](./README.md)**.
 
-From **`webui`** (replace **`OWNER`** / **`HomeBot`** / API URL):
+---
+
+## 13. Optional — GitHub Pages (static Web UI)
+
+**You need:** a **public HTTPS URL** for the API (your Ubuntu server behind Caddy/nginx, or a tunnel for testing), correct **CORS**, and a static build of **`webui/dist`**.
+
+### 13.1 URLs and Vite base path
+
+| Site type | Example browser URL | `VITE_BASE_PATH` when building |
+|-----------|---------------------|--------------------------------|
+| **Project** repo `Owner/HomeBot` | `https://OWNER.github.io/HomeBot/` | **`/HomeBot/`** (leading and trailing slash) |
+| **User** site `owner.github.io` at root | `https://OWNER.github.io/` | **`/`** |
+
+### 13.2 Build locally (smoke test)
 
 ```bash
 cd webui
@@ -526,109 +496,39 @@ npm run build
 npx vite preview --base /HomeBot/
 ```
 
-Open the preview URL and confirm assets load (no 404 on `/HomeBot/assets/...`) and API calls hit **`VITE_API_BASE_URL`**.
+Confirm assets load (no 404 under **`/HomeBot/assets/...`**) and API calls hit your public API.
 
-<a id="api-cors-oauth-for-pages"></a>
+### 13.3 API environment for Pages + OAuth
 
-### 4.3 API + CORS + OAuth for Pages
+On the API host:
 
-On the **server** that runs HomeBot:
+1. **`HOMEBOT_ALLOWED_ORIGINS`** — include **`https://OWNER.github.io`** (origin only). Listing explicit origins avoids surprises.
+2. **`HOMEBOT_WEB_OAUTH_FRONTEND_URL`** — for a project site, use the **full SPA root**, e.g. **`https://OWNER.github.io/HomeBot`** (no trailing slash is OK), so redirects hit **`…/oauth/callback`** correctly.
+3. **`HOMEBOT_DISCORD_OAUTH_REDIRECT_URI`** — must be the **HTTPS API** callback, e.g. **`https://api.yourdomain.com/api/auth/discord/oauth/callback`**, and must match Discord **Redirects** exactly.
 
-1. **`HOMEBOT_ALLOWED_ORIGINS`** — include **`https://OWNER.github.io`** (origin only). If you use OAuth, the host may also merge the origin parsed from **`HOMEBOT_WEB_OAUTH_FRONTEND_URL`**; listing it explicitly is still fine.
+### 13.4 Enable Pages and deploy
 
-2. **`HOMEBOT_WEB_OAUTH_FRONTEND_URL`** — for a **project** site under **`/HomeBot/`**, set this to the **full SPA root URL** (not “origin only” in this case), because the API redirects the browser to **`{HOMEBOT_WEB_OAUTH_FRONTEND_URL}/oauth/callback`**:
-   - Example: **`https://OWNER.github.io/HomeBot`** (no trailing slash is OK; the app trims and appends **`/oauth/callback`**).
+1. Push the repository to GitHub.
+2. **Settings** → **Pages** → **Build and deployment** → **Source** → **GitHub Actions** (recommended).
 
-3. **`HOMEBOT_DISCORD_OAUTH_REDIRECT_URI`** — remains the **API** callback, e.g. **`https://api.yourdomain.com/api/auth/discord/oauth/callback`**, and must match the Discord Developer Portal **exactly**.
+**This repository does not ship a checked-in Pages workflow.** Add your own under **`.github/workflows/`** (any filename you like). A typical pipeline:
 
-4. **`VITE_API_BASE_URL`** at Web UI build time — your public API base, e.g. **`https://api.yourdomain.com`** (no trailing slash).
-
----
-
-<a id="github-pages-actions-and-hosting"></a>
-
-## 5. GitHub Pages — enable hosting and connect the repo
-
-### 5.1 Enable Pages in the GitHub UI
-
-1. Push your repository to GitHub (**`OWNER/REPO`**).
-2. In the repo on GitHub: **Settings** → **Pages**.
-3. Under **Build and deployment** → **Source**, choose **GitHub Actions** (recommended) so your workflow can deploy **`webui/dist`**.
-
-If you use **Deploy from a branch** instead, you must commit **`webui/dist`** or a **`gh-pages`** branch yourself; the Actions approach avoids committing build output to **`main`**.
-
-<a id="add-a-github-actions-workflow"></a>
-
-### 5.2 Add a GitHub Actions workflow
-
-The repository does **not** ship a checked-in Pages deploy workflow; add your own under **`.github/workflows/`** (for example **`deploy-webui.yml`**) after choosing **GitHub Actions** as the Pages source (§5.1). A typical pipeline:
-
-- **Trigger:** `push` to **`main`** with **`paths`** for **`webui/**`** (optional **`workflow_dispatch`**).
+- **Trigger:** `push` to **`main`** with **`paths`** including **`webui/**`** (optional **`workflow_dispatch`**).
 - **Permissions:** `contents: read`, `pages: write`, `id-token: write`.
-- **Build:** checkout → **`actions/setup-node`** (e.g. Node **22**) → **`npm ci`** in **`webui/`** → set **`VITE_BASE_PATH`** to your Pages base (e.g. **`/REPO/`** for **`https://OWNER.github.io/REPO/`**) → set **`VITE_API_BASE_URL`** at build time (often from **`vars.HOMEBOT_API_PUBLIC_URL`**) → **`npm run build`**.
+- **Build:** checkout → **`actions/setup-node`** (e.g. Node **22**) → **`npm ci`** in **`webui/`** → set **`VITE_BASE_PATH`** and **`VITE_API_BASE_URL`** (often from repository variable **`HOMEBOT_API_PUBLIC_URL`**) → **`npm run build`**.
 - **Deploy:** **`actions/configure-pages`** → **`actions/upload-pages-artifact`** with **`path: webui/dist`** → **`actions/deploy-pages`**.
 
-Create a **[repository variable](https://docs.github.com/en/actions/learn-github-actions/variables#defining-configuration-variables-for-multiple-workflows)** **`HOMEBOT_API_PUBLIC_URL`** (**Settings** → **Secrets and variables** → **Actions** → **Variables**) with your public API base (same value as **`VITE_API_BASE_URL`** in §4).
+Create variable **`HOMEBOT_API_PUBLIC_URL`** under **Settings → Secrets and variables → Actions → Variables**.
 
-**After the workflow is enabled:**
-
-1. Commit and push your workflow file. Open the **Actions** tab and confirm the run succeeds.
-2. **Settings** → **Pages**: after the first successful run, GitHub shows the site URL (for example **`https://OWNER.github.io/HomeBot/`**).
-
-### 5.3 First-time “Create GitHub Pages environment”
-
-The first **`actions/deploy-pages`** run may prompt you to create the **`github-pages`** environment; approve it in the repo **Environments** settings if required.
+The first **`deploy-pages`** run may ask you to approve the **`github-pages`** environment.
 
 ---
 
-<a id="checklist-after-everything-is-up"></a>
+## 14. Optional — public HTTPS API (reverse proxy)
 
-## 6. Checklist after everything is up
-
-| Check | What you want to see |
-|-------|-------------------------|
-| **`GET https://your-api/api/health`** | Returns OK from browser or `curl`. |
-| **Web UI loads** | No 404 for JS/CSS under **`/REPO/`** on GitHub Pages. |
-| **Sign in / API calls** | Browser devtools: requests succeed; CORS errors mean fix **`HOMEBOT_ALLOWED_ORIGINS`**. |
-| **Discord** | Bot online; **`/setup-set`** bindings for `buy`, `wishlist`, `money`, `calendar` (and optional **`audit`**). |
-| **OAuth** (if used) | Discord redirect URI = API callback; **`HOMEBOT_WEB_OAUTH_FRONTEND_URL`** = SPA root including **`/REPO`** for project Pages. |
-
----
-
-<a id="quick-reference-same-machine-dev-copy-paste"></a>
-
-## 7. Quick reference — same machine dev (copy-paste)
-
-**Terminal A — API + bot:**
-
-```bash
-# Linux/macOS: export vars or `set -a && source .env && set +a`
-dotnet run
-```
-
-**Terminal B — Web UI:**
-
-```bash
-cd webui && npm install && npm run dev
-```
-
-**Tests:**
-
-```bash
-dotnet test HomeBot.Tests/HomeBot.Tests.csproj
-```
-
-For deeper configuration (rate limits, OAuth partial-env override, database path), see **[README.md](./README.md)**.
-
----
-
-## 8. Reverse proxy snippets (optional)
-
-For **TLS** and a public hostname in front of the API (**`5050`**), put **Caddy** or **nginx** on **`80`/`443`**, terminate TLS, and forward to **`127.0.0.1:5050`**.
+Put **Caddy** or **nginx** on **`80`/`443`**, terminate TLS, and forward to **`http://127.0.0.1:5050`** (or whatever **`HOMEBOT_API_URL`** uses).
 
 ### Caddy (example)
-
-Replace **`api.example.com`** and ensure DNS points at this host.
 
 ```caddy
 api.example.com {
@@ -637,19 +537,12 @@ api.example.com {
 }
 ```
 
-Caddy obtains certificates automatically. Reload: **`caddy reload`** (or your unit’s restart command).
-
 ### nginx (example)
-
-Use **certbot** (`certbot --nginx`) or your CA to obtain certs, then:
 
 ```nginx
 server {
     listen 443 ssl http2;
     server_name api.example.com;
-
-    # ssl_certificate /etc/letsencrypt/live/api.example.com/fullchain.pem;
-    # ssl_certificate_key /etc/letsencrypt/live/api.example.com/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:5050;
@@ -661,9 +554,161 @@ server {
 }
 ```
 
-Set **`HOMEBOT_ALLOWED_ORIGINS`** on the API to include every **browser origin** that calls the API (GitHub Pages URL, **`https://app.example.com`**, etc.) — not the API hostname alone.
+Set **`HOMEBOT_ALLOWED_ORIGINS`** to every **browser origin** that calls the API (not the API hostname alone).
 
-### Renewals
+**Renewals:** **`certbot renew`** for Let’s Encrypt; reload the proxy afterward. Rotate Discord secrets in the portal and **`.env`** when needed.
 
-- **Let’s Encrypt:** **`certbot renew`** (often cron or a systemd timer). Reload nginx/Caddy after renewal if your stack requires it.
-- **Discord / OAuth secrets:** rotate in the Discord Developer Portal and **`.env`**; restart the process.
+---
+
+## 15. Phone or another PC on your LAN (Windows dev)
+
+1. Same Wi‑Fi as the PC; avoid guest/AP isolation.
+2. **`ipconfig`** → note **IPv4** (e.g. **`192.168.1.42`**).
+3. Keep **`HOMEBOT_API_URL`** as default **`http://0.0.0.0:5050`** so the API listens on all interfaces.
+4. Allow **TCP 5050** in Windows Firewall (§6.4).
+5. Set CORS before **`dotnet run`**:
+
+   ```powershell
+   $env:HOMEBOT_ALLOWED_ORIGINS = "http://localhost:5173,http://192.168.1.42:5173"
+   ```
+
+6. From **`webui`**: **`npm run dev -- --host 0.0.0.0`** and open **`http://192.168.1.42:5173`** on the phone.
+7. Sanity check from the phone: **`http://192.168.1.42:5050/api/health`**.
+
+---
+
+## 16. Tests and lint
+
+**Tests** (repo root):
+
+```bash
+dotnet test HomeBot.Tests/HomeBot.Tests.csproj
+```
+
+**Web UI lint:**
+
+```bash
+cd webui && npm run lint
+```
+
+Stop any running **`dotnet run`** for HomeBot if the build cannot overwrite **`HomeBot.dll`**.
+
+---
+
+## 17. Troubleshooting
+
+| Symptom | Likely fix |
+|---------|------------|
+| API **503** on protected routes | Set **`HOMEBOT_API_TOKEN`** and/or **`HOMEBOT_WEB_JWT_SECRET`** (JWT ≥ 32 chars). |
+| Browser **CORS** errors | Add the site **origin** to **`HOMEBOT_ALLOWED_ORIGINS`**; check **`HOMEBOT_WEB_OAUTH_FRONTEND_URL`** for OAuth. |
+| Discord OAuth redirect mismatch | **`HOMEBOT_DISCORD_OAUTH_REDIRECT_URI`** must **exactly** match a Discord **Redirects** entry. |
+| **`dotnet run`** missing token | Set **`DISCORD_TOKEN`** and **`DISCORD_GUILD_ID`**, or **`HOMEBOT_DISCORD_ENABLED=false`** for API-only. |
+| **`systemctl status`** failed | **`journalctl -u homebot.service -xe`** — often a bad **`EnvironmentFile`** line or missing **`publish/`** after git pull. |
+| Slash commands missing | Confirm **`DISCORD_GUILD_ID`** matches the server where you invited the bot; restart the bot after fixing. |
+
+---
+
+## 18. Reference — how configuration works
+
+### What is an environment variable?
+
+A **named value** the process reads at startup (e.g. **`DISCORD_TOKEN`**). You do **not** put secrets in source code. You **do** put them in **`.env`** on disk and **load** them into the environment before **`dotnet run`** (PowerShell, **`scripts/run-homebot.ps1`**, editor **envFile**, or **`systemd`** **`EnvironmentFile=`**).
+
+### Terms
+
+| Term | Meaning |
+|------|--------|
+| **Origin** | Scheme + host, **no path** — e.g. **`https://you.github.io`**. Used for CORS. |
+| **Guild** | Your Discord **server**; **`DISCORD_GUILD_ID`** is its numeric id. |
+| **Bearer** | **`Authorization: Bearer <secret>`** — either **`HOMEBOT_API_TOKEN`** or a **JWT** from web login. |
+| **`0.0.0.0`** | Listen on all network interfaces; you still use **`localhost`** on the same machine. |
+
+---
+
+## 19. Reference — every environment variable
+
+**Use as a checklist** while editing **`.env`**. “Required” depends on mode (Discord on/off, API on/off, web login, OAuth).
+
+### Mode switches
+
+| Variable | Required? | Notes |
+|----------|-----------|--------|
+| **`HOMEBOT_DISCORD_ENABLED`** | No | Default: Discord **on**. **`false`** = API-only process. |
+| **`HOMEBOT_API_ENABLED`** | For HTTP / Web UI | Must be **`true`** to start Kestrel. |
+
+### Discord (when Discord is on)
+
+| Variable | Required? | Notes |
+|----------|-----------|--------|
+| **`DISCORD_TOKEN`** | Yes | Bot token from Developer Portal. |
+| **`DISCORD_GUILD_ID`** | Yes | Right‑click server → Copy Server ID (Developer Mode). |
+
+### HTTP API
+
+| Variable | Required? | Notes |
+|----------|-----------|--------|
+| **`HOMEBOT_API_URL`** | No | Default **`http://0.0.0.0:5050`**. |
+| **`HOMEBOT_API_TOKEN`** | Strongly recommended | Random secret; **`Bearer`** for scripts. |
+| **`HOMEBOT_ALLOWED_ORIGINS`** | If not only localhost:5173 | Comma‑separated **origins**, no paths. |
+| **`HOMEBOT_DATABASE_PATH`** | No | SQLite path or connection string. |
+| **`HOMEBOT_API_MAX_BODY_BYTES`** | No | JSON body cap. |
+| **`HOMEBOT_API_MUTATION_PERMIT_LIMIT`** | No | Mutation requests per IP per minute (default **200**). |
+
+### Web login (JWT)
+
+| Variable | Required? | Notes |
+|----------|-----------|--------|
+| **`HOMEBOT_WEB_JWT_SECRET`** | Yes for web auth flows | ≥ **32** UTF‑8 bytes; server only. |
+| **`HOMEBOT_WEB_SETUP_TOKEN`** | No | Extra gate for first-user bootstrap. |
+| **`HOMEBOT_WEB_INVITE_TOKEN`** | No | Extra gate for additional registration. |
+| **`HOMEBOT_WEB_JWT_ACCESS_TTL_SECONDS`** | No | Access JWT lifetime (default **900**). |
+| **`HOMEBOT_WEB_REFRESH_TTL_SECONDS`** | No | Refresh token lifetime in DB (default **30 days**). |
+
+### Discord OAuth (all three together, or none)
+
+| Variable | Notes |
+|----------|--------|
+| **`HOMEBOT_DISCORD_OAUTH_CLIENT_ID`** | OAuth2 Client ID. |
+| **`HOMEBOT_DISCORD_OAUTH_CLIENT_SECRET`** | OAuth2 Client Secret. |
+| **`HOMEBOT_DISCORD_OAUTH_REDIRECT_URI`** | API callback URL; must match Discord **Redirects** exactly. |
+| **`HOMEBOT_WEB_OAUTH_FRONTEND_URL`** | SPA origin (or full SPA root for GitHub project Pages — §13). |
+
+### Auth rate limits (optional)
+
+| Variable | Default |
+|----------|---------|
+| **`HOMEBOT_API_AUTH_LOGIN_PER_MINUTE`** | **30** |
+| **`HOMEBOT_API_AUTH_REFRESH_PER_MINUTE`** | **36** |
+| **`HOMEBOT_API_OAUTH_CONSUME_PER_MINUTE`** | **15** |
+| **`HOMEBOT_API_OAUTH_BROWSER_PER_MINUTE`** | **48** |
+| **`HOMEBOT_API_AUTH_ACCOUNT_WRITE_PER_MINUTE`** | **24** |
+| **`HOMEBOT_API_DISCORD_STATUS_POLL_PER_MINUTE`** | **120** |
+
+### Other
+
+| Variable | Notes |
+|----------|--------|
+| **`HOMEBOT_ALLOW_PARTIAL_OAUTH_ENV`** | **`true`** only if you intentionally run incomplete OAuth outside Development. |
+| **`ASPNETCORE_ENVIRONMENT`** | **`Development`** vs **`Production`** (.NET); affects OAuth strictness. |
+
+### Web UI (Vite) — `webui/.env`
+
+| Variable | Notes |
+|----------|--------|
+| **`VITE_API_BASE_URL`** | Public API base as the **browser** sees it; no trailing slash. |
+| **`VITE_BASE_PATH`** | SPA base (**`/`** or **`/RepoName/`** for GitHub project Pages). |
+
+For defaults and comments, see **`webui/.env.example`**.
+
+---
+
+## Final checklist
+
+| Check | Expected |
+|-------|----------|
+| **`GET …/api/health`** | OK from browser or `curl`. |
+| **Discord** | Bot online; **`/setup-set`** bindings in place. |
+| **Web UI** | Sign-in works; no CORS errors for your origin. |
+| **GitHub Pages** (if used) | No 404 for assets under **`/REPO/`**; API URL in build matches production. |
+
+Deeper behavior (rate limits, refresh flow, OpenAPI) is summarized in **[README.md](./README.md)**.

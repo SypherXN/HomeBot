@@ -6,6 +6,16 @@ Everything shares one **SQLite** database (`homebot.db` by default), so Discord,
 
 ---
 
+## Quick start
+
+If you are setting up for the **first time** (Discord application, bot token, `.env`, Windows or **Ubuntu + systemd** auto-start, Web UI, optional **GitHub Pages** and HTTPS), follow **[SETUP.md](./SETUP.md)** end to end.
+
+**Short path (after tools are installed):** copy **`.env.example`** → **`.env`**, **`webui/.env.example`** → **`webui/.env`**, set **`DISCORD_TOKEN`**, **`DISCORD_GUILD_ID`**, **`HOMEBOT_API_ENABLED=true`**, **`HOMEBOT_API_TOKEN`**, **`HOMEBOT_WEB_JWT_SECRET`** (≥ 32 characters). From the repo root run **`dotnet run`**; in a second terminal run **`cd webui && npm install && npm run dev`**. The .NET process **does not read `.env` by itself** — use PowerShell, your editor’s **envFile**, **`scripts/run-homebot.ps1`** (Windows), or **`systemd` `EnvironmentFile=`** (Linux); SETUP documents each.
+
+**GitHub Pages:** this repository does **not** include a checked-in Actions deploy workflow. SETUP describes how to add your own and which **`VITE_*`** / CORS / OAuth values must match.
+
+---
+
 ## What it does
 
 | Area | Discord | Web UI |
@@ -25,29 +35,22 @@ Optional: after API writes (new item, etc.), the bot can **post a short notice**
 
 ### 1. One process, two halves
 
-- **Discord half** — Slash commands and button UIs in the channels you bind with `/setup-set`. Most commands only work in the channel assigned to that feature (see `/help topic:setup`).
-- **Web half** — Open the Web UI in a browser, point it at your API URL, sign in (or paste the shared API token), and set **`actorUserId`** to your Discord user id for actions that require it (complete, delete, undo, etc.).
+- **Discord half** — Slash commands and button UIs in the channels you bind with **`/setup-set`**. Most commands only work in the channel assigned to that feature (see **`/help topic:setup`**).
+- **Web half** — Open the Web UI in a browser, point it at your API URL, sign in (password, Discord OAuth if configured, or paste the shared **`HOMEBOT_API_TOKEN`** as a bearer), and set **`actorUserId`** when needed for complete / delete / undo / roster flows.
 
-You can run **Discord only**, **API only**, or **both** in the same process (see environment variables below).
+You can run **Discord only**, **API only**, or **both** in the same process (see environment variables below). **Install order, Discord portal clicks, Windows vs Ubuntu, systemd, and GitHub Pages** are in **[SETUP.md](./SETUP.md)**.
 
-### 2. Discord usage (typical flow)
+### 2. Discord (after the bot is running)
 
-1. Create a Discord application and bot, invite it to your server with **applications.commands** and message/intent access as needed.
-2. Set **`DISCORD_TOKEN`** and **`DISCORD_GUILD_ID`** (guild slash commands register to this guild).
-3. Start HomeBot with Discord enabled (default). Use **`/setup-set`** to bind `buy`, `wishlist`, `money`, and `calendar` to the right text channels. Optionally **`/setup-set audit #channel`** to log **web sign-ins** (password and Discord OAuth) in that channel.
-4. Use **`/help`** with a **topic** option (**`buy`**, **`calendar`**, **`web`**, etc.) for command lists. Use **`/undo`** to revert your last change (works from any channel).
+Use **`/setup-set`** to bind **`buy`**, **`wishlist`**, **`money`**, and **`calendar`** (and optional **`audit`** for web sign-in logs). **`/help`** with a **topic** lists commands; **`/undo`** reverts your last change.
 
-**Web sign-up from Discord:** If someone creates an account in the browser using **Discord verify**, they run **`/webui-verify`** in **your** server and paste the code from the setup page. That ties their Discord id to the login without typing snowflakes on the web.
+**Discord verify sign-up:** new users complete **`/webui-verify`** in your server with the code from the web setup page so **`WebUsers.DiscordUserId`** is set without typing snowflakes in the browser.
 
-### 3. Web UI usage (typical flow)
+### 3. Web UI
 
-1. Start the API (`HOMEBOT_API_ENABLED=true`) and set **`HOMEBOT_WEB_JWT_SECRET`** (at least **32 UTF-8 bytes**) if you use web logins.
-2. From the `webui` folder: `npm install` then `npm run dev` (default API base `http://localhost:5050`, overridable with **`VITE_API_BASE_URL`**).
-3. **New account:** **New account** in the sidebar → prefer **Discord verify**, or manual bootstrap/invite if you are API-only.
-4. **Sign in** — Stores a JWT and fills **`actorUserId`** from your profile when you use web login.
-5. **Settings** — API base URL, bearer token (optional if you only use JWT), calendar **viewer** time zone, and `actorUserId` / roster picker when the bot is online and can list guild members.
+Start the API (**`HOMEBOT_API_ENABLED=true`**) and set **`HOMEBOT_WEB_JWT_SECRET`** for web logins. From **`webui`**: **`npm install`**, **`npm run dev`** (defaults in **`webui/.env.example`**). **Sign in** issues a short-lived **access JWT** and stores a **refresh token** (opaque, server-side row); **Sign out** revokes the refresh row. **Settings** covers API base URL, optional bearer token, calendar viewer zone, and **`actorUserId`** / roster when the bot can list members.
 
-The header shows **API reachability** and whether your token is accepted. The UI polls when the tab becomes visible again (helpful on phones).
+The header shows **API reachability** and token acceptance; the UI refreshes state when the tab becomes visible again.
 
 ### 4. API usage (scripts or other clients)
 
@@ -63,7 +66,7 @@ OpenAPI: **`GET /openapi/v1.json`**.
 
 Values are read from the **process** environment (shell, systemd, Docker, or IDE). The app **does not** load a `.env` file by itself.
 
-**Template:** copy **`.env.example`** in the repo root to **`.env`** (gitignored), fill in secrets, then inject those variables however you run the process—for example Cursor/VS Code **`envFile`** in **`launch.json`** when debugging, **`Environment=`** lines in **systemd**, or **`environment:`** in **Docker Compose**. For a one-off terminal session on Windows you can set **`$env:NAME = "value"`** before **`dotnet run`**.
+**Template:** copy **`.env.example`** → **`.env`** (gitignored), fill in secrets, then load them before **`dotnet run`** — for example Cursor/VS Code **`envFile`** in **`launch.json`**, **`EnvironmentFile=`** in **systemd**, **`scripts/run-homebot.ps1`** on Windows, or **`set -a && source .env`** in an interactive shell. See **[SETUP.md](./SETUP.md)** §5–§8.
 
 ### Always decide first
 
@@ -97,7 +100,7 @@ Values are read from the **process** environment (shell, systemd, Docker, or IDE
 | **`HOMEBOT_WEB_JWT_SECRET`** | Required for web sign-in and user creation flows — **≥ 32 UTF-8 bytes**. Never put this in the frontend; it stays on the server. |
 | **`HOMEBOT_WEB_SETUP_TOKEN`** | Optional — if set, manual **first-user** bootstrap on the web must include this token. |
 | **`HOMEBOT_WEB_INVITE_TOKEN`** | Optional — if set, manual **additional-user** registration must include this invite. |
-| **`HOMEBOT_WEB_JWT_ACCESS_TTL_SECONDS`** | Optional — lifetime of **access** JWTs (default **900** = 15 minutes; allowed **300–1209600**). Longer values behave like a classic long-lived session token. |
+| **`HOMEBOT_WEB_JWT_ACCESS_TTL_SECONDS`** | Optional — lifetime of **access** JWTs (default **900** = 15 minutes; allowed **300–1209600**). Longer values behave like a longer-lived session token. |
 | **`HOMEBOT_WEB_REFRESH_TTL_SECONDS`** | Optional — opaque **refresh** tokens stored in SQLite (default **2592000** = 30 days; allowed **3600–31536000**). |
 
 ### Discord OAuth (optional — “Continue with Discord” on Sign in)
@@ -163,13 +166,13 @@ Then run the .NET app from the repo root, and in another terminal run `npm run d
 
 ## Build and run
 
+From the **repository root** unless noted otherwise. Uses **.NET 10** (`net10.0`) and **SQLite** via **`Microsoft.Data.Sqlite`**.
+
 ### .NET (bot + API)
 
 ```bash
 dotnet run
 ```
-
-From the repository root. Uses **.NET 10** and **SQLite** via `Microsoft.Data.Sqlite`.
 
 ### Tests
 
@@ -202,9 +205,9 @@ Output is in **`webui/dist`**. Set **`VITE_API_BASE_URL`** at build time if the 
 
 ## Data and safety
 
-- **SQLite** holds items, settings, channel bindings, action log (undo), web users, and verification sessions.
+- **SQLite** holds items, settings, channel bindings, action log (undo), **`WebUsers`**, Discord verify sessions, and **opaque refresh tokens** (`WebRefreshTokens`) for browser sessions.
 - **Snowflakes:** Large Discord ids are handled as **strings** in JSON where it matters (money, calendar assignee, list API responses, buy/wishlist writes). Prefer roster picks or member labels when the UI offers them.
-- **Secrets:** Do not commit tokens or `HOMEBOT_WEB_JWT_SECRET`. The Web UI stores the bearer/JWT and refresh token only in **browser localStorage** (refresh is cleared on sign-out; the server row is revoked when sign-out calls **`POST /api/auth/logout`**).
+- **Secrets:** Do not commit tokens or **`HOMEBOT_WEB_JWT_SECRET`**. The Web UI stores access JWT, optional API bearer, and refresh token in **browser localStorage**; **Sign out** clears client storage and **`POST /api/auth/logout`** revokes the refresh row on the server.
 
 ---
 
