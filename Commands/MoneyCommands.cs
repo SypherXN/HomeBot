@@ -78,7 +78,8 @@ public class MoneyCommands : InteractionModuleBase<SocketInteractionContext>
         // --- CASE 1: No args → overall summary ---
         if (user1 == null && user2 == null)
         {
-            var embed = await _money.BuildOverallSummary(
+            var embed = await MoneyDiscordPresentation.BuildOverallSummary(
+                _money,
                 Context.User.Id,
                 Context.User.Username
             );
@@ -111,7 +112,7 @@ public class MoneyCommands : InteractionModuleBase<SocketInteractionContext>
             name2 = user2.Username;
         }
 
-        var embed2 = await _money.BuildSummary(u1, u2, name1, name2);
+        var embed2 = await MoneyDiscordPresentation.BuildSummary(_money, u1, u2, name1, name2);
 
         await RespondAsync(embed: embed2);
     }
@@ -122,7 +123,7 @@ public class MoneyCommands : InteractionModuleBase<SocketInteractionContext>
     [SlashCommand("money-list", "View transaction history")]
     public async Task List()
     {
-        var (embed, components) = await _money.BuildTransactions();
+        var (embed, components) = await MoneyDiscordPresentation.BuildTransactions(_money);
 
         await RespondAsync(embed: embed, components: components);
     }

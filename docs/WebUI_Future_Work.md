@@ -1,6 +1,6 @@
 # WebUI and API — possible next work
 
-**Purpose:** Optional enhancements beyond what [Refined_WebUI_Adaptation_Plan.md](./Refined_WebUI_Adaptation_Plan.md) marks as shipped. Each backlog item states **what implementing it does** for users and the codebase.
+**Purpose:** Optional enhancements beyond what [Refined_WebUI_Adaptation_Plan.md](./Refined_WebUI_Adaptation_Plan.md) marks as shipped. **Recently addressed** lists work already merged; **Other future directions** and the sections below are the **remaining** backlog unless marked *not backlog*. Keep those two lists in sync when you ship or explicitly defer something.
 
 **Out of scope for this doc:** **Frontend / E2E / SPA automation** (Playwright, Vitest, MSW, component test harnesses, etc.). The repo already has **.NET** integration coverage where noted in the adaptation plan; how much browser automation to add is a separate process choice, not listed here.
 
@@ -34,28 +34,36 @@ These are **already in the repo**; they stay out of the backlog below.
 | **Repo hygiene** | **`.gitignore`** expanded for build outputs, logs, SQLite sidecars, local `appsettings.*.local.json`, etc. |
 | **Calendar — recurrence core** | **`CalendarRecurrenceExceptions`** (`ExceptionKind`, overrides, `InstanceCompleted`). API: **`POST …/omit-instance`**, **`POST …/complete-instance`**, **`PATCH …/instance`** (canonical **`instanceStartUtc`** + optional fields). Range rows: **`displayInstanceStartUtc`**, **`isInstanceCompleted`**, **`hasInstanceOverride`**, etc. Reminders skip omitted / completed-this-day / modified-completed instances. Discord: **`/calendar-instance-omit`**, **`/calendar-instance-complete`**, **`/calendar-instance-edit`**. WebUI: hide / complete this day / save for this day / complete or delete series. **Undo** for exception **create** / **update**. |
 | **Calendar — list & detail parity, reset, undo delete** | **`GET /api/calendar/today`** & **`/upcoming`** driven by **`GetRange`** + tasks; list DTOs expose **`instanceStartUtc`**. **`GET …/items/{id}?instanceStartUtc=…`** merged occurrence detail (incl. end from override or series duration). **`DELETE …/items/{id}/instance?instanceStartUtc=…`** clears that occurrence’s exception row; **Undo** restores it. WebUI: occurrence-keyed detail fetch, optional per-instance **end**, **Reset this day** button. |
+| **WebUI — narrow screens / layout** | **Overflow-safe** forms and inputs (`min-w-0` / `max-w-full`), **pagination** controls that stay usable on small widths, **calendar** toolbar and modals tuned for phones, **`DiscordMemberSelect`** full-width + short option text + `title` tooltips, **`AppShell`** horizontal nav scroll, **main** `min-w-0`, **Sign in / New account** row on mobile and stacked on `md+`. Touch points: `AppShell.tsx`, `CalendarPage.tsx`, calendar modals, Buy/Money/Wishlist pages, `DiscordMemberSelect.tsx`. |
+| **WebUI — `429` / rate limit UX** | **`apiJson`** (`webui/src/api.ts`) maps **`429`** to a short user message and honors **`Retry-After`** (delay-seconds or HTTP-date). Login, setup, OAuth consume, Settings, and feature pages pick it up via existing `catch (e) => e.message` handling. **No** API change required beyond existing rate limits. |
+| **Snowflake JSON (Discord ids)** | Public list/detail/request DTOs already used **`SnowflakeUlongJsonConverter`** / **`SnowflakeUlongNullableJsonConverter`**. **Undo payloads** (`BuyUndoModel`, `MoneyUndoModel`, `WishlistUndoModel`, `WishlistCompleteUndoModel`, `CalendarDeleteUndoModel`) now use the same converters so **`ActionLog`** JSON stores digit **strings** (new rows), while **deserialization** still accepts legacy numeric tokens. **`HomeBot.Tests/SnowflakeJsonSerializationTests.cs`** locks string serialization and round-trip for a snowflake above JS **`MAX_SAFE_INTEGER`**. **`GET /api/discord/guild/members`** already returns **`userId`** / **`guildId`** as strings. Web UI types treat ids as **`string`** and send digits in JSON bodies via **`jsonSnowflakeDigits`** / **`moneySnowflake`**. |
+| **Domain vs Discord presentation (list UIs)** | **`BuyService`**, **`WishlistService`**, **`MoneyService`**, and **`CalendarService`** no longer take a dependency on **`Discord.Net`** for paginated list / summary / transaction UIs. Static types under **`Presentation/Discord/`** — **`BuyListDiscordPresentation`**, **`WishlistListDiscordPresentation`**, **`MoneyDiscordPresentation`**, **`CalendarListDiscordPresentation`** — call the existing **`Get*`** / **`GetSummary`** / **`GetTransactions`** methods and own embed rows, **`ListUIBuilder`**, and button **`CustomId`** strings. **`Program`** button handlers and slash commands call those presenters. Per-item **detail** slash flows (e.g. **`wishlist-view`**, **`calendar-view`**) still build one-off embeds in command modules, which is an acceptable Discord-only layer. |
 
 ---
 
 ## Other future directions (at a glance)
 
-Longer sections below; this table is only **what the bot / household gains** if you implement each area.
+Summary of **open** backlog; detailed sections follow. **Not backlog** items are [called out separately](#explicitly-not-backlog) so they do not look like future work.
 
 | Area | What it would do for the bot / users |
 |------|--------------------------------------|
-| **Phase 5 identity** (refresh tokens, multi-tenant, OAuth-provisioned accounts) | Safer long-lived browser sessions, or multiple households / SSO — **large** changes to auth, storage, and ops assumptions. |
-| **Money — non–split expenses in WebUI** | Same simple expense flows as Discord/API in the SPA: one-off line items **without** building a split; fewer “use Discord only” gaps. |
-| **WebUI — `429` UX** | When rate limits fire, users see **retry guidance** instead of opaque fetch errors; **no** server change if messages are client-only. |
+| **Phase 5 identity** (refresh tokens, multi-tenant, OAuth-provisioned accounts) | Safer long-lived browser sessions, or multiple households / SSO — **large** changes to auth, storage, and ops assumptions. *(Single-household JWT + Discord OAuth **linked to an existing** web user is already shipped; see adaptation plan Phase 5.)* |
 | **LAN / dev polish** | Odd Vite ports or **offline** banners reduce “why is nothing loading?” support load for self-hosters. |
-| **Snowflake audit** | Guarantees large Discord IDs never round-trip as JSON numbers — **avoids silent corruption** on assignees and money participants. |
-| **Domain vs Discord presentation** | Thinner shared core between commands and HTTP — **maintainer** velocity and fewer double implementations; small direct user impact unless you intentionally change copy. |
 | **Ops / product polish** | Dedicated health page, extra deployment runbooks, or a **checked-in GitHub Actions** workflow — mainly **operator** convenience and repeatable deploys. |
 
 ---
 
-## Phase 5 identity (beyond single-household JWT)
+## Explicitly not backlog
 
-**Today:** One household; JWT from password login or Discord OAuth **linked to an existing** `WebUsers` row; optional `HOMEBOT_API_TOKEN` for scripts; `actorUserId` on mutations for “who did it.”
+| Topic | Decision |
+|--------|----------|
+| **Money — non-split line items in the Web UI** | **Not planned.** One-off expenses can be entered as a **split expense** with a **single 100%** share (same totals and balances). The SPA stays focused on split / payment / balance flows. |
+
+---
+
+## Phase 5 identity (beyond what is shipped today)
+
+**Shipped today (still “Phase 5” in the adaptation plan):** One household; JWT from password login or Discord OAuth **linked to an existing** `WebUsers` row; optional `HOMEBOT_API_TOKEN` for scripts; `actorUserId` on mutations for “who did it.” Per-IP **rate limits** on public auth routes return **`429`** + **`Retry-After`**; the Web UI surfaces that in **`apiJson`** (see Recently addressed).
 
 | Direction | What implementing it does |
 |-----------|---------------------------|
@@ -65,44 +73,12 @@ Longer sections below; this table is only **what the bot / household gains** if 
 
 ---
 
-## Money — non–split expenses in the WebUI
-
-**Today:** The Money page focuses on **split expenses**, **payments**, and **balances** (per adaptation plan).
-
-**What implementing it does:** Exposes simple (non-split) expenses in the SPA for parity with any Discord or API flow that already supports them—users log one-off expenses without building a split; needs forms and validation aligned with existing API request types.
-
----
-
-## WebUI — rate limiting (`429`) UX
-
-**Today:** Auth and other routes can return **`429`** with `Retry-After` (see README / Phase 3). The SPA still treats most failures as a generic **`fetch`** / **`apiJson`** error unless you read the status elsewhere.
-
-**What implementing it does:** Surfaces **clear, actionable messages** (“Too many attempts, try again in …”) on login, setup, OAuth callback, and optionally a shared **`apiJson`** wrapper—reduces confusion when IP-based limits trigger; **no server change** required.
-
----
-
 ## WebUI — LAN / dev edge cases (optional polish)
 
 | Item | What implementing it does |
 |------|---------------------------|
 | **Custom Vite port** | Today auto API base only runs when the page is on port **5173** or **4173**. If you always use e.g. **`--port 3000`**, you could read a **`VITE_DEV_CLIENT_PORT`** or map `location.port`—**less manual Settings use** for odd ports. |
 | **`fetch` / offline banner** | Detect `navigator.onLine` and failed health checks to show “You’re offline” or “Cannot reach API”—clearer than only the red **API unreachable** dot. |
-
----
-
-## Snowflakes — audit and hardening
-
-**Today:** Critical paths use string snowflakes in JSON where converters exist; API serializers often **write** ulongs as digit **strings** for converter-decorated DTOs.
-
-**What implementing it does:** A pass over **every** API response type and WebUI parse site catches any remaining **numeric** ulong in JSON or unsafe `Number(...)` usage. **Prevents silent ID corruption** for real Discord snowflakes above `2^53−1` in edge responses or future endpoints.
-
----
-
-## Domain vs Discord presentation (Phase 1 depth)
-
-**Today:** Phase 1 is largely done; some Discord-specific `Build*` or formatting helpers may still sit beside HTTP-facing code.
-
-**What implementing it does:** Moves presentation/formatting out of core services so **Discord commands and HTTP share thinner domain operations**—easier refactors and fewer dual paths; **little or no end-user feature** unless copy or embeds change intentionally.
 
 ---
 
@@ -130,8 +106,6 @@ Longer sections below; this table is only **what the bot / household gains** if 
 
 ## Suggested order (when you are not sure where to start)
 
-1. **Quick wins:** **`429` UX** in the WebUI; optional **offline / fetch** messaging in `AppShell` or shared API helpers.  
-2. **Product breadth:** **Money non-split** UI if your household uses that flow.  
-3. **Correctness:** **Snowflake audit** if you use **real** Discord IDs everywhere.  
-4. **Calendar polish:** **Discord reset-this-day** parity or **OpenAPI** touch-ups if scripts or third-party clients matter.  
-5. **Large bets:** **Phase 5** identity expansion (refresh tokens, multi-tenant, or OAuth-provisioned accounts—pick one direction deliberately).
+1. **Quick wins:** **LAN / dev polish** (offline or odd-port API base) — **`429` UX is already done** in `apiJson`.  
+2. **Calendar polish:** **Discord reset-this-day** parity or **OpenAPI** touch-ups if scripts or third-party clients matter.  
+3. **Large bets:** **Phase 5** identity expansion beyond single-household JWT (refresh tokens, multi-tenant, or OAuth-provisioned accounts—pick one direction deliberately).

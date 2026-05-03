@@ -71,7 +71,8 @@ public class BuyCommands : InteractionModuleBase<SocketInteractionContext>
         string sort = "")
     {
 
-        var (embed, components) = await _buyService.BuildBuyList(
+        var (embed, components) = await BuyListDiscordPresentation.BuildBuyList(
+            _buyService,
             assignedTo?.Id,
             store,
             tag,
@@ -97,7 +98,7 @@ public class BuyCommands : InteractionModuleBase<SocketInteractionContext>
 
         _buyService.CompleteItem(id, Context.User.Id);
 
-        var (embed, components) = await _buyService.BuildBuyList();
+        var (embed, components) = await BuyListDiscordPresentation.BuildBuyList(_buyService);
 
         await RespondAsync(
             embed: embed,
@@ -121,7 +122,7 @@ public class BuyCommands : InteractionModuleBase<SocketInteractionContext>
 
         _buyService.DeleteItem(id, Context.User.Id);
 
-        var (embed, components) = await _buyService.BuildBuyList();
+        var (embed, components) = await BuyListDiscordPresentation.BuildBuyList(_buyService);
 
         await RespondAsync(embed: embed, components: components);
     }
@@ -178,7 +179,7 @@ public class BuyCommands : InteractionModuleBase<SocketInteractionContext>
             return;
         }
 
-        var (embed, components) = await _buyService.BuildBuyList();
+        var (embed, components) = await BuyListDiscordPresentation.BuildBuyList(_buyService);
 
         await RespondAsync(embed: embed, components: components);
     }

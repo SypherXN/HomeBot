@@ -30,6 +30,35 @@ function mergeQuery(path: string, query: Record<string, string>): string {
   return s ? `${base}?${s}` : base;
 }
 
+/** Parses `Retry-After` as delay-seconds (RFC 7231) or HTTP-date. */
+function parseRetryAfterSeconds(retryAfter: string | null): number | undefined {
+  if (retryAfter == null) return undefined;
+  const t = retryAfter.trim();
+  if (!t) return undefined;
+  if (/^\d+$/.test(t)) {
+    const sec = parseInt(t, 10);
+    return Number.isFinite(sec) ? sec : undefined;
+  }
+  const ms = Date.parse(t);
+  if (!Number.isNaN(ms)) {
+    return Math.max(0, Math.ceil((ms - Date.now()) / 1000));
+  }
+  return undefined;
+}
+
+function rateLimitUserMessage(retryAfterSec: number | undefined): string {
+  if (retryAfterSec === undefined) {
+    return "Too many requests. Please wait a bit and try again.";
+  }
+  if (retryAfterSec <= 0) {
+    return "Too many requests. Please try again in a moment.";
+  }
+  if (retryAfterSec === 1) {
+    return "Too many requests. Try again in about 1 second.";
+  }
+  return `Too many requests. Try again in about ${retryAfterSec} seconds.`;
+}
+
 /**
  * All JSON calls to the HomeBot API. Pass Discord snowflakes as strings to avoid precision loss.
  */
@@ -52,6 +81,10 @@ export async function apiJson<T>(path: string, options: ApiJsonOptions = {}): Pr
 
   if (!response.ok) {
     const body = await response.text();
+    if (response.status === 429) {
+      const sec = parseRetryAfterSeconds(response.headers.get("Retry-After"));
+      throw new Error(rateLimitUserMessage(sec));
+    }
     throw new Error(`${response.status} ${response.statusText}: ${body}`);
   }
 

@@ -26,7 +26,7 @@ public class DashboardCommands : InteractionModuleBase<SocketInteractionContext>
             .WithColor(Color.Gold);
 
         // --- Calendar Today ---
-        var (todayEmbed, _) = await _calendar.BuildToday();
+        var (todayEmbed, _) = await CalendarListDiscordPresentation.BuildToday(_calendar);
         embed.AddField("📅 Today", todayEmbed.Description ?? "No items");
 
         // --- Money Summary (self vs others optional later)

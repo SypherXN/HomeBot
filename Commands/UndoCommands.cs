@@ -34,7 +34,7 @@ public class UndoCommands : InteractionModuleBase<SocketInteractionContext>
             return;
         }
 
-        var ui = await _money.BuildTransactions();
+        var ui = await MoneyDiscordPresentation.BuildTransactions(_money);
         await RespondAsync(embed: ui.embed, components: ui.components);
     }
 }

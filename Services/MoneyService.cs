@@ -1,5 +1,4 @@
 using Microsoft.Data.Sqlite;
-using Discord;
 
 /// <summary>
 /// Tracks expenses/payments and builds balance and transaction views.
@@ -139,37 +138,6 @@ public class MoneyService
     }
 
     /// <summary>
-    /// Builds an embed for pairwise balance summary.
-    /// </summary>
-    public async Task<Embed> BuildSummary(
-        ulong user1,
-        ulong user2,
-        string name1,
-        string name2)
-    {
-        var summary = GetSummary(user1, user2, name1, name2);
-
-        var embed = new EmbedBuilder()
-            .WithTitle("💰 Money Summary")
-            .WithColor(Color.Gold);
-
-        if (summary.Balance > 0)
-        {
-            embed.Description = $"👉 {summary.User2Name} owes {summary.User1Name} **${summary.Balance:F2}**";
-        }
-        else if (summary.Balance < 0)
-        {
-            embed.Description = $"👉 {summary.User1Name} owes {summary.User2Name} **${Math.Abs(summary.Balance):F2}**";
-        }
-        else
-        {
-            embed.Description = $"✅ {summary.User1Name} and {summary.User2Name} are settled up";
-        }
-
-        return embed.Build();
-    }
-
-    /// <summary>
     /// Returns pairwise summary data for API and UI adapters.
     /// </summary>
     public MoneySummaryModel GetSummary(
@@ -230,79 +198,6 @@ public class MoneyService
         }
 
         return balances;
-    }
-
-    /// <summary>
-    /// Builds an overall balance summary for one user.
-    /// </summary>
-    public async Task<Embed> BuildOverallSummary(ulong userId, string username)
-    {
-        var balances = GetAllBalances(userId);
-
-        var embed = new EmbedBuilder()
-            .WithTitle("💰 Your Balance Summary")
-            .WithColor(Color.Gold);
-
-        if (balances.Count == 0)
-        {
-            embed.Description = "No transactions yet.";
-            return embed.Build();
-        }
-
-        foreach (var entry in balances)
-        {
-            var otherUserId = entry.Key;
-            var amount = entry.Value;
-
-            string line;
-
-            if (amount > 0)
-                line = $"<@{otherUserId}> owes you **${amount:F2}**";
-            else if (amount < 0)
-                line = $"You owe <@{otherUserId}> **${Math.Abs(amount):F2}**";
-            else
-                line = $"You and <@{otherUserId}> are settled";
-
-            embed.AddField("\u200B", line);
-        }
-
-        return embed.Build();
-    }
-
-    /// <summary>
-    /// Builds paginated transaction list UI with delete/paging controls.
-    /// </summary>
-    public async Task<(Embed embed, MessageComponent components)> BuildTransactions(
-        int page = 0)
-    {
-        var result = GetTransactions(page);
-        var rows = result.Items.Select(FormatTransactionRow).ToList();
-        var ids = result.Items.Select(x => x.Id).ToList();
-
-        var embed = ListUIBuilder.BuildEmbed("📜 Transactions", rows);
-
-        var components = new ComponentBuilder();
-
-        foreach (var id in ids)
-        {
-            components.WithButton(
-                $"❌ {id}",
-                $"money_delete_{id}",
-                ButtonStyle.Danger
-            );
-        }
-
-        if (result.HasPrev)
-        {
-            components.WithButton("⬅ Prev", $"money_page_{page - 1}", ButtonStyle.Secondary);
-        }
-
-        if (result.HasNext)
-        {
-            components.WithButton("Next ➡", $"money_page_{page + 1}", ButtonStyle.Secondary);
-        }
-
-        return (embed, components.Build());
     }
 
     /// <summary>
@@ -514,13 +409,4 @@ public class MoneyService
         deleteCmd.ExecuteNonQuery();
     }
 
-    private static string FormatTransactionRow(MoneyTransactionListItemModel item)
-    {
-        if (item.Type == "expense")
-        {
-            return $"💸 **#{item.Id} {item.Name}** | ${item.Amount:F2} | <@{item.PaidBy}> → <@{item.OwedBy}>";
-        }
-
-        return $"💰 **#{item.Id} Payment** | ${item.Amount:F2} | <@{item.PaidBy}> → <@{item.OwedBy}>";
-    }
 }

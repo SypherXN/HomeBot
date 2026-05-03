@@ -193,7 +193,7 @@ class Program
                 var id = int.Parse(customId.Replace("buy_complete_", ""));
                 buyService.CompleteItem(id, component.User.Id);
 
-                var result = await buyService.BuildBuyList();
+                var result = await BuyListDiscordPresentation.BuildBuyList(buyService);
 
                 await component.ModifyOriginalResponseAsync(msg =>
                 {
@@ -209,7 +209,7 @@ class Program
                 var id = int.Parse(customId.Replace("buy_delete_", ""));
                 buyService.DeleteItem(id, component.User.Id);
 
-                var result = await buyService.BuildBuyList();
+                var result = await BuyListDiscordPresentation.BuildBuyList(buyService);
 
                 await component.ModifyOriginalResponseAsync(msg =>
                 {
@@ -224,7 +224,7 @@ class Program
             {
                 var page = int.Parse(customId.Replace("buy_page_", ""));
 
-                var result = await buyService.BuildBuyList(page: page);
+                var result = await BuyListDiscordPresentation.BuildBuyList(buyService, page: page);
 
                 await component.ModifyOriginalResponseAsync(msg =>
                 {
@@ -243,7 +243,7 @@ class Program
                 var id = int.Parse(customId.Replace("wishlist_complete_", ""));
                 wishlistService.MarkComplete(id, component.User.Id);
 
-                var result = await wishlistService.BuildWishlist(page: 0);
+                var result = await WishlistListDiscordPresentation.BuildWishlist(wishlistService, page: 0);
 
                 await component.ModifyOriginalResponseAsync(msg =>
                 {
@@ -260,7 +260,7 @@ class Program
                 var id = int.Parse(customId.Replace("wishlist_delete_", ""));
                 wishlistService.DeleteItem(id, component.User.Id);
 
-                var result = await wishlistService.BuildWishlist(page: 0);
+                var result = await WishlistListDiscordPresentation.BuildWishlist(wishlistService, page: 0);
 
                 await component.ModifyOriginalResponseAsync(msg =>
                 {
@@ -276,7 +276,7 @@ class Program
             {
                 var page = int.Parse(customId.Replace("wishlist_page_", ""));
 
-                var result = await wishlistService.BuildWishlist(page: page);
+                var result = await WishlistListDiscordPresentation.BuildWishlist(wishlistService, page: page);
 
                 await component.ModifyOriginalResponseAsync(msg =>
                 {
@@ -294,7 +294,7 @@ class Program
 
                 moneyService.DeleteTransaction(id, component.User.Id);
 
-                var result = await moneyService.BuildTransactions();
+                var result = await MoneyDiscordPresentation.BuildTransactions(moneyService);
 
                 await component.ModifyOriginalResponseAsync(msg =>
                 {
@@ -310,7 +310,7 @@ class Program
             {
                 var page = int.Parse(customId.Replace("money_page_", ""));
 
-                var result = await moneyService.BuildTransactions(page: page);
+                var result = await MoneyDiscordPresentation.BuildTransactions(moneyService, page);
 
                 await component.ModifyOriginalResponseAsync(msg =>
                 {
@@ -326,7 +326,7 @@ class Program
                 var id = int.Parse(customId.Replace("calendar_complete_", ""));
                 calendarService.CompleteItem(id, component.User.Id);
 
-                var result = await calendarService.BuildList();
+                var result = await CalendarListDiscordPresentation.BuildList(calendarService);
 
                 await component.ModifyOriginalResponseAsync(msg =>
                 {
@@ -342,7 +342,7 @@ class Program
                 var id = int.Parse(customId.Replace("calendar_delete_", ""));
                 calendarService.DeleteItem(id, component.User.Id);
 
-                var result = await calendarService.BuildList();
+                var result = await CalendarListDiscordPresentation.BuildList(calendarService);
 
                 await component.ModifyOriginalResponseAsync(msg =>
                 {
@@ -357,7 +357,7 @@ class Program
             {
                 var page = int.Parse(customId.Replace("calendar_page_", ""));
 
-                var result = await calendarService.BuildList(page);
+                var result = await CalendarListDiscordPresentation.BuildList(calendarService, page);
 
                 await component.ModifyOriginalResponseAsync(msg =>
                 {
@@ -372,7 +372,7 @@ class Program
             {
                 var page = int.Parse(customId.Replace("calendar_today_page_", ""));
 
-                var result = await calendarService.BuildToday(null, page);
+                var result = await CalendarListDiscordPresentation.BuildToday(calendarService, null, page);
 
                 await component.ModifyOriginalResponseAsync(msg =>
                 {
@@ -387,7 +387,7 @@ class Program
             {
                 var page = int.Parse(customId.Replace("calendar_upcoming_page_", ""));
 
-                var result = await calendarService.BuildUpcoming(null, page);
+                var result = await CalendarListDiscordPresentation.BuildUpcoming(calendarService, null, page);
 
                 await component.ModifyOriginalResponseAsync(msg =>
                 {

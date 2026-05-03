@@ -279,14 +279,6 @@ export default function DashboardPage() {
           </SnapshotCard>
         </div>
       )}
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <QuickLink to="/buy" label="Buy list" hint="Shopping & tags" />
-        <QuickLink to="/wishlist" label="Wishlist" hint="Wishes & owners" />
-        <QuickLink to="/money" label="Money" hint="Split, payments, summary" />
-        <QuickLink to="/calendar" label="Calendar" hint="Month, week, agenda, tasks" />
-        <QuickLink to="/settings" label="Settings" hint="Token & actor id" />
-      </div>
     </div>
   );
 }
@@ -320,18 +312,6 @@ function SnapshotCard({
       </div>
       <div className="mt-1 flex-1">{children}</div>
       <span className="mt-3 text-xs font-medium text-blue-400">Open →</span>
-    </Link>
-  );
-}
-
-function QuickLink({ to, label, hint }: { to: string; label: string; hint: string }) {
-  return (
-    <Link
-      to={to}
-      className="rounded-lg border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm transition hover:border-slate-600 hover:bg-slate-900/80"
-    >
-      <div className="font-medium text-white">{label}</div>
-      <p className="mt-0.5 text-xs text-slate-500">{hint}</p>
     </Link>
   );
 }

@@ -1,5 +1,4 @@
 using Microsoft.Data.Sqlite;
-using Discord;
 
 /// <summary>
 /// Domain logic for wishlist querying, persistence, and undo support.
@@ -19,32 +18,6 @@ public class WishlistService
         _db = db;
         _undo = undo;
         _config = config;
-    }
-
-    /// <summary>
-    /// Builds the filtered and paginated wishlist UI payload.
-    /// </summary>
-    public async Task<(Embed embed, MessageComponent components)> BuildWishlist(
-        ulong? owner = null,
-        string tag = "",
-        string sort = "",
-        int page = 0)
-    {
-        var result = GetWishlist(owner, tag, sort, page);
-        var rows = result.Items.Select(FormatDiscordRow).ToList();
-        var ids = result.Items.Select(x => x.Id).ToList();
-
-        var embed = ListUIBuilder.BuildEmbed("🎁 Wishlist", rows);
-
-        var components = ListUIBuilder.BuildButtons(
-            ids,
-            "wishlist",
-            page,
-            result.HasNext,
-            result.HasPrev
-        );
-
-        return (embed, components);
     }
 
     /// <summary>
@@ -534,25 +507,4 @@ public class WishlistService
         return string.Join(",", parts.Where(p => allowed.Contains(p)));
     }
 
-    private static string FormatDiscordRow(WishlistListItemModel item)
-    {
-        var line = $"**#{item.Id} {item.Name}** | 👤 <@{item.Owner}>";
-
-        if (!string.IsNullOrWhiteSpace(item.Price))
-            line += $" | 💲 {item.Price}";
-
-        if (!string.IsNullOrWhiteSpace(item.Priority))
-            line += $" | ⭐ {item.Priority}";
-
-        if (item.Tags.Count > 0)
-        {
-            var formattedTags = string.Join(" ", item.Tags.Select(t => $"#{t}"));
-            line += $" | 🏷 {formattedTags}";
-        }
-
-        if (item.PurchasedBy.HasValue)
-            line += $" | ✔ <@{item.PurchasedBy.Value}>";
-
-        return line;
-    }
 }

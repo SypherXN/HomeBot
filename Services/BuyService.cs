@@ -1,4 +1,3 @@
-using Discord;
 using Microsoft.Data.Sqlite;
 
 /// <summary>
@@ -60,26 +59,6 @@ public class BuyService
         cmd.Parameters.AddWithValue("$createdBy", (long)createdBy);
 
         cmd.ExecuteNonQuery();
-    }
-
-    /// <summary>
-    /// Builds the filtered and paginated buy list UI payload.
-    /// </summary>
-    public async Task<(Embed embed, MessageComponent components)> BuildBuyList(
-        ulong? assignedTo = null,
-        string store = "",
-        string tag = "",
-        string sort = "",
-        int page = 0)
-    {
-        var result = GetBuyList(assignedTo, store, tag, sort, page);
-        var rows = result.Items.Select(FormatDiscordRow).ToList();
-        var ids = result.Items.Select(x => x.Id).ToList();
-
-        var embed = ListUIBuilder.BuildEmbed("🛒 Things To Buy", rows);
-        var components = ListUIBuilder.BuildButtons(ids, "buy", page, result.HasNext, result.HasPrev);
-
-        return (embed, components);
     }
 
     /// <summary>
@@ -418,41 +397,4 @@ public class BuyService
         return string.Join(",", parts.Where(p => allowed.Contains(p)));
     }
 
-    private static string FormatDiscordRow(BuyListItemModel item)
-    {
-        string FormatCell(string value, int width)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                value = "-";
-
-            if (value.Length > width)
-                return value.Substring(0, width - 3) + "...";
-
-            return value.PadRight(width);
-        }
-
-        var assigned = item.AssignedTo.HasValue ? $"<@{item.AssignedTo.Value}>" : "anyone";
-        var storeDisplay = string.IsNullOrWhiteSpace(item.Store) ? "-" : item.Store;
-
-        var line =
-            $"`{item.Id.ToString().PadRight(3)}` " +
-            $"{FormatCell(item.Name, 18)} " +
-            $"📦 {FormatCell(item.Quantity, 8)} " +
-            $"🏬 {FormatCell(storeDisplay, 10)} " +
-            $"👤 {assigned}";
-
-        if (item.Tags.Count > 0)
-        {
-            var formattedTags = string.Join(" ", item.Tags.Select(t => $"#{t}"));
-            line += $" | 🏷 {formattedTags}";
-        }
-
-        if (!string.IsNullOrWhiteSpace(item.Notes))
-            line += $" | 📝 {item.Notes}";
-
-        if (item.PurchasedBy.HasValue)
-            line += $" | ✔ <@{item.PurchasedBy.Value}>";
-
-        return line;
-    }
 }

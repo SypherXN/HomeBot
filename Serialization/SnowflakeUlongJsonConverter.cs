@@ -3,7 +3,8 @@ using System.Text.Json.Serialization;
 
 /// <summary>
 /// Reads Discord snowflakes from JSON numbers or digit strings so JavaScript clients can send
-/// full 64-bit ids without IEEE-754 rounding (unsafe integers in JS).
+/// full 64-bit ids without IEEE-754 rounding (unsafe integers in JS). Used on public API DTOs,
+/// request bodies, and undo payloads stored in <c>ActionLog</c> so persisted JSON prefers digit strings.
 /// </summary>
 public sealed class SnowflakeUlongJsonConverter : JsonConverter<ulong>
 {

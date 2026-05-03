@@ -54,7 +54,8 @@ public class WishlistCommands : InteractionModuleBase<SocketInteractionContext>
         string tag = "",
         string sort = "")
     {
-        var (embed, components) = await _wishlist.BuildWishlist(
+        var (embed, components) = await WishlistListDiscordPresentation.BuildWishlist(
+            _wishlist,
             owner?.Id,
             tag,
             sort
@@ -173,7 +174,7 @@ public class WishlistCommands : InteractionModuleBase<SocketInteractionContext>
 
         _wishlist.EditItem(id, name, owner?.Id, price, link, description, notes, normalizedPriority, tags);
 
-        var (embed, components) = await _wishlist.BuildWishlist();
+        var (embed, components) = await WishlistListDiscordPresentation.BuildWishlist(_wishlist);
 
         await RespondAsync(embed: embed, components: components);
     }

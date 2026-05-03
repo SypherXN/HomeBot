@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 /// <summary>
 /// Serialized payload used to restore deleted calendar items.
 /// </summary>
@@ -8,6 +10,7 @@ public class CalendarDeleteUndoModel
     public string Start { get; set; } = "";
     public string End { get; set; } = "";
     public int AllDay { get; set; }
+    [JsonConverter(typeof(SnowflakeUlongNullableJsonConverter))]
     public ulong? Assigned { get; set; }
     public string Description { get; set; } = "";
     public string Notes { get; set; } = "";

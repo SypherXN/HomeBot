@@ -117,7 +117,7 @@ public class CalendarCommands : InteractionModuleBase<SocketInteractionContext>
     {
         try
         {
-            var (embed, components) = await _calendar.BuildList();
+            var (embed, components) = await CalendarListDiscordPresentation.BuildList(_calendar);
 
             await RespondAsync(embed: embed, components: components);
         }
@@ -229,7 +229,7 @@ public class CalendarCommands : InteractionModuleBase<SocketInteractionContext>
     [SlashCommand("calendar-today", "View today's items")]
     public async Task Today(IUser? user = null)
     {
-        var result = await _calendar.BuildToday(user?.Id);
+        var result = await CalendarListDiscordPresentation.BuildToday(_calendar, user?.Id);
         await RespondAsync(embed: result.embed, components: result.components);
     }
 
@@ -239,7 +239,7 @@ public class CalendarCommands : InteractionModuleBase<SocketInteractionContext>
     [SlashCommand("calendar-upcoming", "View upcoming events")]
     public async Task Upcoming(IUser? user = null)
     {
-        var result = await _calendar.BuildUpcoming(user?.Id);
+        var result = await CalendarListDiscordPresentation.BuildUpcoming(_calendar, user?.Id);
         await RespondAsync(embed: result.embed, components: result.components);
     }
 
