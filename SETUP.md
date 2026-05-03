@@ -12,7 +12,8 @@ This guide walks through installing prerequisites, running the **.NET** process 
 2. [Environment variable reference](#environment-variable-reference)
 3. [Prerequisites](#prerequisites-all-platforms)
 4. [Windows: install and run](#windows-install-and-run)
-5. [Ubuntu: install and run](#ubuntu-install-and-run)
+5. [Ubuntu: install and run](#ubuntu-install-and-run)  
+   - [Start on every reboot (systemd)](#ubuntu-start-on-boot-systemd)
 6. [Local testing](#local-testing)
 7. [GitHub Pages: static build](#github-pages-static-build)
 8. [GitHub Pages: Actions and hosting](#github-pages-actions-and-hosting)
@@ -309,49 +310,56 @@ dotnet run
 
 Confirm logs show Discord connecting (if enabled) and **Kestrel** listening. Stop with **Ctrl+C**.
 
-### 2.7 systemd unit (API + Discord, auto-restart)
+### 2.7 systemd service (API + Discord, production-style)
 
-Create **`/etc/systemd/system/homebot.service`** (run with `sudo`):
+**systemd** is Ubuntu’s service manager. A **unit file** tells it **which command to run**, **as which user**, and **when** (including **at boot**).
 
-```ini
-[Unit]
-Description=HomeBot Discord + API
-After=network-online.target
-Wants=network-online.target
+1. **Publish** the app once (builds a self-contained folder with **`HomeBot.dll`**):
 
-[Service]
-User=homebot
-Group=homebot
-WorkingDirectory=/opt/homebot/app
-EnvironmentFile=/opt/homebot/app/.env
-ExecStart=/usr/bin/dotnet run --no-build
-Restart=on-failure
-RestartSec=10
+   ```bash
+   sudo -u homebot bash -c 'cd /opt/homebot/app && dotnet publish -c Release -o /opt/homebot/app/publish'
+   ```
 
-[Install]
-WantedBy=multi-user.target
-```
+2. Create **`/etc/systemd/system/homebot.service`** with `sudo` and an editor (e.g. **`sudo nano /etc/systemd/system/homebot.service`**):
 
-Build once so **`--no-build`** is valid in production:
+   ```ini
+   [Unit]
+   Description=HomeBot Discord + API
+   After=network-online.target
+   Wants=network-online.target
 
-```bash
-sudo -u homebot bash -c 'cd /opt/homebot/app && dotnet publish -c Release -o /opt/homebot/app/publish'
-```
+   [Service]
+   Type=simple
+   User=homebot
+   Group=homebot
+   WorkingDirectory=/opt/homebot/app
+   EnvironmentFile=/opt/homebot/app/.env
+   ExecStart=/usr/bin/dotnet /opt/homebot/app/publish/HomeBot.dll
+   Restart=on-failure
+   RestartSec=10
 
-Then point **`ExecStart`** at the published DLL instead of `dotnet run`:
+   [Install]
+   WantedBy=multi-user.target
+   ```
 
-```ini
-ExecStart=/usr/bin/dotnet /opt/homebot/app/publish/HomeBot.dll
-```
+   - **`WorkingDirectory=/opt/homebot/app`** — default SQLite file **`homebot.db`** is created next to this folder unless you set **`HOMEBOT_DATABASE_PATH`** in **`.env`**.
+   - **`EnvironmentFile=`** — each line should look like **`NAME=value`** (no `export` keyword). Use your real **`.env`** path if different.
 
-Enable and start:
+3. **Reload** systemd, **enable** start-on-boot, and **start** now:
 
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now homebot.service
-sudo systemctl status homebot.service
-journalctl -u homebot.service -f
-```
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now homebot.service
+   sudo systemctl status homebot.service
+   ```
+
+4. **Logs** (follow live):
+
+   ```bash
+   journalctl -u homebot.service -f
+   ```
+
+If **`status`** shows **failed**, scroll up in **`journalctl`** for the error (often a missing env var or bad path).
 
 ### 2.8 Reverse proxy + TLS (typical production)
 
@@ -371,6 +379,45 @@ sudo ufw enable
 ```
 
 Prefer TLS on **443** via a proxy instead of exposing **5050** publicly.
+
+<a id="ubuntu-start-on-boot-systemd"></a>
+
+### 2.10 Start on every reboot (systemd)
+
+**Goal:** after a power cycle or `sudo reboot`, HomeBot comes back **without** you SSHing in to run `dotnet` by hand.
+
+**What `systemctl enable` does:** it registers the unit under the default boot target (**`multi-user.target`**, normal text-only server). The line **`WantedBy=multi-user.target`** in **`[Install]`** is what makes that registration work. **`systemctl enable --now homebot.service`** both **registers for boot** and **starts the service immediately**.
+
+**Check that start-on-boot is on:**
+
+```bash
+systemctl is-enabled homebot.service
+```
+
+You should see **`enabled`**.
+
+**Simulate a reboot** (optional): **`sudo reboot`**, wait for SSH to return, then:
+
+```bash
+sudo systemctl status homebot.service
+```
+
+It should be **active (running)**. If it is **inactive**, run **`journalctl -u homebot.service -b`** to see this boot’s logs.
+
+**After you `git pull` or change code**, publish again and restart:
+
+```bash
+sudo -u homebot bash -c 'cd /opt/homebot/app && dotnet publish -c Release -o /opt/homebot/app/publish'
+sudo systemctl restart homebot.service
+```
+
+**Turn off start-on-boot** (service stays installed but does not run at boot):
+
+```bash
+sudo systemctl disable homebot.service
+```
+
+**If you want the process to restart after any crash** (not only on boot), change **`Restart=on-failure`** to **`Restart=always`** in the unit file, then **`sudo systemctl daemon-reload`** and **`sudo systemctl restart homebot.service`**.
 
 ---
 
