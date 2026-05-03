@@ -445,7 +445,7 @@ export default function MoneyPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-3 pb-10 sm:px-4">
+    <div className="mx-auto min-w-0 max-w-5xl px-3 pb-10 sm:px-4">
       <header className="mb-6 border-b border-slate-800 pb-4">
         <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Money</h1>
         <p className="mt-1 text-sm text-slate-400">
@@ -770,27 +770,27 @@ export default function MoneyPage() {
 
         {data && data.totalCount > 0 && (
           <nav
-            className="mt-6 flex flex-col items-stretch gap-4 border-t border-slate-800 pt-6 sm:flex-row sm:items-center sm:justify-between"
+            className="mt-6 flex min-w-0 flex-col items-stretch gap-4 border-t border-slate-800 pt-6 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
             aria-label="Transaction pages"
           >
-            <p className="text-center text-sm text-slate-400 sm:text-left">
-              {rangeStart > 0 ? (
-                <>
+            {rangeStart > 0 ? (
+              <p className="min-w-0 space-y-1 text-center text-sm leading-snug text-slate-400 sm:max-w-[55%] sm:text-left">
+                <span className="block break-words sm:inline">
                   Showing <strong className="text-slate-200">{rangeStart}</strong>–
                   <strong className="text-slate-200">{rangeEnd}</strong> of{" "}
                   <strong className="text-slate-200">{data.totalCount}</strong>
-                  <span className="ml-2 text-slate-500">
-                    (page {data.page + 1} of {totalPages}, {data.pageSize} per page)
-                  </span>
-                </>
-              ) : null}
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-end">
+                </span>
+                <span className="block text-xs text-slate-500 sm:text-sm">
+                  Page {data.page + 1} of {totalPages} · {data.pageSize} per page
+                </span>
+              </p>
+            ) : null}
+            <div className="flex w-full min-w-0 gap-2 sm:w-auto sm:flex-wrap sm:justify-end">
               <button
                 type="button"
                 disabled={!data.hasPrev || listLoading}
                 onClick={() => setListPage((p) => Math.max(0, p - 1))}
-                className="min-h-[44px] min-w-[100px] rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                className="min-h-[44px] min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[100px] sm:flex-none sm:px-4"
               >
                 Previous
               </button>
@@ -798,7 +798,7 @@ export default function MoneyPage() {
                 type="button"
                 disabled={!data.hasNext || listLoading}
                 onClick={() => setListPage((p) => p + 1)}
-                className="min-h-[44px] min-w-[100px] rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                className="min-h-[44px] min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[100px] sm:flex-none sm:px-4"
               >
                 Next
               </button>

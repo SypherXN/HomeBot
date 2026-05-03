@@ -25,16 +25,25 @@ public static class CommandFeatureMap
             "wishlist-complete" => "wishlist",
             "wishlist-delete" => "wishlist",
             "wishlist-clear-completed" => "wishlist",
+            "wishlist-edit" => "wishlist",
 
             // --- MONEY ---
             "money-add" => "money",
             "money-pay" => "money",
             "money-summary" => "money",
             "money-list" => "money",
+            "money-edit" => "money",
+            "money-delete" => "money",
 
             // --- CALENDAR ---
             "calendar-add" => "calendar",
             "calendar-list" => "calendar",
+            "calendar-view" => "calendar",
+            "calendar-complete" => "calendar",
+            "calendar-delete" => "calendar",
+            "calendar-edit" => "calendar",
+            "calendar-today" => "calendar",
+            "calendar-upcoming" => "calendar",
             "calendar-instance-omit" => "calendar",
             "calendar-instance-complete" => "calendar",
             "calendar-instance-edit" => "calendar",

@@ -13,7 +13,7 @@ Everything shares one **SQLite** database (`homebot.db` by default), so Discord,
 | **Buy** | Add, list, complete, delete items; tag filters; channel-bound list UI | Same features with forms, pagination, tag catalog editor |
 | **Wishlist** | Add, list, complete, delete; owners and tags | Same + owner filter |
 | **Money** | Split-style expenses, payments, summaries | Ledger table, balance between two people, record payment / split expense |
-| **Calendar** | Add and list items | Month / week / day / agenda views, tasks panel, time zones, recurring-instance display |
+| **Calendar** | Add, list, view, edit, complete, delete; today/upcoming (expanded recurrence); per-instance omit/complete/edit | Month / week / day / agenda, tasks, time zones, occurrence detail, reset day, undo |
 | **Undo** | `/undo` reverts the last logged action for **you** | Undo on each feature page (one global stack per `actorUserId`, not per page) |
 | **Config** | `/config-set`, `/config-view`, timezone commands, `/setup-set` to bind features to channels | Settings: API URL, token, calendar viewer zone, `actorUserId` |
 
@@ -35,7 +35,7 @@ You can run **Discord only**, **API only**, or **both** in the same process (see
 1. Create a Discord application and bot, invite it to your server with **applications.commands** and message/intent access as needed.
 2. Set **`DISCORD_TOKEN`** and **`DISCORD_GUILD_ID`** (guild slash commands register to this guild).
 3. Start HomeBot with Discord enabled (default). Use **`/setup-set`** to bind `buy`, `wishlist`, `money`, and `calendar` to the right text channels. Optionally **`/setup-set audit #channel`** to log **web sign-ins** (password and Discord OAuth) in that channel.
-4. Use **`/help`** (and topics like **`/help topic:buy`**) for command lists. Use **`/undo`** in a channel where undo is allowed to revert your last change.
+4. Use **`/help`** with a **topic** option (**`buy`**, **`calendar`**, **`web`**, etc.) for command lists. Use **`/undo`** to revert your last change (works from any channel).
 
 **Web sign-up from Discord:** If someone creates an account in the browser using **Discord verify**, they run **`/webui-verify`** in **your** server and paste the code from the setup page. That ties their Discord id to the login without typing snowflakes on the web.
 

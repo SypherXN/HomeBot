@@ -127,18 +127,18 @@ export default function AddItemModal({
 
   return (
     <ModalShell title={mode === "event" ? "New event" : "New task"} onClose={onClose}>
-      <div className="mb-4 inline-flex rounded-lg border border-slate-700 bg-slate-900/60 p-1 text-sm">
+      <div className="mb-4 flex w-full max-w-full flex-wrap rounded-lg border border-slate-700 bg-slate-900/60 p-1 text-sm sm:inline-flex sm:w-auto">
         <button
           type="button"
           onClick={() => setMode("event")}
-          className={`rounded-md px-3 py-1.5 ${mode === "event" ? "bg-slate-800 text-white" : "text-slate-400 hover:text-slate-200"}`}
+          className={`min-h-[2.5rem] flex-1 rounded-md px-3 py-1.5 sm:flex-none ${mode === "event" ? "bg-slate-800 text-white" : "text-slate-400 hover:text-slate-200"}`}
         >
           Event
         </button>
         <button
           type="button"
           onClick={() => setMode("task")}
-          className={`rounded-md px-3 py-1.5 ${mode === "task" ? "bg-slate-800 text-white" : "text-slate-400 hover:text-slate-200"}`}
+          className={`min-h-[2.5rem] flex-1 rounded-md px-3 py-1.5 sm:flex-none ${mode === "task" ? "bg-slate-800 text-white" : "text-slate-400 hover:text-slate-200"}`}
         >
           Task
         </button>
@@ -170,7 +170,7 @@ export default function AddItemModal({
                 ))}
               </select>
             </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="Start date">
                 <input
                   type="date"
@@ -250,13 +250,14 @@ export default function AddItemModal({
             className={`${inputClass} disabled:opacity-50`}
             placeholder="leave blank for unassigned"
           />
-          <div className="mt-2">
+          <div className="mt-2 min-w-0">
             <DiscordMemberSelect
               token={token}
               sharedRoster={guildRoster}
               label="Pick from server"
               onPickUserId={setAssignedTo}
               disabled={mode === "event" && assignToEveryone}
+              className="min-w-0"
             />
           </div>
         </Field>
@@ -305,7 +306,7 @@ function normalizeHm(t: string): string {
 }
 
 const inputClass =
-  "w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+  "box-border min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
 
 function Field({
   label,
@@ -317,7 +318,7 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="block">
+    <label className="block min-w-0 max-w-full">
       <span className="mb-1 block text-xs font-medium text-slate-400">
         {label}
         {required && <span className="ml-0.5 text-red-400">*</span>}
@@ -341,12 +342,12 @@ function ModalShell({
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-heading"
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overflow-x-hidden bg-black/60 p-3 sm:p-4"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="my-10 w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-950 p-6 shadow-2xl"
+        className="my-4 w-[min(100%,42rem)] min-w-0 max-w-[calc(100vw-1.5rem)] rounded-2xl border border-slate-800 bg-slate-950 p-4 shadow-2xl sm:my-10 sm:p-6"
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 id="modal-heading" className="text-lg font-semibold text-white">

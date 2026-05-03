@@ -338,15 +338,15 @@ export default function ItemDetailModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="detail-modal-heading"
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overflow-x-hidden bg-black/60 p-3 sm:p-4"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="my-10 w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-950 p-6 shadow-2xl"
+        className="my-4 w-[min(100%,42rem)] min-w-0 max-w-[calc(100vw-1.5rem)] rounded-2xl border border-slate-800 bg-slate-950 p-4 shadow-2xl sm:my-10 sm:p-6"
       >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 id="detail-modal-heading" className="text-lg font-semibold text-white">
+        <div className="mb-4 flex min-w-0 items-center justify-between gap-2">
+          <h2 id="detail-modal-heading" className="min-w-0 flex-1 truncate text-lg font-semibold text-white">
             Item details
           </h2>
           <button
@@ -389,7 +389,7 @@ export default function ItemDetailModal({
                     ))}
                   </select>
                 </Field>
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
                   <Field label="Start date">
                     <input
                       type="date"
@@ -408,7 +408,7 @@ export default function ItemDetailModal({
                   </Field>
                 </div>
                 {isRecurringInstance ? (
-                  <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
                     <Field label="End date (this day only, optional)">
                       <input
                         type="date"
@@ -446,7 +446,7 @@ export default function ItemDetailModal({
                 <strong>Read-only here (server v1 patch):</strong> all-day, reminder, recurrence, assignee. Delete and
                 re-add the item to change those.
               </p>
-              <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
+              <dl className="mt-2 grid min-w-0 grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
                 <dt>All-day</dt>
                 <dd className="text-slate-200">{detail.allDay ? "yes" : "no"}</dd>
                 <dt>Reminder</dt>
@@ -535,7 +535,7 @@ export default function ItemDetailModal({
 }
 
 const inputClass =
-  "w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+  "box-border min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
 
 function utcStorageToWallParts(raw: string, zone: string): { date: string; time: string } | null {
   const dt = DateTime.fromFormat(raw.trim(), "yyyy-MM-dd HH:mm", { zone: "utc" }).setZone(zone);
@@ -565,7 +565,7 @@ function normalizeHmDetail(t: string): string {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="block">
+    <label className="block min-w-0 max-w-full">
       <span className="mb-1 block text-xs font-medium text-slate-400">{label}</span>
       {children}
     </label>

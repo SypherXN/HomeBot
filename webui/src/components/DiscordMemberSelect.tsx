@@ -96,23 +96,29 @@ export default function DiscordMemberSelect({
   }
 
   return (
-    <div className={`flex flex-col gap-1 ${className}`}>
-      <label htmlFor={id} className="text-xs font-medium text-slate-400">
-        {label}
-      </label>
+    <div className={`flex min-w-0 w-full max-w-full flex-col gap-1 ${className}`}>
+      {label ? (
+        <label htmlFor={id} className="text-xs font-medium text-slate-400">
+          {label}
+        </label>
+      ) : null}
       <select
         id={id}
         disabled={disabled}
         defaultValue=""
-        className="max-w-md rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        className="box-border min-w-0 w-full max-w-full rounded-md border border-slate-600 bg-slate-900 px-2 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         onChange={(e) => onPickUserId(e.target.value)}
       >
         <option value="">— Choose a person —</option>
-        {rosterData.members.map((m) => (
-          <option key={m.userId} value={m.userId}>
-            {m.displayName} (@{m.username}) — {m.userId}
-          </option>
-        ))}
+        {rosterData.members.map((m) => {
+          const primary = (m.displayName || m.username || "").trim() || m.userId;
+          const title = `@${m.username} · ${m.userId}`;
+          return (
+            <option key={m.userId} value={m.userId} title={title}>
+              {primary}
+            </option>
+          );
+        })}
       </select>
       {rosterData.guildId && !useShared && (
         <p className="text-xs text-slate-500">Guild {rosterData.guildId}</p>

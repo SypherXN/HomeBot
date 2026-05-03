@@ -15,7 +15,20 @@ const nav: { to: string; label: string; end?: boolean }[] = [
 
 function navClass({ isActive }: { isActive: boolean }) {
   return [
-    "block rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+    "block shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+    isActive
+      ? "bg-slate-800 text-white"
+      : "text-slate-400 hover:bg-slate-900 hover:text-slate-100",
+  ].join(" ");
+}
+
+/**
+ * Login / setup: side-by-side in the horizontal mobile strip; stacked full-width in the desktop sidebar (same as other links).
+ */
+function authNavClass({ isActive }: { isActive: boolean }) {
+  return [
+    "shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+    "inline-flex items-center justify-center whitespace-nowrap md:block md:w-full",
     isActive
       ? "bg-slate-800 text-white"
       : "text-slate-400 hover:bg-slate-900 hover:text-slate-100",
@@ -90,17 +103,17 @@ export default function AppShell() {
             ) : null}
           </div>
         </div>
-        <nav className="flex flex-wrap gap-1 px-2 pb-3 md:flex-col md:px-2">
+        <nav className="-mx-1 flex flex-nowrap gap-1 overflow-x-auto px-2 pb-3 md:mx-0 md:flex-col md:flex-wrap md:overflow-visible">
           {nav.map(({ to, label, end }) => (
             <NavLink key={to} to={to} end={end ?? false} className={navClass}>
               {label}
             </NavLink>
           ))}
-          <div className="mt-2 border-t border-slate-800 pt-2 md:mt-3">
-            <NavLink to="/login" className={navClass}>
+          <div className="flex shrink-0 flex-row gap-1 md:mt-2 md:w-full md:flex-col md:gap-1">
+            <NavLink to="/login" className={authNavClass}>
               Sign in
             </NavLink>
-            <NavLink to="/setup" className={navClass}>
+            <NavLink to="/setup" className={authNavClass}>
               New account
             </NavLink>
           </div>
@@ -126,7 +139,7 @@ export default function AppShell() {
             </div>
           </div>
         </header>
-        <main className="mx-auto max-w-6xl px-4 py-6">
+        <main className="mx-auto min-w-0 max-w-6xl px-3 py-6 sm:px-4">
           <Outlet />
         </main>
       </div>

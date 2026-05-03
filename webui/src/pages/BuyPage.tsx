@@ -287,7 +287,7 @@ export default function BuyPage() {
   const rangeEnd = data ? data.page * data.pageSize + data.items.length : 0;
 
   return (
-    <div className="mx-auto max-w-3xl px-3 pb-10 sm:px-4">
+    <div className="mx-auto min-w-0 max-w-3xl px-3 pb-10 sm:px-4">
       <header className="mb-6 border-b border-slate-800 pb-4">
         <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Buy list</h1>
         <p className="mt-1 text-sm text-slate-400">
@@ -378,7 +378,7 @@ export default function BuyPage() {
                   }
                 }}
                 placeholder="e.g. groceries"
-                className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="box-border min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <button
@@ -451,13 +451,13 @@ export default function BuyPage() {
       {/* Add item */}
       <section
         aria-labelledby="add-heading"
-        className="mb-8 rounded-xl border border-slate-800 bg-slate-900/40 p-4 shadow-sm sm:p-5"
+        className="mb-8 min-w-0 max-w-full overflow-x-hidden rounded-xl border border-slate-800 bg-slate-900/40 p-4 shadow-sm sm:p-5"
       >
         <h2 id="add-heading" className="text-lg font-semibold text-white">
           Add an item
         </h2>
-        <form onSubmit={(e) => void handleAdd(e)} className="mt-4 space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+        <form onSubmit={(e) => void handleAdd(e)} className="mt-4 min-w-0 space-y-4">
+          <div className="grid min-w-0 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label htmlFor="buy-add-name" className="mb-1 block text-xs font-medium text-slate-400">
                 Name <span className="text-red-400">*</span>
@@ -468,7 +468,7 @@ export default function BuyPage() {
                 onChange={(e) => setAddName(e.target.value)}
                 placeholder="Milk, bread, …"
                 autoComplete="off"
-                className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="box-border min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <div>
@@ -479,7 +479,7 @@ export default function BuyPage() {
                 id="buy-add-qty"
                 value={addQty}
                 onChange={(e) => setAddQty(e.target.value)}
-                className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="box-border min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <div>
@@ -490,7 +490,7 @@ export default function BuyPage() {
                 id="buy-add-store"
                 value={addStore}
                 onChange={(e) => setAddStore(e.target.value)}
-                className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="box-border min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <div className="sm:col-span-2">
@@ -525,7 +525,7 @@ export default function BuyPage() {
                     value={addTags}
                     onChange={(e) => setAddTags(e.target.value)}
                     placeholder="comma-separated (no catalog yet)"
-                    className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="box-border min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </>
               )}
@@ -542,7 +542,7 @@ export default function BuyPage() {
                 value={addNotes}
                 onChange={(e) => setAddNotes(e.target.value)}
                 rows={2}
-                className="w-full resize-y rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="box-border min-w-0 w-full max-w-full resize-y rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <div className="sm:col-span-2">
@@ -554,14 +554,15 @@ export default function BuyPage() {
                 value={addAssigned}
                 onChange={(e) => setAddAssigned(e.target.value)}
                 inputMode="numeric"
-                className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="box-border min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
-              <div className="mt-2">
+              <div className="mt-2 min-w-0">
                 <DiscordMemberSelect
                   token={tok}
                   sharedRoster={guildRoster}
                   label="Pick from server"
                   onPickUserId={setAddAssigned}
+                  className="min-w-0"
                 />
               </div>
             </div>
@@ -712,27 +713,27 @@ export default function BuyPage() {
         {/* Pagination — Web UI only */}
         {data && data.totalCount > 0 && (
           <nav
-            className="mt-6 flex flex-col items-stretch gap-4 border-t border-slate-800 pt-6 sm:flex-row sm:items-center sm:justify-between"
+            className="mt-6 flex min-w-0 flex-col items-stretch gap-4 border-t border-slate-800 pt-6 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
             aria-label="Buy list pages"
           >
-            <p className="text-center text-sm text-slate-400 sm:text-left">
-              {rangeStart > 0 ? (
-                <>
+            {rangeStart > 0 ? (
+              <p className="min-w-0 space-y-1 text-center text-sm leading-snug text-slate-400 sm:max-w-[55%] sm:text-left">
+                <span className="block break-words sm:inline">
                   Showing <strong className="text-slate-200">{rangeStart}</strong>–
                   <strong className="text-slate-200">{rangeEnd}</strong> of{" "}
                   <strong className="text-slate-200">{data.totalCount}</strong>
-                  <span className="ml-2 text-slate-500">
-                    (page {data.page + 1} of {totalPages}, {data.pageSize} per page)
-                  </span>
-                </>
-              ) : null}
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-end">
+                </span>
+                <span className="block text-xs text-slate-500 sm:text-sm">
+                  Page {data.page + 1} of {totalPages} · {data.pageSize} per page
+                </span>
+              </p>
+            ) : null}
+            <div className="flex w-full min-w-0 gap-2 sm:w-auto sm:flex-wrap sm:justify-end">
               <button
                 type="button"
                 disabled={!data.hasPrev || listLoading}
                 onClick={() => setListPage((p) => Math.max(0, p - 1))}
-                className="min-h-[44px] min-w-[100px] rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                className="min-h-[44px] min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[100px] sm:flex-none sm:px-4"
               >
                 Previous
               </button>
@@ -740,7 +741,7 @@ export default function BuyPage() {
                 type="button"
                 disabled={!data.hasNext || listLoading}
                 onClick={() => setListPage((p) => p + 1)}
-                className="min-h-[44px] min-w-[100px] rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                className="min-h-[44px] min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[100px] sm:flex-none sm:px-4"
               >
                 Next
               </button>

@@ -26,13 +26,13 @@ export default function TasksPanel({
   return (
     <aside
       aria-labelledby="tasks-panel-heading"
-      className="rounded-xl border border-slate-800 bg-slate-900/40 p-4"
+      className="min-w-0 max-w-full rounded-xl border border-slate-800 bg-slate-900/40 p-4"
     >
-      <div className="mb-3 flex items-center justify-between gap-2">
+      <div className="mb-3 flex min-w-0 items-center justify-between gap-2">
         <h2 id="tasks-panel-heading" className="text-base font-semibold text-white">
           Tasks
         </h2>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 shrink items-center gap-2">
           <button
             type="button"
             disabled={!canAuth || loading}
@@ -88,16 +88,16 @@ export default function TasksPanel({
       )}
 
       {canAuth && data && data.totalCount > 0 && (
-        <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-800 pt-3 text-xs text-slate-400">
-          <span>
+        <div className="mt-3 flex min-w-0 flex-col gap-2 border-t border-slate-800 pt-3 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+          <span className="min-w-0 break-words">
             Page {data.page + 1} · {data.totalCount} total
           </span>
-          <div className="flex items-center gap-1">
+          <div className="flex w-full min-w-0 gap-1 sm:w-auto sm:justify-end">
             <button
               type="button"
               disabled={!data.hasPrev || loading}
               onClick={onPrevPage}
-              className="rounded border border-slate-700 bg-slate-900 px-2 py-1 hover:bg-slate-800 disabled:opacity-40"
+              className="min-h-9 min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 hover:bg-slate-800 disabled:opacity-40 sm:flex-none"
             >
               Prev
             </button>
@@ -105,7 +105,7 @@ export default function TasksPanel({
               type="button"
               disabled={!data.hasNext || loading}
               onClick={onNextPage}
-              className="rounded border border-slate-700 bg-slate-900 px-2 py-1 hover:bg-slate-800 disabled:opacity-40"
+              className="min-h-9 min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 hover:bg-slate-800 disabled:opacity-40 sm:flex-none"
             >
               Next
             </button>

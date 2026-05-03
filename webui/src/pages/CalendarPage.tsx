@@ -218,11 +218,11 @@ export default function CalendarPage() {
   );
 
   return (
-    <div className="mx-auto max-w-6xl px-3 pb-12 sm:px-4">
+    <div className="mx-auto min-w-0 max-w-6xl px-3 pb-12 sm:px-4">
       <header className="mb-4 border-b border-slate-800 pb-4">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
           <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Calendar</h1>
-          <p className="text-sm text-slate-500">
+          <p className="min-w-0 break-words text-sm text-slate-500">
             {dateLabel}
             <span className="ml-2 text-xs text-slate-600">· {effectiveViewerZone}</span>
             {rangeLoading && <span className="ml-2 text-xs text-slate-600">refreshing…</span>}
@@ -460,38 +460,40 @@ function Toolbar({
   onViewerTimeZone: (z: string) => void;
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-slate-800 bg-slate-900/40 p-3 lg:flex-row lg:items-center lg:justify-between">
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={onToday}
-          className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
-        >
-          Today
-        </button>
-        <button
-          type="button"
-          onClick={onPrev}
-          aria-label="Previous"
-          className="rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
-        >
-          ‹
-        </button>
-        <button
-          type="button"
-          onClick={onNext}
-          aria-label="Next"
-          className="rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
-        >
-          ›
-        </button>
-        <div className="ml-1 inline-flex rounded-lg border border-slate-700 bg-slate-900/60 p-0.5 text-sm">
+    <div className="flex min-w-0 w-full flex-col gap-3 rounded-xl border border-slate-800 bg-slate-900/40 p-3">
+      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onToday}
+            className="shrink-0 rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
+          >
+            Today
+          </button>
+          <button
+            type="button"
+            onClick={onPrev}
+            aria-label="Previous"
+            className="shrink-0 rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            onClick={onNext}
+            aria-label="Next"
+            className="shrink-0 rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
+          >
+            ›
+          </button>
+        </div>
+        <div className="grid min-w-0 w-full grid-cols-4 gap-0.5 rounded-lg border border-slate-700 bg-slate-900/60 p-0.5 text-xs sm:ml-1 sm:w-auto sm:max-w-sm sm:shrink-0 sm:text-sm">
           {ALL_VIEWS.map((v) => (
             <button
               key={v}
               type="button"
               onClick={() => onViewChange(v)}
-              className={`rounded-md px-2.5 py-1 capitalize ${
+              className={`min-h-[2.25rem] rounded-md px-1 py-1 capitalize leading-tight sm:px-2.5 sm:py-1 ${
                 view === v ? "bg-slate-800 text-white" : "text-slate-400 hover:text-slate-200"
               }`}
             >
@@ -501,8 +503,8 @@ function Toolbar({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="inline-flex rounded-lg border border-slate-700 bg-slate-900/60 p-0.5 text-xs">
+      <div className="flex min-w-0 w-full flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center lg:gap-3">
+        <div className="inline-flex max-w-full shrink-0 flex-wrap rounded-lg border border-slate-700 bg-slate-900/60 p-0.5 text-xs">
           <button
             type="button"
             onClick={() => onFilterMode("all")}
@@ -528,39 +530,48 @@ function Toolbar({
           </button>
         </div>
         {filterMode === "user" && (
-          <div className="flex items-center gap-2">
-            <input
-              value={filterUser}
-              onChange={(e) => setFilterUser(e.target.value)}
-              inputMode="numeric"
-              placeholder="User id"
-              className="h-9 w-32 rounded-md border border-slate-700 bg-slate-950 px-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
-            />
+          <div className="grid min-w-0 w-full max-w-full grid-cols-1 gap-2 sm:grid-cols-2 sm:items-end">
+            <div className="min-w-0">
+              <label htmlFor="cal-filter-user" className="mb-1 block text-xs font-medium text-slate-400">
+                User id
+              </label>
+              <input
+                id="cal-filter-user"
+                value={filterUser}
+                onChange={(e) => setFilterUser(e.target.value)}
+                inputMode="numeric"
+                placeholder="Discord user id"
+                className="box-border h-9 w-full min-w-0 rounded-md border border-slate-700 bg-slate-950 px-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
+              />
+            </div>
             <DiscordMemberSelect
               token={token}
               sharedRoster={guildRoster}
-              label=""
+              label="Pick person"
               onPickUserId={setFilterUser}
+              className="min-w-0"
             />
           </div>
         )}
-        <button
-          type="button"
-          disabled={!canAuth}
-          onClick={onAddEvent}
-          className="rounded-md border border-blue-600 bg-blue-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-50"
-        >
-          + Event
-        </button>
-        <label className="flex items-center gap-2 text-xs text-slate-400">
-          <span className="shrink-0">View TZ</span>
-          <TimeZoneSelect
-            value={viewerTimeZone}
-            onChange={onViewerTimeZone}
+        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <button
+            type="button"
             disabled={!canAuth}
-            className="h-9 max-w-[min(100vw-8rem,260px)] truncate rounded-md border border-slate-700 bg-slate-950 px-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
-          />
-        </label>
+            onClick={onAddEvent}
+            className="shrink-0 rounded-md border border-blue-600 bg-blue-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-50"
+          >
+            + Event
+          </button>
+          <label className="flex min-w-0 max-w-full flex-col gap-1 text-xs text-slate-400 sm:flex-row sm:items-center sm:gap-2">
+            <span className="shrink-0">View TZ</span>
+            <TimeZoneSelect
+              value={viewerTimeZone}
+              onChange={onViewerTimeZone}
+              disabled={!canAuth}
+              className="box-border h-9 min-h-9 w-full min-w-0 max-w-full rounded-md border border-slate-700 bg-slate-950 px-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none sm:max-w-[280px]"
+            />
+          </label>
+        </div>
       </div>
     </div>
   );

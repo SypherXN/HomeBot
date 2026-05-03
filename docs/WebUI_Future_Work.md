@@ -2,7 +2,24 @@
 
 **Purpose:** Optional enhancements beyond what [Refined_WebUI_Adaptation_Plan.md](./Refined_WebUI_Adaptation_Plan.md) marks as shipped. Each backlog item states **what implementing it does** for users and the codebase.
 
+**Out of scope for this doc:** **Frontend / E2E / SPA automation** (Playwright, Vitest, MSW, component test harnesses, etc.). The repo already has **.NET** integration coverage where noted in the adaptation plan; how much browser automation to add is a separate process choice, not listed here.
+
 **Related:** Implementation snapshot, routes, and patterns live in the adaptation plan. Step-by-step install, env vars, LAN, GitHub Pages, and Ubuntu boot are in **[SETUP.md](../SETUP.md)** at the repo root.
+
+---
+
+## What the latest calendar extension does (household + bot)
+
+Together these changes keep **Discord, HTTP API, reminders, and Web UI** aligned on **recurring** calendar behavior:
+
+| Layer | Effect |
+|--------|--------|
+| **API `GET /api/calendar/today` & `/upcoming`** | Same expansion rules as **`GET /api/calendar/range`**: recurring series show one row per occurrence in the window, respect **omit** / **complete-this-day** / **time overrides**, and include **`instanceStartUtc`** on each row so clients can key and re-fetch that slot. **Tasks** are still merged in (all active tasks for today; all tasks plus in-window events for upcoming). |
+| **API `GET /api/calendar/items/{id}`** | Optional query **`instanceStartUtc`** returns **merged** detail for that occurrence (title/notes/link/start/end when overrides or series duration apply). Omitted instances return **not found** (same as “hidden” in range). |
+| **`DELETE /api/calendar/items/{id}/instance`** | Removes the **`CalendarRecurrenceExceptions`** row for that canonical slot (clears hide, complete-this-day, or modify overrides). **Undo** restores the deleted row (`calendar_rec_ex` **delete** path). |
+| **Discord** | **`BuildToday` / `BuildUpcoming`** use the same service methods as the API, so embed **Today** and **Upcoming** lists match recurrence and exceptions, not just raw DB rows. |
+| **Reminders** | Unchanged contract: still consult exception state so **omitted** / **completed-this-day** / **completed modified** instances do not fire incorrectly. |
+| **Web UI** | Calendar grid opens **occurrence-aware** detail (merged fields), optional **end time** for “this day only,” **Reset this day** for the DELETE above, and **Undo** in-page still applies to the last logged action (including exception delete). |
 
 ---
 
@@ -11,19 +28,28 @@
 These are **already in the repo**; they stay out of the backlog below.
 
 | Topic | What was added |
-|--------|------------------|
+|--------|----------------|
 | **API URL from the phone / LAN** | **Auto-detection:** on Vite **dev (5173)** or **preview (4173)**, the UI uses **same hostname + port 5050** unless you save an override. **Settings → API server** still allows a manual URL and **Reset to build default**. See `webui/src/apiBaseUrl.ts`. |
 | **Setup documentation** | **[SETUP.md](../SETUP.md)** — Windows and Ubuntu, env var “where to get each value,” **systemd start on reboot**, **LAN / phone** (CORS, firewall, `--host`), GitHub Pages + Actions workflow example. |
 | **Repo hygiene** | **`.gitignore`** expanded for build outputs, logs, SQLite sidecars, local `appsettings.*.local.json`, etc. |
-| **Calendar — per-instance recurrence** | Extended **`CalendarRecurrenceExceptions`** (`ExceptionKind`, overrides, `InstanceCompleted`). API: **`POST …/omit-instance`**, **`POST …/complete-instance`**, **`PATCH …/instance`** (canonical `instanceStartUtc` + optional fields). Range rows include **`displayInstanceStartUtc`**, **`isInstanceCompleted`**, **`hasInstanceOverride`**. Reminders skip omitted / completed-this-day / completed modified instances. Discord: **`/calendar-instance-omit`**, **`/calendar-instance-complete`**, **`/calendar-instance-edit`**. WebUI detail modal from grid: hide, complete this day, save for this day, complete/delete series. **Undo** restores exception rows (`calendar_rec_ex` create/update). |
+| **Calendar — recurrence core** | **`CalendarRecurrenceExceptions`** (`ExceptionKind`, overrides, `InstanceCompleted`). API: **`POST …/omit-instance`**, **`POST …/complete-instance`**, **`PATCH …/instance`** (canonical **`instanceStartUtc`** + optional fields). Range rows: **`displayInstanceStartUtc`**, **`isInstanceCompleted`**, **`hasInstanceOverride`**, etc. Reminders skip omitted / completed-this-day / modified-completed instances. Discord: **`/calendar-instance-omit`**, **`/calendar-instance-complete`**, **`/calendar-instance-edit`**. WebUI: hide / complete this day / save for this day / complete or delete series. **Undo** for exception **create** / **update**. |
+| **Calendar — list & detail parity, reset, undo delete** | **`GET /api/calendar/today`** & **`/upcoming`** driven by **`GetRange`** + tasks; list DTOs expose **`instanceStartUtc`**. **`GET …/items/{id}?instanceStartUtc=…`** merged occurrence detail (incl. end from override or series duration). **`DELETE …/items/{id}/instance?instanceStartUtc=…`** clears that occurrence’s exception row; **Undo** restores it. WebUI: occurrence-keyed detail fetch, optional per-instance **end**, **Reset this day** button. |
 
 ---
 
-## Calendar — per-instance recurrence (future polish)
+## Other future directions (at a glance)
 
-**Today:** Per-instance **hide**, **complete this day**, **edit this day** (title/notes/link/time override), **reminders** skip omitted/completed/suppressed instances, **Discord** `/calendar-instance-*`, and **Undo** for exception rows are implemented (see Recently addressed table).
+Longer sections below; this table is only **what the bot / household gains** if you implement each area.
 
-**Possible follow-ups:** richer Today/Upcoming views that expand recurrence like the Web range; per-instance **end** override UX; optional “clear override” API.
+| Area | What it would do for the bot / users |
+|------|--------------------------------------|
+| **Phase 5 identity** (refresh tokens, multi-tenant, OAuth-provisioned accounts) | Safer long-lived browser sessions, or multiple households / SSO — **large** changes to auth, storage, and ops assumptions. |
+| **Money — non–split expenses in WebUI** | Same simple expense flows as Discord/API in the SPA: one-off line items **without** building a split; fewer “use Discord only” gaps. |
+| **WebUI — `429` UX** | When rate limits fire, users see **retry guidance** instead of opaque fetch errors; **no** server change if messages are client-only. |
+| **LAN / dev polish** | Odd Vite ports or **offline** banners reduce “why is nothing loading?” support load for self-hosters. |
+| **Snowflake audit** | Guarantees large Discord IDs never round-trip as JSON numbers — **avoids silent corruption** on assignees and money participants. |
+| **Domain vs Discord presentation** | Thinner shared core between commands and HTTP — **maintainer** velocity and fewer double implementations; small direct user impact unless you intentionally change copy. |
+| **Ops / product polish** | Dedicated health page, extra deployment runbooks, or a **checked-in GitHub Actions** workflow — mainly **operator** convenience and repeatable deploys. |
 
 ---
 
@@ -80,11 +106,15 @@ These are **already in the repo**; they stay out of the backlog below.
 
 ---
 
-## Frontend automated tests
+## Calendar — optional follow-ups
 
-**Today:** Regression coverage is mainly **.NET** integration tests (`ApiWebAuthTests`, `ApiAuthRateLimitTests`, mutation tests, etc.).
+**Today:** Recurrence expansion, per-instance APIs, list/detail parity, Web reset, and undo for exception delete are shipped (see tables above).
 
-**What implementing it does:** **Playwright**, **Vitest**, and/or **MSW** against a test API catches **routing, auth, calendar time zones, API base URL logic, and forms** regressions before manual QA; complements but does not replace API tests.
+| Follow-up | What implementing it does |
+|-----------|---------------------------|
+| **Discord “reset this occurrence”** | Slash or button flow mirroring **`DELETE …/instance`** so phone-Discord-only users can clear overrides without the Web UI. |
+| **OpenAPI / docs strings** | Generated or hand-maintained docs list **`instanceStartUtc`** on GET detail and **DELETE instance** — faster integration for scripts and agents. |
+| **Dashboard copy / limits** | Today/upcoming tiles already call the same APIs; optional tweaks (page size, copy) if snapshots feel too busy after expansion. |
 
 ---
 
@@ -100,7 +130,8 @@ These are **already in the repo**; they stay out of the backlog below.
 
 ## Suggested order (when you are not sure where to start)
 
-1. **Quick wins:** **`429` UX** in the WebUI; optional **offline / fetch** messaging; **Playwright smoke** for login + Settings API URL.  
+1. **Quick wins:** **`429` UX** in the WebUI; optional **offline / fetch** messaging in `AppShell` or shared API helpers.  
 2. **Product breadth:** **Money non-split** UI if your household uses that flow.  
 3. **Correctness:** **Snowflake audit** if you use **real** Discord IDs everywhere.  
-4. **Large bets:** **Per-instance calendar** recurrence; **Phase 5** identity expansion; deeper **SPA E2E** suite.
+4. **Calendar polish:** **Discord reset-this-day** parity or **OpenAPI** touch-ups if scripts or third-party clients matter.  
+5. **Large bets:** **Phase 5** identity expansion (refresh tokens, multi-tenant, or OAuth-provisioned accounts—pick one direction deliberately).
