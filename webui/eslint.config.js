@@ -18,5 +18,16 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    // react-refresh treats only PascalCase exports as components. Co-exported hooks (useAuth, …)
+    // next to Provider components would otherwise fail CI with react-refresh/only-export-components.
+    rules: {
+      'react-refresh/only-export-components': [
+        'error',
+        {
+          allowConstantExport: true,
+          allowExportNames: ['useAuth', 'useCalendarZone'],
+        },
+      ],
+    },
   },
 ])
