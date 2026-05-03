@@ -12,7 +12,7 @@ If you are setting up for the **first time** (Discord application, bot token, `.
 
 **Short path (after tools are installed):** copy **[`.env.example`](.env.example)** → **`.env`**, **[`webui/.env.example`](webui/.env.example)** → **`webui/.env`**, set **`DISCORD_TOKEN`**, **`DISCORD_GUILD_ID`**, **`HOMEBOT_API_ENABLED=true`**, **`HOMEBOT_API_TOKEN`**, **`HOMEBOT_WEB_JWT_SECRET`** (≥ 32 characters). From the repo root run **`dotnet run`**; in a second terminal run **`cd webui && npm install && npm run dev`**. The .NET process **does not read `.env` by itself** — use PowerShell, your editor’s **envFile**, **[`scripts/run-homebot.ps1`](scripts/run-homebot.ps1)** (Windows), or **`systemd`** **`EnvironmentFile=`** (Linux); [SETUP.md](SETUP.md) documents each.
 
-**GitHub Pages:** this repository does **not** include a checked-in Actions deploy workflow. [SETUP.md — Section 13](SETUP.md#13-optional--github-pages-static-web-ui) describes how to add your own and which **`VITE_*`** / CORS / OAuth values must match.
+**GitHub Pages:** use the checked-in **[`pages-webui.yml`](.github/workflows/pages-webui.yml)** workflow (enable **Pages → GitHub Actions**, set **`HOMEBOT_API_PUBLIC_URL`** and optionally **`HOMEBOT_WEBUI_BASE_PATH`**). Full steps: [SETUP.md — Section 13](SETUP.md#13-optional--github-pages-static-web-ui) (**`VITE_*`**, CORS, OAuth).
 
 ---
 
@@ -190,7 +190,7 @@ Pushes and pull requests to **`main`** run **[`.github/workflows/ci.yml`](.githu
 
 ### Dependency updates
 
-**[Dependabot](https://docs.github.com/en/code-security/dependabot/dependabot-version-updates)** is configured in **[`.github/dependabot.yml`](.github/dependabot.yml)** (monthly **NuGet** and **npm** / `webui`). Review and merge its pull requests after **`dotnet test`** / **`npm run build`** as you would any other change.
+**[Dependabot](https://docs.github.com/en/code-security/dependabot/dependabot-version-updates)** is configured in **[`.github/dependabot.yml`](.github/dependabot.yml)** (monthly **NuGet** and **npm** / `webui`, **grouped** so you typically get one combined PR per ecosystem per month). Review and merge after **`dotnet test`** / **`npm run build`** as you would any other change.
 
 ### Web UI
 
@@ -213,7 +213,7 @@ Output is in **`webui/dist`**. Set **`VITE_API_BASE_URL`** at build time if the 
 
 ## Data and safety
 
-- **SQLite** holds items, settings, channel bindings, action log (undo), **`WebUsers`**, Discord verify sessions, and **opaque refresh tokens** (`WebRefreshTokens`) for browser sessions. **Backups:** copy the DB when the process is stopped, and include **`-wal`** / **`-shm`** files if present — see [SETUP.md — Section 20](SETUP.md#20-backing-up-sqlite-homebotdb).
+- **SQLite** holds items, settings, channel bindings, action log (undo), **`WebUsers`**, Discord verify sessions, and **opaque refresh tokens** (`WebRefreshTokens`) for browser sessions. **Backups:** copy the DB when the process is stopped, and include **`-wal`** / **`-shm`** files if present — see [SETUP.md — Section 20](SETUP.md#20-backing-up-sqlite-homebotdb) and [automated options](SETUP.md#201-automated-backups-optional).
 - **Snowflakes:** Large Discord ids are handled as **strings** in JSON where it matters (money, calendar assignee, list API responses, buy/wishlist writes). Prefer roster picks or member labels when the UI offers them.
 - **Secrets:** Do not commit tokens or **`HOMEBOT_WEB_JWT_SECRET`**. The Web UI stores access JWT, optional API bearer, and refresh token in **browser localStorage**; **Sign out** clears client storage and **`POST /api/auth/logout`** revokes the refresh row on the server.
 
@@ -221,6 +221,6 @@ Output is in **`webui/dist`**. Set **`VITE_API_BASE_URL`** at build time if the 
 
 ## License
 
-This project is licensed under the **MIT License** — see **[LICENSE](LICENSE)** for the full text.
+This project is licensed under the **MIT License** (copyright **Matthew Tran**) — see **[LICENSE](LICENSE)** for the full text.
 
 HomeBot is a **single-household** project; you may still customize deployment and ops for your own servers (see [SETUP.md](SETUP.md)).

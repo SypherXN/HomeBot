@@ -1,0 +1,13 @@
+# Copy to /etc/systemd/system/homebot-sqlite-backup.service and adjust paths.
+# Then: sudo systemctl daemon-reload && sudo systemctl enable --now homebot-sqlite-backup.timer
+#
+# Requires scripts/backup-homebot-sqlite.sh installed and executable (e.g. chmod +x),
+# or set ExecStart to the absolute path inside your clone.
+
+[Unit]
+Description=HomeBot SQLite backup (stop, copy, start)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/homebot/app/scripts/backup-homebot-sqlite.sh /opt/homebot/app /opt/homebot/backups homebot.service

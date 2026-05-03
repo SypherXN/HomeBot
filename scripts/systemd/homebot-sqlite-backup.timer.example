@@ -1,0 +1,12 @@
+# Copy to /etc/systemd/system/homebot-sqlite-backup.timer
+# Weekly Sunday 03:15 (machine local time). Change OnCalendar to suit your household.
+
+[Unit]
+Description=Weekly HomeBot SQLite backup
+
+[Timer]
+OnCalendar=Sun *-*-* 03:15
+Persistent=true
+
+[Install]
+WantedBy=timers.target

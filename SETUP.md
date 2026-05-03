@@ -472,7 +472,7 @@ Uses the **same** `WebUsers` row as password login when **`DiscordUserId`** matc
 3. Set **`HOMEBOT_WEB_OAUTH_FRONTEND_URL`** to the **origin** where the SPA runs (e.g. **`http://localhost:5173`** or your GitHub Pages SPA root — see [Section 13](#13-optional--github-pages-static-web-ui)).
 4. **`HOMEBOT_WEB_JWT_SECRET`** must still be set.
 
-In **Production**, partial OAuth env fails startup unless **`HOMEBOT_ALLOW_PARTIAL_OAUTH_ENV=true`**. Details: **[README.md](./README.md)**.
+In **Production**, partial OAuth env fails startup unless **`HOMEBOT_ALLOW_PARTIAL_OAUTH_ENV=true`**. Details: **[README.md](README.md)**.
 
 ---
 
@@ -512,17 +512,15 @@ On the API host:
 
 1. Push the repository to GitHub.
 2. **Settings** → **Pages** → **Build and deployment** → **Source** → **GitHub Actions** (recommended).
+3. **Settings** → **Secrets and variables** → **Actions** → **Variables**:
+   - **`HOMEBOT_API_PUBLIC_URL`** (recommended) — public API base baked into the static build, e.g. **`https://api.example.com`** (no trailing slash). If unset, the workflow still builds but logs a **warning** (easy to ship a broken SPA by mistake).
+   - **`HOMEBOT_WEBUI_BASE_PATH`** (optional) — override **`VITE_BASE_PATH`** for the Actions build. If unset, the workflow defaults to **`/REPO_NAME/`** from **`GITHUB_REPOSITORY`** (correct for **project** Pages at **`https://OWNER.github.io/REPO/`**). Use **`/`** for a **user** site at the domain root.
 
-**This repository does not ship a checked-in Pages workflow.** Add your own under **`.github/workflows/`** (any filename you like). A typical pipeline:
+The repo ships **[`.github/workflows/pages-webui.yml`](.github/workflows/pages-webui.yml)** (runs on **`webui/**`** pushes to **`main`** and **`workflow_dispatch`**). The first **`deploy-pages`** run may ask you to approve the **`github-pages`** environment.
 
-- **Trigger:** `push` to **`main`** with **`paths`** including **`webui/**`** (optional **`workflow_dispatch`**).
-- **Permissions:** `contents: read`, `pages: write`, `id-token: write`.
-- **Build:** checkout → **`actions/setup-node`** (e.g. Node **22**) → **`npm ci`** in **`webui/`** → set **`VITE_BASE_PATH`** and **`VITE_API_BASE_URL`** (often from repository variable **`HOMEBOT_API_PUBLIC_URL`**) → **`npm run build`**.
-- **Deploy:** **`actions/configure-pages`** → **`actions/upload-pages-artifact`** with **`path: webui/dist`** → **`actions/deploy-pages`**.
+**Optional:** keep a **local-only** workflow filename **`deploy-webui.yml`** — it stays **gitignored** in this repo so it never overwrites the shared **`pages-webui.yml`** on push.
 
-Create variable **`HOMEBOT_API_PUBLIC_URL`** under **Settings → Secrets and variables → Actions → Variables**.
-
-The first **`deploy-pages`** run may ask you to approve the **`github-pages`** environment.
+To customize the pipeline further, copy **`pages-webui.yml`** under a new name in **`.github/workflows/`** and edit triggers or env.
 
 ---
 
@@ -738,7 +736,17 @@ sudo -u homebot test -f /opt/homebot/app/homebot.db-shm && sudo -u homebot cp -a
 sudo systemctl start homebot.service
 ```
 
-Create **`/opt/homebot/backups`** once (`sudo mkdir -p /opt/homebot/backups && sudo chown homebot:homebot /opt/homebot/backups`). For **automation**, use a **weekly `systemd` timer** or **cron** that runs the same **stop → copy → start** sequence (or only **copy** if you accept brief downtime inside a maintenance window).
+Create **`/opt/homebot/backups`** once (`sudo mkdir -p /opt/homebot/backups && sudo chown homebot:homebot /opt/homebot/backups`).
+
+### 20.1 Automated backups (optional)
+
+The repo includes:
+
+- **[`scripts/backup-homebot-sqlite.sh`](scripts/backup-homebot-sqlite.sh)** — **`sudo`** script: **`systemctl stop`** → copy **`homebot.db`** (+ **`-wal`** / **`-shm`** if present) with a timestamp → **`systemctl start`**. Defaults: app **`/opt/homebot/app`**, backups **`/opt/homebot/backups`**, service **`homebot.service`**. Install on the server, then **`chmod +x`**. Expects a **`homebot`** unix user (see [Section 8](#8-ubuntu-server--install-systemd-auto-start-on-reboot)).
+- **[`scripts/systemd/homebot-sqlite-backup.service.example`](scripts/systemd/homebot-sqlite-backup.service.example)** and **[`scripts/systemd/homebot-sqlite-backup.timer.example`](scripts/systemd/homebot-sqlite-backup.timer.example)** — copy to **`/etc/systemd/system/`** (remove **`.example`**), adjust **`ExecStart`** paths, then **`sudo systemctl daemon-reload`**, **`sudo systemctl enable --now homebot-sqlite-backup.timer`**. The sample timer runs **weekly Sunday 03:15** (edit **`OnCalendar`** to taste).
+- **[`scripts/backup-homebot-sqlite.ps1`](scripts/backup-homebot-sqlite.ps1)** — copies **`homebot.db`** (+ sidecars) into a **`backups`** folder under the repo root by default. **Stop HomeBot first** (or pass **`-Force`** if you accept risk while **`dotnet run`** is active). Schedule with **Task Scheduler** if you want a recurring job.
+
+The **`backups/`** directory is **gitignored** so snapshots are not committed by accident.
 
 ### Online backup without stopping (advanced)
 

@@ -87,6 +87,9 @@ _NCrunch_*/
 # --- Local scratch ---
 .tmp/
 
+# --- Local SQLite backups (scripts may write here; never commit) ---
+backups/
+
 # --- Optional ops / planning docs (not required to build or run the bot) ---
 docs/OPS.md
 docs/HomeBot_Base_Design.md

@@ -1,0 +1,78 @@
+# Deploy static Web UI to GitHub Pages (project site: https://OWNER.github.io/REPO/).
+# Prerequisites:
+#   - Repo Settings → Pages → Source: GitHub Actions
+#   - Variable HOMEBOT_API_PUBLIC_URL (e.g. https://api.example.com) — Settings → Secrets and variables → Actions → Variables
+# Optional variable HOMEBOT_WEBUI_BASE_PATH overrides Vite base (default: /REPO_NAME/ — trailing slash required by Vite for project sites)
+
+name: Deploy Web UI to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "webui/**"
+      - ".github/workflows/pages-webui.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check public API URL variable
+        env:
+          API_URL: ${{ vars.HOMEBOT_API_PUBLIC_URL }}
+        run: |
+          if [ -z "$API_URL" ]; then
+            echo "::warning::HOMEBOT_API_PUBLIC_URL is not set. The build may bake in the wrong API URL. Set Actions → Variables → HOMEBOT_API_PUBLIC_URL to your public API origin (no trailing slash)."
+          fi
+
+      - name: Compute VITE_BASE_PATH
+        id: vitebase
+        env:
+          CUSTOM: ${{ vars.HOMEBOT_WEBUI_BASE_PATH }}
+        run: |
+          if [ -n "$CUSTOM" ]; then
+            echo "base_path=$CUSTOM" >> "$GITHUB_OUTPUT"
+          else
+            echo "base_path=/${GITHUB_REPOSITORY##*/}/" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: webui/package-lock.json
+
+      - name: Install and build
+        working-directory: webui
+        env:
+          VITE_BASE_PATH: ${{ steps.vitebase.outputs.base_path }}
+          VITE_API_BASE_URL: ${{ vars.HOMEBOT_API_PUBLIC_URL }}
+        run: npm ci && npm run build
+
+      - uses: actions/configure-pages@v4
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: webui/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
