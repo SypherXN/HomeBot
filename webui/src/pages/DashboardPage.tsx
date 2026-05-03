@@ -35,9 +35,13 @@ function balanceLine(s: MoneySummary): string {
   return `${a} and ${b} are even (net).`;
 }
 
-function titlesFromCalendar(items: PagedCalendarList | null, max = 4): string[] {
-  if (!items) return [];
-  return items.items.slice(0, max).map((i) => i.title.trim() || "(untitled)");
+function formatDashboardCalendarLine(item: PagedCalendarList["items"][number], mode: "today" | "upcoming"): string {
+  const base = item.title.trim() || "(untitled)";
+  const icon = item.type === "task" ? "📝" : "📅";
+  if (mode === "upcoming" && item.dateText?.trim()) {
+    return `${icon} ${base} · ${item.dateText}`;
+  }
+  return `${icon} ${base}`;
 }
 
 type DashboardBundle = {
@@ -224,37 +228,54 @@ export default function DashboardPage() {
           <SnapshotCard
             to="/calendar"
             title="Calendar"
-            subtitle="Today & upcoming"
+            subtitle="Today & upcoming (first page each)"
             stat={`${slice.value.today.totalCount} today · ${slice.value.upcoming.totalCount} upcoming`}
           >
             <div className="mt-2 space-y-3 text-sm">
               <div>
                 <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Today</div>
                 <ul className="mt-1 space-y-1 text-slate-400">
-                  {titlesFromCalendar(slice.value.today, 4).length === 0 ? (
+                  {slice.value.today.items.length === 0 ? (
                     <li>Nothing scheduled today.</li>
                   ) : (
-                    titlesFromCalendar(slice.value.today, 4).map((t, i) => (
-                      <li key={`t-${i}`} className="truncate">
-                        {t}
+                    slice.value.today.items.map((it) => (
+                      <li
+                        key={it.instanceStartUtc ? `t-${it.id}-${it.instanceStartUtc}` : `t-${it.id}`}
+                        className="truncate"
+                      >
+                        {formatDashboardCalendarLine(it, "today")}
                       </li>
                     ))
                   )}
                 </ul>
+                {slice.value.today.totalCount > slice.value.today.items.length ? (
+                  <p className="mt-1 text-xs text-slate-500">
+                    +{slice.value.today.totalCount - slice.value.today.items.length} more today — open Calendar for the
+                    full list.
+                  </p>
+                ) : null}
               </div>
               <div>
                 <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Soon</div>
                 <ul className="mt-1 space-y-1 text-slate-400">
-                  {titlesFromCalendar(slice.value.upcoming, 4).length === 0 ? (
+                  {slice.value.upcoming.items.length === 0 ? (
                     <li>No upcoming items on this page.</li>
                   ) : (
-                    titlesFromCalendar(slice.value.upcoming, 4).map((t, i) => (
-                      <li key={`u-${i}`} className="truncate">
-                        {t}
+                    slice.value.upcoming.items.map((it) => (
+                      <li
+                        key={it.instanceStartUtc ? `u-${it.id}-${it.instanceStartUtc}` : `u-${it.id}`}
+                        className="truncate"
+                      >
+                        {formatDashboardCalendarLine(it, "upcoming")}
                       </li>
                     ))
                   )}
                 </ul>
+                {slice.value.upcoming.totalCount > slice.value.upcoming.items.length ? (
+                  <p className="mt-1 text-xs text-slate-500">
+                    +{slice.value.upcoming.totalCount - slice.value.upcoming.items.length} more upcoming — open Calendar.
+                  </p>
+                ) : null}
               </div>
             </div>
           </SnapshotCard>

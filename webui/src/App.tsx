@@ -3,6 +3,7 @@ import AppShell from "./layout/AppShell";
 import BuyPage from "./pages/BuyPage";
 import CalendarPage from "./pages/CalendarPage";
 import DashboardPage from "./pages/DashboardPage";
+import HealthPage from "./pages/HealthPage";
 import LoginPage from "./pages/LoginPage";
 import MoneyPage from "./pages/MoneyPage";
 import OAuthCallbackPage from "./pages/OAuthCallbackPage";
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="/wishlist" element={<WishlistPage />} />
         <Route path="/money" element={<MoneyPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
+        <Route path="/health" element={<HealthPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/setup" element={<SetupPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

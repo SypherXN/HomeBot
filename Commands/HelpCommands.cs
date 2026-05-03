@@ -106,6 +106,7 @@ public class HelpCommands : InteractionModuleBase<SocketInteractionContext>
     One recurring **occurrence** only (canonical UTC slot, e.g. **2026-04-16T09:00:00Z** — same key as Web range **instanceStartUtc**):
     - /calendar-instance-omit — hide this day
     - /calendar-instance-complete — complete this day only
+    - /calendar-instance-reset — clear overrides for that day (same as Web **Reset this day**)
     - /calendar-instance-edit — title/description/notes/link + optional **override_start_utc** / **override_end_utc**
 
     Household timezone: /timezone-set or /config-set timezone <IANA>

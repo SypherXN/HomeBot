@@ -227,7 +227,9 @@ public static class HomeBotApiHost
                 context.Request.Path.StartsWithSegments("/api/auth/discord/complete-register") ||
                 context.Request.Path.StartsWithSegments("/api/auth/discord/oauth/url") ||
                 context.Request.Path.StartsWithSegments("/api/auth/discord/oauth/callback") ||
-                context.Request.Path.StartsWithSegments("/api/auth/discord/oauth/consume");
+                context.Request.Path.StartsWithSegments("/api/auth/discord/oauth/consume") ||
+                context.Request.Path.StartsWithSegments("/api/auth/refresh") ||
+                context.Request.Path.StartsWithSegments("/api/auth/logout");
 
             if (isAuthPublic)
             {
@@ -290,7 +292,7 @@ public static class HomeBotApiHost
             name = "HomeBot API",
             version = "phase3",
             features = new[] { "buy", "wishlist", "money", "calendar", "undo" },
-            docs = "Authorization: Bearer accepts HOMEBOT_API_TOKEN and/or HS256 JWTs from POST /api/auth/login. Web sign-up: POST /api/auth/discord/start then /webui-verify in Discord, then complete-* . Mutations use query actorUserId=DISCORD_USER_ID where noted.",
+            docs = "Authorization: Bearer accepts HOMEBOT_API_TOKEN and/or HS256 JWTs from POST /api/auth/login (short-lived access) plus POST /api/auth/refresh with refreshToken for browser sessions. Web sign-up: POST /api/auth/discord/start then /webui-verify in Discord, then complete-* . Mutations use query actorUserId=DISCORD_USER_ID where noted.",
             openApi = "/openapi/v1.json",
             restExamples = new
             {

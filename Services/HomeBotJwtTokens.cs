@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -10,12 +11,29 @@ public static class HomeBotJwtTokens
 {
     public const string DiscordUidClaim = "discord_uid";
 
-    public static int DefaultLifetimeSeconds => 60 * 60 * 24 * 30;
+    /// <summary>
+    /// Access JWT lifetime in seconds. Default 15 minutes. Set <c>HOMEBOT_WEB_JWT_ACCESS_TTL_SECONDS</c> (300–1209600).
+    /// </summary>
+    public static int AccessTokenLifetimeSeconds
+    {
+        get
+        {
+            var raw = Environment.GetEnvironmentVariable("HOMEBOT_WEB_JWT_ACCESS_TTL_SECONDS");
+            if (int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) &&
+                n >= 300 &&
+                n <= 86400 * 14)
+            {
+                return n;
+            }
+
+            return 900;
+        }
+    }
 
     public static string CreateAccessToken(string username, string discordUserId, string secret, int lifetimeSeconds = 0)
     {
         if (lifetimeSeconds <= 0)
-            lifetimeSeconds = DefaultLifetimeSeconds;
+            lifetimeSeconds = AccessTokenLifetimeSeconds;
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);

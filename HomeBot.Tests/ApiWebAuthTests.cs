@@ -31,6 +31,7 @@ public sealed class ApiWebAuthTests : IDisposable
         var sc = new ServiceCollection();
         sc.AddSingleton(_ => new DatabaseService(_dbPath));
         sc.AddSingleton<WebAuthService>();
+        sc.AddSingleton<WebRefreshTokenService>();
         sc.AddSingleton<WebAuthDiscordVerificationService>();
         sc.AddSingleton<DiscordOAuthService>();
         sc.AddSingleton<ConfigService>();
@@ -60,7 +61,8 @@ public sealed class ApiWebAuthTests : IDisposable
             oauthConsumePerMinute: 100_000,
             oauthBrowserPerMinute: 100_000,
             authAccountWritePerMinute: 100_000,
-            discordStatusPollPerMinute: 100_000);
+            discordStatusPollPerMinute: 100_000,
+            authRefreshPerMinute: 100_000);
         builder.WebHost.UseTestServer();
 
         _app = builder.Build();
@@ -137,6 +139,41 @@ public sealed class ApiWebAuthTests : IDisposable
 
         var tags = await jwtClient.GetAsync("/api/buy/tags");
         Assert.Equal(HttpStatusCode.OK, tags.StatusCode);
+    }
+
+    [Fact]
+    public async Task Login_refresh_rotates_and_old_refresh_rejected()
+    {
+        using var naked = _app.GetTestClient();
+
+        var boot = await naked.PostAsJsonAsync(
+            "/api/auth/bootstrap",
+            new { username = "refreshy", password = "password1x", discordUserId = "100002" });
+        Assert.Equal(HttpStatusCode.OK, boot.StatusCode);
+
+        var login = await naked.PostAsJsonAsync(
+            "/api/auth/login",
+            new { username = "refreshy", password = "password1x" });
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var loginDoc = await login.Content.ReadFromJsonAsync<JsonElement>();
+        var rt1 = loginDoc.GetProperty("refreshToken").GetString();
+        Assert.False(string.IsNullOrEmpty(rt1));
+
+        var refresh1 = await naked.PostAsJsonAsync("/api/auth/refresh", new { refreshToken = rt1 });
+        Assert.Equal(HttpStatusCode.OK, refresh1.StatusCode);
+        var doc1 = await refresh1.Content.ReadFromJsonAsync<JsonElement>();
+        var rt2 = doc1.GetProperty("refreshToken").GetString();
+        var jwt2 = doc1.GetProperty("accessToken").GetString();
+        Assert.False(string.IsNullOrEmpty(rt2));
+        Assert.NotEqual(rt1, rt2);
+
+        var replay = await naked.PostAsJsonAsync("/api/auth/refresh", new { refreshToken = rt1 });
+        Assert.Equal(HttpStatusCode.Unauthorized, replay.StatusCode);
+
+        using var c = _app.GetTestClient();
+        c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt2!);
+        var me = await c.GetAsync("/api/auth/me");
+        Assert.Equal(HttpStatusCode.OK, me.StatusCode);
     }
 
     [Fact]

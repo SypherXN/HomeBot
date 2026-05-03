@@ -280,6 +280,31 @@ public class CalendarCommands : InteractionModuleBase<SocketInteractionContext>
     /// <summary>
     /// Edits title/description/notes/link and optional UTC start/end overrides for one recurrence occurrence.
     /// </summary>
+    /// <summary>
+    /// Clears per-instance overrides for one occurrence (omit / complete-this-day / edits). Same as Web &quot;Reset this day&quot;.
+    /// </summary>
+    [SlashCommand("calendar-instance-reset", "Clear overrides for one recurring occurrence")]
+    public async Task InstanceReset(int id, string instance_start_utc)
+    {
+        try
+        {
+            var cleared = _calendar.ClearRecurrenceInstance(id, instance_start_utc, Context.User.Id);
+            if (!cleared)
+            {
+                await RespondAsync(
+                    "ℹ️ Nothing to reset for that occurrence (no per-instance row). If it is hidden or completed, it may already match the series.",
+                    ephemeral: true);
+                return;
+            }
+
+            await RespondAsync("↩ Cleared overrides for that day. Undo restores the previous exception row.");
+        }
+        catch (Exception ex)
+        {
+            await RespondAsync($"❌ {ex.Message}", ephemeral: true);
+        }
+    }
+
     [SlashCommand("calendar-instance-edit", "Edit one recurring occurrence")]
     public async Task InstanceEdit(
         int id,

@@ -55,19 +55,19 @@ public static class HomeBotDiscordOAuthApi
                 if (err != null)
                     return err;
 
-                var t = tokens!.Value;
+                var t = tokens!;
                 var audit = root.GetRequiredService<DiscordAuthAuditNotifier>();
                 _ = audit.NotifyWebSignInAsync("discord_oauth", t.Username, t.DiscordUserId);
 
                 return Results.Ok(
-                    new
-                    {
-                        accessToken = t.AccessToken,
-                        tokenType = "Bearer",
-                        expiresInSeconds = HomeBotJwtTokens.DefaultLifetimeSeconds,
-                        username = t.Username,
-                        discordUserId = t.DiscordUserId,
-                    });
+                    new WebAuthSessionResponse(
+                        t.AccessToken,
+                        "Bearer",
+                        HomeBotJwtTokens.AccessTokenLifetimeSeconds,
+                        t.Username,
+                        t.DiscordUserId,
+                        t.RefreshToken,
+                        t.RefreshExpiresInSeconds));
             }).RequireRateLimiting("auth_oauth_consume");
     }
 

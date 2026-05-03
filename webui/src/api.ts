@@ -1,3 +1,9 @@
+import {
+  AUTH_ACCESS_REFRESHED_EVENT,
+  AUTH_STORAGE_REFRESH,
+  AUTH_STORAGE_TOKEN,
+  type AuthAccessRefreshedDetail,
+} from "./auth/storageKeys";
 import { getApiBaseUrl } from "./apiBaseUrl";
 
 /**
@@ -16,6 +22,7 @@ export type ApiJsonOptions = {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   signal?: AbortSignal;
+  /** @internal */ _authRetry?: boolean;
 };
 
 function mergeQuery(path: string, query: Record<string, string>): string {
@@ -44,6 +51,24 @@ function parseRetryAfterSeconds(retryAfter: string | null): number | undefined {
     return Math.max(0, Math.ceil((ms - Date.now()) / 1000));
   }
   return undefined;
+}
+
+async function trySilentRefreshOnce(): Promise<string | null> {
+  const rt = localStorage.getItem(AUTH_STORAGE_REFRESH)?.trim();
+  if (!rt) return null;
+  try {
+    const r = await postAuthRefresh(rt);
+    localStorage.setItem(AUTH_STORAGE_TOKEN, r.accessToken);
+    localStorage.setItem(AUTH_STORAGE_REFRESH, r.refreshToken);
+    window.dispatchEvent(
+      new CustomEvent<AuthAccessRefreshedDetail>(AUTH_ACCESS_REFRESHED_EVENT, {
+        detail: { accessToken: r.accessToken, refreshToken: r.refreshToken },
+      })
+    );
+    return r.accessToken;
+  } catch {
+    return null;
+  }
 }
 
 function rateLimitUserMessage(retryAfterSec: number | undefined): string {
@@ -78,6 +103,19 @@ export async function apiJson<T>(path: string, options: ApiJsonOptions = {}): Pr
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
     signal: options.signal,
   });
+
+  if (
+    response.status === 401 &&
+    options.token &&
+    !options._authRetry &&
+    path.startsWith("/api/") &&
+    !path.startsWith("/api/auth/")
+  ) {
+    const newTok = await trySilentRefreshOnce();
+    if (newTok) {
+      return apiJson<T>(path, { ...options, token: newTok, _authRetry: true });
+    }
+  }
 
   if (!response.ok) {
     const body = await response.text();
@@ -775,6 +813,8 @@ export type AuthLoginResponse = {
   expiresInSeconds: number;
   username: string;
   discordUserId: string;
+  refreshToken: string;
+  refreshExpiresInSeconds: number;
 };
 
 /** Web UI login (no bearer). */
@@ -783,6 +823,43 @@ export function postAuthLogin(username: string, password: string) {
     method: "POST",
     body: { username, password },
   });
+}
+
+/** Rotate session using a refresh token (no bearer). Uses raw fetch to avoid recursion with apiJson. */
+export async function postAuthRefresh(refreshToken: string, signal?: AbortSignal): Promise<AuthLoginResponse> {
+  const response = await fetch(`${getApiBaseUrl()}/api/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refreshToken }),
+    signal,
+  });
+  const body = await response.text();
+  if (!response.ok) {
+    if (response.status === 429) {
+      const sec = parseRetryAfterSeconds(response.headers.get("Retry-After"));
+      throw new Error(rateLimitUserMessage(sec));
+    }
+    throw new Error(`${response.status} ${response.statusText}: ${body}`);
+  }
+  return JSON.parse(body) as AuthLoginResponse;
+}
+
+/** Revokes the refresh session server-side (no bearer). */
+export async function postAuthLogout(refreshToken: string, signal?: AbortSignal): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/api/auth/logout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refreshToken }),
+    signal,
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    if (response.status === 429) {
+      const sec = parseRetryAfterSeconds(response.headers.get("Retry-After"));
+      throw new Error(rateLimitUserMessage(sec));
+    }
+    throw new Error(`${response.status} ${response.statusText}: ${body}`);
+  }
 }
 
 export type DiscordOAuthUrlResponse = {

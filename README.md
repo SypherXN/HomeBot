@@ -97,10 +97,12 @@ Values are read from the **process** environment (shell, systemd, Docker, or IDE
 | **`HOMEBOT_WEB_JWT_SECRET`** | Required for web sign-in and user creation flows — **≥ 32 UTF-8 bytes**. Never put this in the frontend; it stays on the server. |
 | **`HOMEBOT_WEB_SETUP_TOKEN`** | Optional — if set, manual **first-user** bootstrap on the web must include this token. |
 | **`HOMEBOT_WEB_INVITE_TOKEN`** | Optional — if set, manual **additional-user** registration must include this invite. |
+| **`HOMEBOT_WEB_JWT_ACCESS_TTL_SECONDS`** | Optional — lifetime of **access** JWTs (default **900** = 15 minutes; allowed **300–1209600**). Longer values behave like a classic long-lived session token. |
+| **`HOMEBOT_WEB_REFRESH_TTL_SECONDS`** | Optional — opaque **refresh** tokens stored in SQLite (default **2592000** = 30 days; allowed **3600–31536000**). |
 
 ### Discord OAuth (optional — “Continue with Discord” on Sign in)
 
-Uses the same **`WebUsers`** row as password login when **`DiscordUserId`** matches. There is **no** auto-provisioning from OAuth alone; the user must already exist (e.g. after Discord verify signup).
+Uses the same **`WebUsers`** row as password login when **`DiscordUserId`** matches. There is **no** auto-provisioning from OAuth alone; the user must already exist (e.g. after Discord verify signup). **Multi-tenant / SSO** and **Discord-first account creation** are out of scope for this repo ([**docs/WebUI_Future_Work.md**](docs/WebUI_Future_Work.md) — *Explicitly not backlog*).
 
 | Variable | Purpose |
 |----------|---------|
@@ -126,6 +128,7 @@ Public auth routes are **rate-limited** separately from the general mutation buc
 | Variable | Default | Applies to |
 |----------|---------|------------|
 | **`HOMEBOT_API_AUTH_LOGIN_PER_MINUTE`** | **30** | `POST /api/auth/login` |
+| **`HOMEBOT_API_AUTH_REFRESH_PER_MINUTE`** | **36** | `POST /api/auth/refresh` and `POST /api/auth/logout` (shared counter per IP) |
 | **`HOMEBOT_API_OAUTH_CONSUME_PER_MINUTE`** | **15** | `POST /api/auth/discord/oauth/consume` |
 | **`HOMEBOT_API_OAUTH_BROWSER_PER_MINUTE`** | **48** | `GET` OAuth authorize URL + `GET` OAuth callback (shared counter per IP) |
 | **`HOMEBOT_API_AUTH_ACCOUNT_WRITE_PER_MINUTE`** | **24** | `POST` bootstrap, register, Discord verify start, complete-bootstrap, complete-register (shared counter per IP) |
@@ -176,7 +179,7 @@ dotnet test HomeBot.Tests/HomeBot.Tests.csproj
 
 The test assembly disables **xUnit parallelization** (`HomeBot.Tests/AssemblyInfo.cs`) because several fixtures set process-global **`HOMEBOT_WEB_JWT_SECRET`**; parallel runs could clear it between `await` calls in another test.
 
-Stop any running `HomeBot` process first if the build cannot overwrite `HomeBot.dll`.
+Stop any running `HomeBot` process first if the build cannot overwrite `HomeBot.dll` or `HomeBot.exe`.
 
 ### Web UI
 
@@ -201,7 +204,7 @@ Output is in **`webui/dist`**. Set **`VITE_API_BASE_URL`** at build time if the 
 
 - **SQLite** holds items, settings, channel bindings, action log (undo), web users, and verification sessions.
 - **Snowflakes:** Large Discord ids are handled as **strings** in JSON where it matters (money, calendar assignee, list API responses, buy/wishlist writes). Prefer roster picks or member labels when the UI offers them.
-- **Secrets:** Do not commit tokens or `HOMEBOT_WEB_JWT_SECRET`. The Web UI stores the bearer/JWT only in **browser localStorage**.
+- **Secrets:** Do not commit tokens or `HOMEBOT_WEB_JWT_SECRET`. The Web UI stores the bearer/JWT and refresh token only in **browser localStorage** (refresh is cleared on sign-out; the server row is revoked when sign-out calls **`POST /api/auth/logout`**).
 
 ---
 

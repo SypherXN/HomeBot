@@ -38,6 +38,7 @@ internal sealed class ApiTestHarness : IAsyncDisposable
         var sc = new ServiceCollection();
         sc.AddSingleton(_ => new DatabaseService(dbPath));
         sc.AddSingleton<WebAuthService>();
+        sc.AddSingleton<WebRefreshTokenService>();
         sc.AddSingleton<WebAuthDiscordVerificationService>();
         sc.AddSingleton<DiscordOAuthService>();
         sc.AddSingleton<ConfigService>();
@@ -125,6 +126,9 @@ public sealed class ApiPhase3Tests
         r.EnsureSuccessStatusCode();
         var text = await r.Content.ReadAsStringAsync();
         Assert.Contains("openapi", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("instanceStartUtc", text, StringComparison.Ordinal);
+        Assert.Contains("Get calendar item", text, StringComparison.Ordinal);
+        Assert.Contains("Delete recurrence exception", text, StringComparison.Ordinal);
     }
 
     [Fact]

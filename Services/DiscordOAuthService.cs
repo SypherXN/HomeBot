@@ -21,11 +21,13 @@ public sealed class DiscordOAuthService
 
     private readonly DatabaseService _db;
     private readonly WebAuthService _auth;
+    private readonly WebRefreshTokenService _refreshTokens;
 
-    public DiscordOAuthService(DatabaseService db, WebAuthService auth)
+    public DiscordOAuthService(DatabaseService db, WebAuthService auth, WebRefreshTokenService refreshTokens)
     {
         _db = db;
         _auth = auth;
+        _refreshTokens = refreshTokens;
     }
 
     public static string? ReadClientId() => Environment.GetEnvironmentVariable("HOMEBOT_DISCORD_OAUTH_CLIENT_ID")?.Trim();
@@ -114,7 +116,7 @@ public sealed class DiscordOAuthService
         return Results.Redirect($"{fe}/oauth/callback?oauth_code={Uri.EscapeDataString(exchange)}");
     }
 
-    public IResult? TryConsumeExchange(string code, out (string AccessToken, string Username, string DiscordUserId)? tokens)
+    public IResult? TryConsumeExchange(string code, out DiscordOAuthConsumeResult? tokens)
     {
         tokens = null;
         if (string.IsNullOrWhiteSpace(code))
@@ -157,9 +159,23 @@ public sealed class DiscordOAuthService
         if (fresh is null || !string.Equals(fresh.Value.Username, username, StringComparison.OrdinalIgnoreCase))
             return ApiResults.BadRequest("Account no longer exists or has changed.", "oauth_account_invalid");
 
-        tokens = fresh;
+        var (rPlain, rExp) = _refreshTokens.IssueForUser(username, discordUserId);
+        var refreshSec = (int)Math.Clamp((rExp - DateTimeOffset.UtcNow).TotalSeconds, 1, int.MaxValue);
+        tokens = new DiscordOAuthConsumeResult(
+            fresh.Value.AccessToken,
+            username,
+            discordUserId,
+            rPlain,
+            refreshSec);
         return null;
     }
+
+    public sealed record DiscordOAuthConsumeResult(
+        string AccessToken,
+        string Username,
+        string DiscordUserId,
+        string RefreshToken,
+        int RefreshExpiresInSeconds);
 
     private static void DeleteExchange(SqliteConnection conn, string code)
     {

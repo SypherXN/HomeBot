@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using System.Globalization;
 using System.Text.Json;
 
 /// <summary>
@@ -396,6 +397,50 @@ class Program
                 });
 
                 return;
+            }
+
+            if (customId.StartsWith("calrst-", StringComparison.Ordinal))
+            {
+                var parts = customId.Split('-', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 5 &&
+                    parts[0] == "calrst" &&
+                    (parts[1] == "t" || parts[1] == "u") &&
+                    int.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out var rstPage) &&
+                    int.TryParse(parts[3], NumberStyles.Integer, CultureInfo.InvariantCulture, out var calId) &&
+                    long.TryParse(parts[4], NumberStyles.Integer, CultureInfo.InvariantCulture, out var unix))
+                {
+                    var iso = DateTimeOffset.FromUnixTimeSeconds(unix).UtcDateTime.ToString(
+                        "yyyy-MM-ddTHH:mm:ssZ",
+                        CultureInfo.InvariantCulture);
+
+                    try
+                    {
+                        var cleared = calendarService.ClearRecurrenceInstance(calId, iso, component.User.Id);
+                        if (!cleared)
+                        {
+                            await component.FollowupAsync(
+                                "ℹ️ Nothing to reset for that occurrence (no per-instance row).",
+                                ephemeral: true);
+                            return;
+                        }
+
+                        var refreshed = parts[1] == "t"
+                            ? await CalendarListDiscordPresentation.BuildToday(calendarService, null, rstPage)
+                            : await CalendarListDiscordPresentation.BuildUpcoming(calendarService, null, rstPage);
+
+                        await component.ModifyOriginalResponseAsync(msg =>
+                        {
+                            msg.Embed = refreshed.embed;
+                            msg.Components = refreshed.components;
+                        });
+                    }
+                    catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+                    {
+                        await component.FollowupAsync($"❌ {ex.Message}", ephemeral: true);
+                    }
+
+                    return;
+                }
             }
         }
         catch (Exception ex)

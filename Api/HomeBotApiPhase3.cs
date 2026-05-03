@@ -36,6 +36,9 @@ public static class HomeBotApiPhase3
     /// <summary>Default GET <c>/api/auth/discord/status</c> polls per client IP per minute.</summary>
     public const int DefaultDiscordStatusPollPerMinute = 120;
 
+    /// <summary>Default POST <c>/api/auth/refresh</c> and <c>/api/auth/logout</c> per client IP per minute.</summary>
+    public const int DefaultAuthRefreshPerMinute = 36;
+
     /// <summary>
     /// Reads <c>HOMEBOT_API_MAX_BODY_BYTES</c> or <paramref name="defaultBytes"/>.
     /// </summary>
@@ -103,6 +106,15 @@ public static class HomeBotApiPhase3
         return defaultPerMinute;
     }
 
+    /// <summary>Reads <c>HOMEBOT_API_AUTH_REFRESH_PER_MINUTE</c> or default.</summary>
+    public static int ResolveAuthRefreshPerMinute(int defaultPerMinute = DefaultAuthRefreshPerMinute)
+    {
+        var raw = Environment.GetEnvironmentVariable("HOMEBOT_API_AUTH_REFRESH_PER_MINUTE");
+        if (int.TryParse(raw, out var n) && n > 0)
+            return n;
+        return defaultPerMinute;
+    }
+
     /// <summary>
     /// Registers rate limiting, Kestrel body limit, OpenAPI, and HTTP logging.
     /// Pass explicit limits in tests; omit to use environment (see <see cref="ResolveMaxRequestBodyBytes"/> / <see cref="ResolveMutationPermitLimit"/> and auth resolver methods).
@@ -115,7 +127,8 @@ public static class HomeBotApiPhase3
         int? oauthConsumePerMinute = null,
         int? oauthBrowserPerMinute = null,
         int? authAccountWritePerMinute = null,
-        int? discordStatusPollPerMinute = null)
+        int? discordStatusPollPerMinute = null,
+        int? authRefreshPerMinute = null)
     {
         var maxBody = maxRequestBodyBytes ?? ResolveMaxRequestBodyBytes();
         builder.Services.Configure<KestrelServerOptions>(o =>
@@ -129,6 +142,7 @@ public static class HomeBotApiPhase3
         var browserPermits = oauthBrowserPerMinute ?? ResolveOauthBrowserPerMinute();
         var accountWritePermits = authAccountWritePerMinute ?? ResolveAuthAccountWritePerMinute();
         var statusPollPermits = discordStatusPollPerMinute ?? ResolveDiscordStatusPollPerMinute();
+        var refreshPermits = authRefreshPerMinute ?? ResolveAuthRefreshPerMinute();
 
         builder.Services.AddRateLimiter(options =>
         {
@@ -165,6 +179,7 @@ public static class HomeBotApiPhase3
             AddIpFixedWindowPolicy(options, "auth_oauth_browser", browserPermits);
             AddIpFixedWindowPolicy(options, "auth_account_write", accountWritePermits);
             AddIpFixedWindowPolicy(options, "auth_discord_status_poll", statusPollPermits);
+            AddIpFixedWindowPolicy(options, "auth_refresh", refreshPermits);
         });
 
         builder.Services.AddOpenApi();

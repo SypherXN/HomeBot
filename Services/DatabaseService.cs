@@ -215,6 +215,23 @@ public class DatabaseService
         );";
 
         cmd.ExecuteNonQuery();
+
+        cmd.CommandText = @"
+        CREATE TABLE IF NOT EXISTS WebRefreshTokens (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            TokenHash TEXT NOT NULL COLLATE BINARY UNIQUE,
+            Username TEXT NOT NULL COLLATE NOCASE,
+            DiscordUserId TEXT NOT NULL,
+            ExpiresAt TEXT NOT NULL,
+            CreatedAt TEXT NOT NULL
+        );";
+
+        cmd.ExecuteNonQuery();
+
+        cmd.CommandText = @"
+        CREATE INDEX IF NOT EXISTS IX_WebRefreshTokens_Username ON WebRefreshTokens(Username);";
+
+        cmd.ExecuteNonQuery();
     }
 
     /// <summary>

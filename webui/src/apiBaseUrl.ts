@@ -16,15 +16,24 @@ function emit(): void {
 }
 
 /**
- * When the SPA is served by Vite (dev or preview) from a normal host, assume the API is the same
- * host on port 5050 (HomeBot default). Skips GitHub Pages and other non-Vite ports.
+ * When the SPA is served by Vite from a normal host, assume the API is the same host on port 5050
+ * (HomeBot default). Matches: default dev/preview ports, optional {@link VITE_DEV_CLIENT_PORT}, or any
+ * port while `import.meta.env.DEV` is true (e.g. `vite --port 3000`). For preview on a non-default port,
+ * set `VITE_DEV_CLIENT_PORT` in `.env` to match. Skips GitHub Pages.
  */
 function inferSameHostApiBase(): string | null {
   if (typeof window === "undefined") return null;
-  const port = window.location.port;
-  if (port !== "5173" && port !== "4173") return null;
   const host = window.location.hostname;
   if (host.endsWith("github.io")) return null;
+
+  const port = window.location.port;
+  const configuredClient = (import.meta.env.VITE_DEV_CLIENT_PORT as string | undefined)?.trim();
+  const defaultVitePorts = port === "5173" || port === "4173";
+  const matchesConfigured = Boolean(configuredClient && port === configuredClient);
+  const viteDevAnyPort = import.meta.env.DEV === true;
+
+  if (!defaultVitePorts && !matchesConfigured && !viteDevAnyPort) return null;
+
   return `${window.location.protocol}//${host}:5050`;
 }
 
@@ -74,7 +83,7 @@ export function subscribeApiBaseUrl(listener: () => void): () => void {
   };
 }
 
-/** True when API URL is inferred from the page URL (Vite dev/preview on port 5173 or 4173). */
+/** True when API URL is inferred from the page URL (Vite dev, preview, or `VITE_DEV_CLIENT_PORT`). */
 export function isApiBaseInferred(): boolean {
   return readStoredOverride() === null && inferSameHostApiBase() !== null;
 }

@@ -193,7 +193,7 @@ public static class HomeBotApiRegistration
             var inst = request.Query["instanceStartUtc"].ToString();
             var item = calendarService.GetItem(id, string.IsNullOrWhiteSpace(inst) ? null : inst);
             return item is null ? ApiResults.NotFound("Calendar item not found.") : Results.Ok(item);
-        });
+        }).WithCalendarItemGetDocs();
 
         app.MapGet("/api/calendar/items/{id:int}", (HttpRequest request, int id) =>
         {
@@ -201,7 +201,7 @@ public static class HomeBotApiRegistration
             var inst = request.Query["instanceStartUtc"].ToString();
             var item = calendarService.GetItem(id, string.IsNullOrWhiteSpace(inst) ? null : inst);
             return item is null ? ApiResults.NotFound("Calendar item not found.") : Results.Ok(item);
-        });
+        }).WithCalendarItemGetDocs();
 
         app.MapGet("/api/calendar/today", (HttpRequest request) =>
         {
@@ -891,7 +891,7 @@ public static class HomeBotApiRegistration
             }
 
             return Results.Ok(new { ok = true });
-        });
+        }).WithCalendarItemDeleteInstanceDocs();
 
         w.MapDelete("/calendar/items/{id:int}", (HttpRequest http, int id) =>
         {

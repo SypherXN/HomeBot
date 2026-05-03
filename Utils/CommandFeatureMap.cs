@@ -46,6 +46,7 @@ public static class CommandFeatureMap
             "calendar-upcoming" => "calendar",
             "calendar-instance-omit" => "calendar",
             "calendar-instance-complete" => "calendar",
+            "calendar-instance-reset" => "calendar",
             "calendar-instance-edit" => "calendar",
 
             // --- SYSTEM (no restriction) ---

@@ -38,12 +38,18 @@ public static class HomeBotAuthApi
             var audit = root.GetRequiredService<DiscordAuthAuditNotifier>();
             _ = audit.NotifyWebSignInAsync("password", username, discordUserId);
 
-            return Results.Ok(new LoginResponse(
+            var refreshSvc = root.GetRequiredService<WebRefreshTokenService>();
+            var (rPlain, rExp) = refreshSvc.IssueForUser(username, discordUserId);
+            var refreshTtl = (int)Math.Clamp((rExp - DateTimeOffset.UtcNow).TotalSeconds, 1, int.MaxValue);
+
+            return Results.Ok(new WebAuthSessionResponse(
                 accessToken,
                 "Bearer",
-                HomeBotJwtTokens.DefaultLifetimeSeconds,
+                HomeBotJwtTokens.AccessTokenLifetimeSeconds,
                 username,
-                discordUserId));
+                discordUserId,
+                rPlain,
+                refreshTtl));
         }).RequireRateLimiting("auth_login");
 
         app.MapPost("/api/auth/bootstrap", async (HttpRequest http) =>
@@ -190,6 +196,65 @@ public static class HomeBotAuthApi
             return Results.Ok(new { ok = true, message = "User created. Sign in with your username and password." });
         }).RequireRateLimiting("auth_account_write");
 
+        app.MapPost("/api/auth/refresh", async (HttpRequest http) =>
+        {
+            if (!WebAuthService.IsJwtSecretConfigured(WebAuthService.ReadJwtSecret()))
+            {
+                return Results.Json(
+                    new ApiErrorBody(
+                        "Web login is not configured (set HOMEBOT_WEB_JWT_SECRET to at least 32 UTF-8 bytes).",
+                        "service_unavailable"),
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+
+            var body = await http.ReadFromJsonAsync<RefreshBody>();
+            if (body is null || string.IsNullOrWhiteSpace(body.RefreshToken))
+                return ApiResults.Validation("refreshToken is required.");
+
+            var refreshSvc = root.GetRequiredService<WebRefreshTokenService>();
+            var auth = root.GetRequiredService<WebAuthService>();
+
+            if (!refreshSvc.TryPeekValid(body.RefreshToken.Trim(), out var u, out var d))
+            {
+                return Results.Json(
+                    new ApiErrorBody("Invalid or expired refresh token.", "refresh_invalid"),
+                    statusCode: StatusCodes.Status401Unauthorized);
+            }
+
+            var jwt = auth.TryIssueJwtForWebUserByDiscordId(d);
+            if (jwt is null || !string.Equals(jwt.Value.Username, u, StringComparison.OrdinalIgnoreCase))
+            {
+                refreshSvc.RevokePlain(body.RefreshToken.Trim());
+                return Results.Json(
+                    new ApiErrorBody("Account no longer exists or has changed.", "refresh_user_missing"),
+                    statusCode: StatusCodes.Status401Unauthorized);
+            }
+
+            refreshSvc.DeleteByPlain(body.RefreshToken.Trim());
+            var (newR, rExp) = refreshSvc.IssueForUser(jwt.Value.Username, jwt.Value.DiscordUserId);
+            var refreshTtl = (int)Math.Clamp((rExp - DateTimeOffset.UtcNow).TotalSeconds, 1, int.MaxValue);
+
+            return Results.Ok(new WebAuthSessionResponse(
+                jwt.Value.AccessToken,
+                "Bearer",
+                HomeBotJwtTokens.AccessTokenLifetimeSeconds,
+                jwt.Value.Username,
+                jwt.Value.DiscordUserId,
+                newR,
+                refreshTtl));
+        }).RequireRateLimiting("auth_refresh");
+
+        app.MapPost("/api/auth/logout", async (HttpRequest http) =>
+        {
+            var body = await http.ReadFromJsonAsync<LogoutBody>();
+            if (body is null || string.IsNullOrWhiteSpace(body.RefreshToken))
+                return ApiResults.Validation("refreshToken is required.");
+
+            var refreshSvc = root.GetRequiredService<WebRefreshTokenService>();
+            refreshSvc.RevokePlain(body.RefreshToken.Trim());
+            return Results.Ok(new { ok = true });
+        }).RequireRateLimiting("auth_refresh");
+
         app.MapGet("/api/auth/me", (HttpRequest http) =>
         {
             var authHeader = http.Headers.Authorization.ToString();
@@ -230,12 +295,9 @@ public static class HomeBotAuthApi
 
     private sealed record DiscordCompleteBody(string SessionId, string Username, string Password);
 
-    private sealed record LoginResponse(
-        string AccessToken,
-        string TokenType,
-        int ExpiresInSeconds,
-        string Username,
-        string DiscordUserId);
+    private sealed record RefreshBody(string RefreshToken);
+
+    private sealed record LogoutBody(string RefreshToken);
 
     private sealed record MeResponse(string Kind, string? Username, string? DiscordUserId);
 }

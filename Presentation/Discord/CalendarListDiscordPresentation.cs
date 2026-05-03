@@ -1,3 +1,4 @@
+using System.Globalization;
 using Discord;
 
 /// <summary>
@@ -39,9 +40,12 @@ public static class CalendarListDiscordPresentation
 
         var components = new ComponentBuilder();
         if (result.HasPrev)
-            components.WithButton("⬅ Prev", $"calendar_today_page_{page - 1}", ButtonStyle.Secondary);
+            components.WithButton("⬅ Prev", $"calendar_today_page_{page - 1}", ButtonStyle.Secondary, row: 0);
         if (result.HasNext)
-            components.WithButton("Next ➡", $"calendar_today_page_{page + 1}", ButtonStyle.Secondary);
+            components.WithButton("Next ➡", $"calendar_today_page_{page + 1}", ButtonStyle.Secondary, row: 0);
+
+        if (!userFilter.HasValue)
+            AppendOccurrenceResetButtons(components, "t", page, result.Items, row: 1);
 
         return Task.FromResult((embed, components.Build()));
     }
@@ -57,11 +61,67 @@ public static class CalendarListDiscordPresentation
 
         var components = new ComponentBuilder();
         if (result.HasPrev)
-            components.WithButton("⬅ Prev", $"calendar_upcoming_page_{page - 1}", ButtonStyle.Secondary);
+            components.WithButton("⬅ Prev", $"calendar_upcoming_page_{page - 1}", ButtonStyle.Secondary, row: 0);
         if (result.HasNext)
-            components.WithButton("Next ➡", $"calendar_upcoming_page_{page + 1}", ButtonStyle.Secondary);
+            components.WithButton("Next ➡", $"calendar_upcoming_page_{page + 1}", ButtonStyle.Secondary, row: 0);
+
+        if (!userFilter.HasValue)
+            AppendOccurrenceResetButtons(components, "u", page, result.Items, row: 1);
 
         return Task.FromResult((embed, components.Build()));
+    }
+
+    /// <summary>
+    /// Per-row reset for recurrence occurrences (same as <c>DELETE /api/calendar/items/{id}/instance?instanceStartUtc=…</c>).
+    /// Hidden when a user filter is applied so we do not lose filter context in the button handler.
+    /// </summary>
+    private static void AppendOccurrenceResetButtons(
+        ComponentBuilder components,
+        string viewKind,
+        int page,
+        IReadOnlyList<CalendarListItemModel> items,
+        int row)
+    {
+        const int max = 4;
+        var added = 0;
+        foreach (var item in items)
+        {
+            if (string.IsNullOrWhiteSpace(item.InstanceStartUtc))
+                continue;
+
+            long unix;
+            try
+            {
+                unix = ToUnixSecondsForInstanceKey(item.InstanceStartUtc!);
+            }
+            catch
+            {
+                continue;
+            }
+
+            var customId = $"calrst-{viewKind}-{page}-{item.Id}-{unix}";
+            if (customId.Length > 100)
+                continue;
+
+            components.WithButton($"↩{item.Id}", customId, ButtonStyle.Secondary, row: row);
+            if (++added >= max)
+                break;
+        }
+    }
+
+    private static long ToUnixSecondsForInstanceKey(string instanceStartUtc)
+    {
+        var iso = CalendarService.NormalizeCalendarInstanceStartUtc(instanceStartUtc);
+        if (!DateTimeOffset.TryParse(
+                iso,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var dto))
+        {
+            throw new InvalidOperationException("Invalid instance key.");
+        }
+
+        return dto.ToUnixTimeSeconds();
     }
 
     private static string GetAssignedDisplay(ulong? assigned)

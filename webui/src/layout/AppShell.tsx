@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { getApiBaseUrl, subscribeApiBaseUrl } from "../api";
@@ -35,6 +35,17 @@ function authNavClass({ isActive }: { isActive: boolean }) {
   ].join(" ");
 }
 
+function looksLikeBrowserNetworkFailure(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes("failed to fetch") ||
+    m.includes("networkerror") ||
+    m.includes("network request failed") ||
+    m.includes("load failed") ||
+    m.includes("fetch failed")
+  );
+}
+
 function connectionLabel(status: ReturnType<typeof useApiConnectionStatus>["status"]): {
   text: string;
   dotClass: string;
@@ -47,9 +58,17 @@ function connectionLabel(status: ReturnType<typeof useApiConnectionStatus>["stat
       title: "Probing API",
     };
   }
-  if (status.phase === "down") {
+  if (status.phase === "offline") {
     return {
-      text: "API unreachable",
+      text: "Offline",
+      dotClass: "bg-slate-600",
+      title: "No network on this device. Reconnect to reach HomeBot.",
+    };
+  }
+  if (status.phase === "down") {
+    const unreachable = looksLikeBrowserNetworkFailure(status.detail);
+    return {
+      text: unreachable ? "Cannot reach API" : "API error",
       dotClass: "bg-red-500",
       title: status.detail,
     };
@@ -125,7 +144,10 @@ export default function AppShell() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p className="min-w-0 truncate text-xs text-slate-500">
               <span className="text-slate-400">Base URL</span>{" "}
-              <code className="rounded bg-slate-900 px-1.5 py-0.5 text-slate-300">{apiBaseDisplay}</code>
+              <code className="rounded bg-slate-900 px-1.5 py-0.5 text-slate-300">{apiBaseDisplay}</code>{" "}
+              <Link to="/health" className="shrink-0 text-blue-400 hover:underline">
+                Diagnostics
+              </Link>
             </p>
             <div
               className="flex shrink-0 items-center gap-2 text-xs text-slate-300"
@@ -139,6 +161,31 @@ export default function AppShell() {
             </div>
           </div>
         </header>
+        {status.phase === "offline" ? (
+          <div
+            role="alert"
+            className="border-b border-slate-700 bg-slate-900/90 px-4 py-2.5 text-sm text-slate-200"
+          >
+            <span className="font-medium text-slate-100">You appear to be offline.</span>{" "}
+            <span className="text-slate-400">Reconnect, then the app will retry automatically.</span>
+          </div>
+        ) : null}
+        {status.phase === "down" ? (
+          <div
+            role="alert"
+            className="border-b border-amber-900/50 bg-amber-950/40 px-4 py-2.5 text-sm text-amber-100"
+          >
+            <span className="font-medium text-amber-50">
+              {looksLikeBrowserNetworkFailure(status.detail)
+                ? "Cannot reach the API at the current base URL."
+                : "The API returned an error while checking health."}
+            </span>{" "}
+            <Link to="/settings" className="font-medium text-amber-200 underline hover:text-white">
+              Settings
+            </Link>
+            <span className="text-amber-200/90"> — URL, CORS, and firewall.</span>
+          </div>
+        ) : null}
         <main className="mx-auto min-w-0 max-w-6xl px-3 py-6 sm:px-4">
           <Outlet />
         </main>

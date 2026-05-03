@@ -31,6 +31,7 @@ public sealed class ApiMutationTests : IDisposable
         var sc = new ServiceCollection();
         sc.AddSingleton(_ => new DatabaseService(_dbPath));
         sc.AddSingleton<WebAuthService>();
+        sc.AddSingleton<WebRefreshTokenService>();
         sc.AddSingleton<WebAuthDiscordVerificationService>();
         sc.AddSingleton<DiscordOAuthService>();
         sc.AddSingleton<ConfigService>();
@@ -60,7 +61,8 @@ public sealed class ApiMutationTests : IDisposable
             oauthConsumePerMinute: 100_000,
             oauthBrowserPerMinute: 100_000,
             authAccountWritePerMinute: 100_000,
-            discordStatusPollPerMinute: 100_000);
+            discordStatusPollPerMinute: 100_000,
+            authRefreshPerMinute: 100_000);
         builder.WebHost.UseTestServer();
 
         _app = builder.Build();

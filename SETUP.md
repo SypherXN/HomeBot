@@ -561,67 +561,13 @@ If you use **Deploy from a branch** instead, you must commit **`webui/dist`** or
 
 ### 5.2 Add a GitHub Actions workflow
 
-Create **`.github/workflows/deploy-webui.yml`** in your repo with content like below. Adjust:
+This repository includes **`.github/workflows/deploy-webui.yml`**. Enable it by choosing **GitHub Actions** as the Pages source (§5.1) and setting the variable below. If you maintain a fork from an older tree, compare your workflow to the file in **`main`**. Adjust:
 
 - **`VITE_API_BASE_URL`** — use a **[repository variable](https://docs.github.com/en/actions/learn-github-actions/variables#defining-configuration-variables-for-multiple-workflows)** (e.g. `HOMEBOT_API_PUBLIC_URL`) or a secret, set in **Settings** → **Secrets and variables** → **Actions** → **Variables** tab.
 
-```yaml
-name: Deploy Web UI to GitHub Pages
+The YAML lives at **`.github/workflows/deploy-webui.yml`** (Node **22**, **`npm ci`**, **`VITE_BASE_PATH`** set to the GitHub **project** path, **`VITE_API_BASE_URL`** from **`vars.HOMEBOT_API_PUBLIC_URL`**). Edit the file in-repo if you need a different branch filter or Node version.
 
-on:
-  push:
-    branches: [main]
-    paths:
-      - "webui/**"
-      - ".github/workflows/deploy-webui.yml"
-  workflow_dispatch:
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: webui/package-lock.json
-
-      - name: Install and build
-        working-directory: webui
-        env:
-          VITE_BASE_PATH: /${{ github.event.repository.name }}/
-          VITE_API_BASE_URL: ${{ vars.HOMEBOT_API_PUBLIC_URL }}
-        run: npm ci && npm run build
-
-      - uses: actions/configure-pages@v4
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: webui/dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
-```
-
-**After the workflow file is in your repo:**
+**After the workflow is enabled:**
 
 1. In GitHub: **Settings** → **Secrets and variables** → **Actions** → **Variables** → create **`HOMEBOT_API_PUBLIC_URL`** with your public API base (same value you want in **`VITE_API_BASE_URL`**, e.g. **`https://your-api-host`**).
 2. Commit and push the workflow (if you have not already). Open the **Actions** tab and confirm the workflow run succeeds.
@@ -671,3 +617,9 @@ dotnet test HomeBot.Tests/HomeBot.Tests.csproj
 ```
 
 For deeper configuration (rate limits, OAuth partial-env override, database path), see **[README.md](./README.md)**.
+
+---
+
+## 8. Reverse proxy snippets (optional)
+
+For **TLS** and a public hostname in front of the API (**`5050`**), see **[docs/OPS.md](./docs/OPS.md)** (Caddy / nginx examples and renewal pointers).

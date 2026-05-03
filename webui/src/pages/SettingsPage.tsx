@@ -3,9 +3,12 @@ import { useAuth } from "../auth/AuthContext";
 import DiscordMemberSelect from "../components/DiscordMemberSelect";
 import TimeZoneSelect from "../components/TimeZoneSelect";
 import { useCalendarZone } from "../calendar/CalendarZoneContext";
+import { Link } from "react-router-dom";
+import { AUTH_STORAGE_REFRESH } from "../auth/storageKeys";
 import {
   getApiBaseUrl,
   isApiBaseInferred,
+  postAuthLogout,
   resetApiBaseUrlToDefault,
   setApiBaseUrl,
   subscribeApiBaseUrl,
@@ -30,10 +33,11 @@ export default function SettingsPage() {
       <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/30 p-4">
         <h2 className="text-sm font-semibold text-white">API server</h2>
         <p className="max-w-2xl text-sm text-slate-400">
-          Base URL for <code className="text-slate-300">/api/…</code> requests. With Vite on port{" "}
-          <strong className="text-slate-300">5173</strong> (dev) or <strong className="text-slate-300">4173</strong>{" "}
-          (preview), the UI assumes the API is on the <strong className="text-slate-300">same hostname</strong> with
-          port <strong className="text-slate-300">5050</strong> — so opening{" "}
+          Base URL for <code className="text-slate-300">/api/…</code> requests. With Vite dev (any port), or preview on{" "}
+          <strong className="text-slate-300">4173</strong>, or preview on a custom port set via{" "}
+          <code className="text-slate-300">VITE_DEV_CLIENT_PORT</code> in <code className="text-slate-300">.env</code>, the
+          UI assumes the API is on the <strong className="text-slate-300">same hostname</strong> with port{" "}
+          <strong className="text-slate-300">5050</strong> — e.g. opening{" "}
           <code className="text-slate-300">http://192.168.1.5:5173</code> on your phone talks to{" "}
           <code className="text-slate-300">http://192.168.1.5:5050</code> automatically.{" "}
           {isApiBaseInferred() ? (
@@ -43,6 +47,13 @@ export default function SettingsPage() {
               Override below if your API uses a different host or port, then <strong className="text-slate-300">Save</strong>.
             </span>
           )}
+        </p>
+        <p className="text-xs text-slate-500">
+          <Link to="/health" className="text-blue-400 hover:underline">
+            Open diagnostics page
+          </Link>{" "}
+          (bookmarkable <code className="text-slate-400">/health</code>) for raw <code className="text-slate-400">/api/health</code> and{" "}
+          <code className="text-slate-400">/api/meta</code> output.
         </p>
         <label htmlFor="settings-api-base" className="block text-sm font-medium text-slate-300">
           API base URL
@@ -79,8 +90,9 @@ export default function SettingsPage() {
         <h2 className="text-sm font-semibold text-white">Web sign-in</h2>
         <p className="max-w-2xl text-sm text-slate-400">
           Prefer signing in with a household username and password (see <span className="text-slate-300">Sign in</span>{" "}
-          in the sidebar). That stores a short-lived JWT and sets <code className="text-slate-300">actorUserId</code>{" "}
-          from your profile.
+          in the sidebar). The API issues a short-lived access JWT plus a longer-lived refresh token (browser localStorage);
+          expired access tokens are renewed automatically when possible. <code className="text-slate-300">actorUserId</code>{" "}
+          comes from your profile.
         </p>
         {webUsername ? (
           <p className="text-sm text-slate-300">
@@ -91,7 +103,13 @@ export default function SettingsPage() {
         )}
         <button
           type="button"
-          onClick={() => clearSession()}
+          onClick={() => {
+            const rt = localStorage.getItem(AUTH_STORAGE_REFRESH)?.trim();
+            if (rt) {
+              void postAuthLogout(rt).catch(() => {});
+            }
+            clearSession();
+          }}
           className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
         >
           Sign out &amp; clear token

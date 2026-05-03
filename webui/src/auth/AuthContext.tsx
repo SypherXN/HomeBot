@@ -7,10 +7,14 @@ import {
   type ReactNode,
 } from "react";
 import type { AuthLoginResponse } from "../api";
-
-const STORAGE_TOKEN = "homebot_webui_api_token";
-const STORAGE_ACTOR = "homebot_webui_actor_user_id";
-const STORAGE_WEB_USERNAME = "homebot_webui_web_username";
+import {
+  AUTH_ACCESS_REFRESHED_EVENT,
+  AUTH_STORAGE_ACTOR,
+  AUTH_STORAGE_REFRESH,
+  AUTH_STORAGE_TOKEN,
+  AUTH_STORAGE_WEB_USERNAME,
+  type AuthAccessRefreshedDetail,
+} from "./storageKeys";
 
 export type { AuthLoginResponse } from "../api";
 
@@ -28,31 +32,48 @@ export type AuthState = {
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState(() => localStorage.getItem(STORAGE_TOKEN) ?? "");
+  const [token, setToken] = useState(() => localStorage.getItem(AUTH_STORAGE_TOKEN) ?? "");
   const [actorUserId, setActorUserId] = useState(
-    () => localStorage.getItem(STORAGE_ACTOR) ?? ""
+    () => localStorage.getItem(AUTH_STORAGE_ACTOR) ?? ""
   );
   const [webUsername, setWebUsername] = useState(
-    () => localStorage.getItem(STORAGE_WEB_USERNAME) ?? ""
+    () => localStorage.getItem(AUTH_STORAGE_WEB_USERNAME) ?? ""
   );
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_TOKEN, token);
+    localStorage.setItem(AUTH_STORAGE_TOKEN, token);
   }, [token]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_ACTOR, actorUserId);
+    localStorage.setItem(AUTH_STORAGE_ACTOR, actorUserId);
   }, [actorUserId]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_WEB_USERNAME, webUsername);
+    localStorage.setItem(AUTH_STORAGE_WEB_USERNAME, webUsername);
   }, [webUsername]);
+
+  useEffect(() => {
+    const onRefreshed = (ev: Event) => {
+      const e = ev as CustomEvent<AuthAccessRefreshedDetail>;
+      const d = e.detail;
+      if (d?.accessToken) {
+        setToken(d.accessToken);
+      }
+    };
+    window.addEventListener(AUTH_ACCESS_REFRESHED_EVENT, onRefreshed);
+    return () => window.removeEventListener(AUTH_ACCESS_REFRESHED_EVENT, onRefreshed);
+  }, []);
 
   const applyWebLogin = useMemo(
     () => (r: AuthLoginResponse) => {
       setToken(r.accessToken);
       setActorUserId(r.discordUserId);
       setWebUsername(r.username);
+      if (r.refreshToken) {
+        localStorage.setItem(AUTH_STORAGE_REFRESH, r.refreshToken);
+      } else {
+        localStorage.removeItem(AUTH_STORAGE_REFRESH);
+      }
     },
     []
   );
@@ -62,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken("");
       setActorUserId("");
       setWebUsername("");
+      localStorage.removeItem(AUTH_STORAGE_REFRESH);
     },
     []
   );

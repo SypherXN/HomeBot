@@ -9,6 +9,7 @@ public static class HomeBotDataServices
     {
         services.AddSingleton<DatabaseService>();
         services.AddSingleton<WebAuthService>();
+        services.AddSingleton<WebRefreshTokenService>();
         services.AddSingleton<WebAuthDiscordVerificationService>();
         services.AddSingleton<DiscordOAuthService>();
         services.AddSingleton<ConfigService>();
