@@ -150,6 +150,35 @@ public class DatabaseService
         );";
 
         cmd.ExecuteNonQuery();
+
+        cmd.CommandText = @"
+        CREATE TABLE IF NOT EXISTS WebUsers (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            Username TEXT NOT NULL COLLATE NOCASE UNIQUE,
+            PasswordHash TEXT NOT NULL,
+            DiscordUserId TEXT NOT NULL,
+            CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+        );";
+
+        cmd.ExecuteNonQuery();
+
+        cmd.CommandText = @"
+        CREATE TABLE IF NOT EXISTS WebAuthVerifications (
+            SessionId TEXT PRIMARY KEY,
+            Code TEXT NOT NULL COLLATE NOCASE,
+            Intent TEXT NOT NULL,
+            DiscordUserId TEXT,
+            ExpiresAt TEXT NOT NULL,
+            VerifiedAt TEXT,
+            ConsumedAt TEXT
+        );";
+
+        cmd.ExecuteNonQuery();
+
+        cmd.CommandText = @"
+        CREATE UNIQUE INDEX IF NOT EXISTS IX_WebAuthVerifications_Code ON WebAuthVerifications(Code);";
+
+        cmd.ExecuteNonQuery();
     }
 
     /// <summary>

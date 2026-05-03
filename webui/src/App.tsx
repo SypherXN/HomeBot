@@ -3,8 +3,10 @@ import AppShell from "./layout/AppShell";
 import BuyPage from "./pages/BuyPage";
 import CalendarPage from "./pages/CalendarPage";
 import DashboardPage from "./pages/DashboardPage";
+import LoginPage from "./pages/LoginPage";
 import MoneyPage from "./pages/MoneyPage";
 import SettingsPage from "./pages/SettingsPage";
+import SetupPage from "./pages/SetupPage";
 import WishlistPage from "./pages/WishlistPage";
 
 export default function App() {
@@ -17,6 +19,8 @@ export default function App() {
         <Route path="/wishlist" element={<WishlistPage />} />
         <Route path="/money" element={<MoneyPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/setup" element={<SetupPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

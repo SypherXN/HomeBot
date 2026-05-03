@@ -1,8 +1,8 @@
 # Refined HomeBot WebUI Adaptation Plan
 
-**Last updated:** 2026-04-30 — aligned with repo state after the **Calendar** product page (month/week/day/agenda + tasks panel), **`GET /api/calendar/range`** with daily/weekly recurrence expansion, calendar list **`?type=task|event`**, and **`AssignedToUserId`** snowflake JSON on calendar create.
+**Last updated:** 2026-05-02 — aligned with repo state after **calendar time zones** (viewer zone + per-event zones + API range window), **Phase 4 shell polish** (API connection status in the header, richer **Dashboard** snapshots), and **route simplification** (no dedicated `/health` or `/undo` pages; **Workspace** removed from the app router).
 
-**How to use this doc (agents):** Treat the [Implementation snapshot](#implementation-snapshot) and [WebUI routes and pages](#webui-routes-and-pages) sections as source of truth for what exists. Prefer opening the cited files over inferring behavior. Phases 1–3 and backend API work are largely **shipped**; Phase 4 product pages are **shipped** for buy, wishlist, money, and **calendar** (optional polish: dedicated minimal health page, `/undo` nav consolidation).
+**How to use this doc (agents):** Treat the [Implementation snapshot](#implementation-snapshot) and [WebUI routes and pages](#webui-routes-and-pages) sections as source of truth for what exists. Prefer opening the cited files over inferring behavior. Phases 1–3 and backend API work are **shipped**; Phase 4 product pages are **shipped** for buy, wishlist, money, and **calendar**, with the optional UX polish items below either **done** or explicitly **deferred**.
 
 ---
 
@@ -24,8 +24,9 @@
 | Buy / wishlist / money HTTP surface | **Shipped** — `Api/HomeBotApiRegistration.cs`; wishlist owners GET for filters. |
 | Money POST bodies (`paidBy`, `owedBy`, `receivedBy`) | **Shipped** — JSON **strings** + `Serialization/SnowflakeUlongJsonConverter.cs` on request DTO `ulong` fields so full snowflakes round-trip from JS. |
 | Calendar POST `assignedToUserId` | **Shipped** — JSON **strings** (or numbers) via `Serialization/SnowflakeUlongNullableJsonConverter.cs` on `Models/ApiRequests.cs` `CalendarItemCreateRequest`. |
-| Calendar range + recurrence | **Shipped** — `GET /api/calendar/range?from&to&userFilter` (local `YYYY-MM-DD` bounds, max 92 days) returns `Models/CalendarRangeItemModel.cs` rows with `instanceStartUtc` / `instanceEndUtc` / `isRecurringInstance`; `CalendarService.GetRange` expands **daily** / **weekly** in the window. |
+| Calendar range + recurrence | **Shipped** — `GET /api/calendar/range?from&to&userFilter` (local `YYYY-MM-DD` bounds, max 92 days) returns `Models/CalendarRangeItemModel.cs` rows with `instanceStartUtc` / `instanceEndUtc` / `isRecurringInstance` / **`timeZoneId`** (event row zone); optional query **`timeZone`** = IANA (or Windows id where the host supports it) sets the **window** for interpreting `from`/`to` and expansion math (`CalendarService.GetRange(..., windowTimeZoneId)`). `Utils/TimeZoneResolver.cs` resolves ids cross-platform (direct + Windows↔IANA when the runtime allows). Household default zone when unset: **`UTC`** (config key `timezone`). |
 | Calendar list filter | **Shipped** — `GET /api/calendar` and `GET /api/calendar/items?type=task|event&page=…` |
+| Calendar create / PATCH body `timezone` | **Shipped** — optional on create and update; wall times interpreted in that zone; defaults to household Settings timezone (`Models/ApiRequests.cs`). |
 | SQLite / DI | `Composition/HomeBotDataServices.cs`; tests may use `DatabaseService(path)`. |
 | HTTP host | **Minimal APIs** — `Api/HomeBotApiRegistration.cs`, `Api/HomeBotApiHost.cs` (not MVC). |
 | Process layout | Same process: optional Discord + optional Kestrel (`Program.cs`). API-only: `HOMEBOT_DISCORD_ENABLED=false`, `HOMEBOT_API_ENABLED=true`. |
@@ -34,7 +35,9 @@
 | Discord notify on API creates | **Shipped** — `IDiscordChannelNotifier` after POST creates (buy, wishlist, money, calendar); needs bindings + connected bot. |
 | Integration tests | `HomeBot.Tests/ApiMutationTests.cs`, `HomeBot.Tests/ApiPhase3Tests.cs`. |
 | Calendar range unit tests | `HomeBot.Tests/CalendarServiceRangeTests.cs` — recurrence + filter + window cap. |
-| WebUI (Vite + React + Tailwind) | **Phase 4 (core)** — **Buy**, **Wishlist**, **Money**, **Calendar** (`webui/src/pages/CalendarPage.tsx` + `webui/src/calendar/*`); **Dashboard**, **Settings**, **AuthContext**; **Workspace** for **health** + **undo** JSON smoke only (calendar console removed). |
+| Time zone resolver unit tests | `HomeBot.Tests/TimeZoneResolverTests.cs` — cross-platform id resolution / storage id. |
+| WebUI (Vite + React + Tailwind) | **Phase 4 (core)** — **Buy**, **Wishlist**, **Money**, **Calendar** (`CalendarPage.tsx` + `webui/src/calendar/*`); **Dashboard** (parallel fetch of buy / wishlist / money / calendar “today” + upcoming + tasks); **Settings** (token, `actorUserId`, **calendar viewer time zone**); **`AppShell`** header shows **API base URL** + **connection status** (`useApiConnectionStatus`); **`CalendarZoneProvider`** in `main.tsx` for persisted viewer IANA selection + Luxon helpers (`calendarZoned.ts`, `TimeZoneSelect`, `timeZoneOptions.ts`). **No** separate Workspace/health/undo routes. |
+| Discord (household timezone UX) | **Shipped (bot)** — `/timezone-set` (autocomplete), `/timezone-list`, validated `/config-set timezone`; storage prefers **IANA** via `TimeZoneResolver.ToStorageId` so Linux and Windows share the same SQLite. |
 
 **Fixes worth remembering:** SQLite deadlocks avoided by not calling `UndoService.LogAction` while a `DataReader` is open (`BuyService.DeleteItem`), and not calling `DeleteLastAction` inside the same open connection as undo-restore SQL (`UndoService.ApplyLastUndo`).
 
@@ -48,16 +51,16 @@ Router: `webui/src/App.tsx` inside `AppShell` (`webui/src/layout/AppShell.tsx`).
 
 | Path | Component | Purpose |
 |------|-----------|---------|
-| `/` | `DashboardPage` | Hub / links to features. |
-| `/settings` | `SettingsPage` | API base URL, bearer token, `actorUserId` (stored in `localStorage` via `AuthContext`). |
+| `/` | `DashboardPage` | Hub with **per-feature snapshots** (buy, wishlist, money summary + recent tx, calendar today / upcoming / tasks) when a bearer token is set; links to feature pages. |
+| `/settings` | `SettingsPage` | API base URL, bearer token, **`actorUserId`**, **calendar viewer time zone** (`TimeZoneSelect` + `CalendarZoneContext`); stored in `localStorage` via `AuthContext` / zone provider. |
 | `/buy` | `BuyPage` | Tag catalog editor, tag filter + sort, add form (roster assignee), list with complete/remove, clear completed, pagination, **Undo last action** under pagination when list non-empty. |
 | `/wishlist` | `WishlistPage` | Same catalog pattern as buy; **owner filter** (everyone vs user); roster or `GET /api/wishlist/owners`; add/complete/remove/clear completed; pagination; **Undo** under pagination. |
 | `/money` | `MoneyPage` | Transactions table (roster-aware names; subline = exact id from `member-{id}` parse); **split expense only** (no non-split expense UI); **record payment**; pairwise **balance** (summary uses roster usernames when possible); pagination; **Undo** under pagination. |
-| `/health` | `WorkspacePage` `section="health"` | Smoke: GET health + meta JSON. |
-| `/calendar` | `CalendarPage` | **Month / Week / Day / Agenda** views; `GET /api/calendar/range` for the visible window; **Tasks** side panel (`?type=task`) stacks below on narrow screens; filter (everyone / me / user); **+ Event** / **+ Task** modals; item detail (PATCH / complete / delete); recurring-instance banner; **Undo** (Calendar also has in-page Undo). URL state: `?view=` & `?date=`. |
-| `/undo` | `WorkspacePage` `section="undo"` | Smoke: POST `/api/undo` only (feature pages also expose Undo). |
+| `/calendar` | `CalendarPage` | **Month / Week / Day / Agenda** views; `GET /api/calendar/range` for the visible window with **`timeZone`** from the **viewer zone**; **Tasks** side panel (`?type=task`) stacks below on narrow screens; filter (everyone / me / user); **+ Event** / **+ Task** modals (optional event **time zone**); item detail (PATCH / complete / delete); per-row **time zone** hints when event zone differs from display zone; recurring-instance banner; **Undo** in-page. URL state: `?view=` & `?date=`. |
 
-**Nav:** `webui/src/layout/AppShell.tsx` — sidebar lists all routes above.
+**Removed from the SPA (use feature pages + shell instead):** dedicated `/health` and `/undo` routes and **`WorkspacePage`** — API reachability and token validity are shown in **`AppShell`** (`useApiConnectionStatus`: health + meta + optional authenticated probe); **Undo** remains on **Buy / Wishlist / Money / Calendar** only.
+
+**Nav:** `webui/src/layout/AppShell.tsx` — sidebar: Home, Buy, Wishlist, Money, Calendar, Settings (no Workspace).
 
 ---
 
@@ -78,11 +81,13 @@ Router: `webui/src/App.tsx` inside `AppShell` (`webui/src/layout/AppShell.tsx`).
 
 - `POST /api/undo?actorUserId=…` — reverts **one** latest undoable `ActionLog` row for that actor (any domain), not “current page only.”
 - **Product UX:** `postUndo` in `api.ts` returns `UndoResponse` `{ undone, message? }`; `200` with `undone: false` means nothing to undo — not an HTTP error.
-- Buttons: bottom of pagination on **Buy**, **Wishlist**, **Money** when `totalCount > 0`; **Calendar** exposes Undo below the main grid; still use `/undo` workspace for raw debugging if needed.
+- Buttons: bottom of pagination on **Buy**, **Wishlist**, **Money** when `totalCount > 0`; **Calendar** exposes Undo below the main grid. There is **no** separate Undo debug page; use browser devtools or `curl` against `POST /api/undo` if needed.
 
 ### Calendar (WebUI + range API)
 
 - **Grid data** comes from `GET /api/calendar/range` (not from paging all items). **Tasks** use `GET /api/calendar/items?type=task`.
+- **Viewer time zone:** persisted in `localStorage` (`CalendarZoneContext`), configurable on **Settings** and **Calendar**; passed as query **`timeZone`** on range requests so the server’s window matches what the user sees (`api.ts` `getCalendarRange`). Fallback: browser `Intl` default (`calendarZoned.ts`).
+- **Event time zones:** create/update payloads may include **`timezone`**; list/range rows expose **`timeZoneId`** for display (e.g. Agenda row subline when different from the viewer zone).
 - **Recurrence:** the server expands **daily** / **weekly** into one row per occurrence in the requested window (`isRecurringInstance`). **Complete** and **Delete** in the API still target the **parent row id** — they affect the **entire series**; the detail modal warns when opened from a recurring instance.
 - **Per-instance skip/edit** is not implemented (would need schema/API changes).
 
@@ -154,10 +159,11 @@ Router: `webui/src/App.tsx` inside `AppShell` (`webui/src/layout/AppShell.tsx`).
 |------|--------|
 | `api.ts` typed clients + money string snowflakes + `UndoResponse` | **Done** |
 | Buy / Wishlist / Money full pages | **Done** |
-| Dashboard + Settings + shell | **Done** |
+| Dashboard + Settings + shell | **Done** — Dashboard loads multi-feature snapshots; shell shows API connection status |
 | Calendar product page (replace `WorkspacePage` console) | **Done** — `CalendarPage` + `webui/src/calendar/*` |
-| Health as dedicated minimal page (optional) | **Not done** |
-| Consolidate or remove redundant `/undo` nav entry vs in-page Undo | **Optional UX** |
+| Calendar time zones (viewer zone, range `timeZone`, per-event `timezone` / `timeZoneId`) | **Done** — see [Calendar (WebUI + range API)](#calendar-webui--range-api) |
+| Health as dedicated minimal page (optional) | **Superseded** — use **`AppShell`** connection indicator (health/meta; token probe) |
+| Consolidate or remove redundant `/undo` nav entry vs in-page Undo | **Done** — `/undo` route and Workspace **removed**; in-page Undo only |
 
 ### Phase 5 — Identity
 
@@ -171,22 +177,24 @@ Unchanged: v1 bearer + `actorUserId`; future OAuth / accounts.
 |---------|--------|
 | Routes | `webui/src/App.tsx`, `webui/src/layout/AppShell.tsx` |
 | API client | `webui/src/api.ts` |
+| API connection status (shell) | `webui/src/hooks/useApiConnectionStatus.ts` |
 | Feature pages | `webui/src/pages/BuyPage.tsx`, `WishlistPage.tsx`, `MoneyPage.tsx`, `CalendarPage.tsx` |
-| Calendar UI modules | `webui/src/calendar/` (`MonthView`, `TimeGridView`, `AgendaView`, `TasksPanel`, `AddItemModal`, `ItemDetailModal`, `dateUtils`) |
-| Shell / hub / settings | `webui/src/pages/DashboardPage.tsx`, `SettingsPage.tsx`, `auth/AuthContext.tsx` |
-| API console (health, undo) | `webui/src/pages/WorkspacePage.tsx` |
+| Calendar UI modules | `webui/src/calendar/` (`MonthView`, `TimeGridView`, `AgendaView`, `TasksPanel`, `AddItemModal`, `ItemDetailModal`, `dateUtils`, `CalendarZoneContext`, `calendarZoned`, `timeZoneOptions`) |
+| Shell / hub / settings | `webui/src/pages/DashboardPage.tsx`, `SettingsPage.tsx`, `auth/AuthContext.tsx`, `components/TimeZoneSelect.tsx` |
+| App entry (zone provider) | `webui/src/main.tsx` (`CalendarZoneProvider`) |
 | Roster hook | `webui/src/hooks/useDiscordGuildRoster.ts` |
 | HTTP registration | `Api/HomeBotApiRegistration.cs` |
 | Host + Phase 3 | `Api/HomeBotApiHost.cs`, `Api/HomeBotApiPhase3.cs` |
 | Money JSON ulong | `Serialization/SnowflakeUlongJsonConverter.cs`, `Models/ApiRequests.cs` (money request types) |
 | Calendar range DTO + JSON ulong (nullable) | `Models/CalendarRangeItemModel.cs`, `Serialization/SnowflakeUlongNullableJsonConverter.cs`, `Services/CalendarService.cs` (`GetRange`) |
+| Time zone resolution (API + bot) | `Utils/TimeZoneResolver.cs`, `Utils/HomeBotTimeZones.cs`, `Commands/ConfigCommands.cs`, `Commands/TimezoneAutocompleteHandler.cs` |
 | Error DTOs | `Api/ApiErrorBody.cs`, `Api/ApiResults.cs` |
 | DI | `Composition/HomeBotDataServices.cs` |
 | Process | `Program.cs` |
 | Discord notify | `Services/DiscordChannelNotifier.cs`, `Utils/DiscordNotifyText.cs` |
 | Bindings | `Services/ChannelBindingService.cs` |
 | Wishlist tags / owners | `Services/WishlistService.cs` |
-| Tests | `HomeBot.Tests/ApiMutationTests.cs`, `ApiPhase3Tests.cs`, `CalendarServiceRangeTests.cs` |
+| Tests | `HomeBot.Tests/ApiMutationTests.cs`, `ApiPhase3Tests.cs`, `CalendarServiceRangeTests.cs`, `TimeZoneResolverTests.cs` |
 
 ---
 
@@ -196,13 +204,13 @@ Unchanged: v1 bearer + `actorUserId`; future OAuth / accounts.
 flowchart LR
   subgraph webui [WebUI Vite React]
     pages[Buy Wishlist Money Calendar Dashboard Settings]
-    ws[Workspace health undo]
+    shell[AppShell API status]
   end
   subgraph api [Kestrel Minimal API]
     routes[HomeBotApiRegistration]
   end
   pages --> routes
-  ws --> routes
+  shell --> routes
   routes --> svc[Buy Wishlist Money Calendar Undo services]
   svc --> db[(SQLite)]
   routes --> notify[DiscordChannelNotifier]

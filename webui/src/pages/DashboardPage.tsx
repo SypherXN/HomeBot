@@ -125,11 +125,15 @@ export default function DashboardPage() {
 
       {!canAuth && (
         <div className="rounded-lg border border-amber-700/50 bg-amber-950/40 px-4 py-3 text-sm text-amber-100">
-          No bearer token stored. Add your <code className="rounded bg-slate-900 px-1">HOMEBOT_API_TOKEN</code> in{" "}
+          No bearer token stored.{" "}
+          <Link to="/login" className="font-medium text-amber-50 underline">
+            Sign in
+          </Link>{" "}
+          with a household account, or add <code className="rounded bg-slate-900 px-1">HOMEBOT_API_TOKEN</code> in{" "}
           <Link to="/settings" className="font-medium text-amber-50 underline">
             Settings
-          </Link>{" "}
-          to load this dashboard.
+          </Link>
+          .
         </div>
       )}
 

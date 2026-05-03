@@ -44,6 +44,7 @@ public static class CommandFeatureMap
             "timezone-set" => null,
             "timezone-list" => null,
             "undo" => null,
+            "webui-verify" => null,
 
             _ => null
         };

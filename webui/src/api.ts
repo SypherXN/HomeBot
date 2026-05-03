@@ -661,3 +661,91 @@ export function postUndo(token: string, actorUserId: string) {
   const path = mergeQuery("/api/undo", { actorUserId });
   return apiJson<UndoResponse>(path, { token, method: "POST" });
 }
+
+export type AuthLoginResponse = {
+  accessToken: string;
+  tokenType: string;
+  expiresInSeconds: number;
+  username: string;
+  discordUserId: string;
+};
+
+/** Web UI login (no bearer). */
+export function postAuthLogin(username: string, password: string) {
+  return apiJson<AuthLoginResponse>("/api/auth/login", {
+    method: "POST",
+    body: { username, password },
+  });
+}
+
+export function postAuthBootstrap(body: {
+  username: string;
+  password: string;
+  discordUserId: string;
+  setupToken?: string;
+}) {
+  return apiJson<{ ok: boolean; message: string }>("/api/auth/bootstrap", { method: "POST", body });
+}
+
+export function postAuthRegister(body: {
+  inviteToken: string;
+  username: string;
+  password: string;
+  discordUserId: string;
+}) {
+  return apiJson<{ ok: boolean; message: string }>("/api/auth/register", { method: "POST", body });
+}
+
+export function postAuthDiscordStart(body: { intent: "bootstrap" | "register" }) {
+  return apiJson<{
+    sessionId: string;
+    code: string;
+    expiresAt: string;
+    message: string;
+  }>("/api/auth/discord/start", { method: "POST", body });
+}
+
+export type AuthDiscordStatus = {
+  exists: boolean;
+  discordVerified: boolean;
+  consumed: boolean;
+  expired: boolean;
+  expiresAt: string | null;
+};
+
+export function getAuthDiscordStatus(sessionId: string, signal?: AbortSignal) {
+  const path = mergeQuery("/api/auth/discord/status", { sessionId });
+  return apiJson<AuthDiscordStatus>(path, { signal });
+}
+
+export function postAuthDiscordCompleteBootstrap(body: {
+  sessionId: string;
+  username: string;
+  password: string;
+}) {
+  return apiJson<{ ok: boolean; message: string }>("/api/auth/discord/complete-bootstrap", {
+    method: "POST",
+    body,
+  });
+}
+
+export function postAuthDiscordCompleteRegister(body: {
+  sessionId: string;
+  username: string;
+  password: string;
+}) {
+  return apiJson<{ ok: boolean; message: string }>("/api/auth/discord/complete-register", {
+    method: "POST",
+    body,
+  });
+}
+
+export type AuthMeResponse = {
+  kind: "webUser" | "apiToken";
+  username: string | null;
+  discordUserId: string | null;
+};
+
+export function getAuthMe(token: string, signal?: AbortSignal) {
+  return apiJson<AuthMeResponse>("/api/auth/me", { token, signal });
+}

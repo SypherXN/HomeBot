@@ -29,10 +29,12 @@ public class HelpCommands : InteractionModuleBase<SocketInteractionContext>
     • Use /setup-set to configure channels
     • Use /undo to revert last action
     • Use /config-set to change settings
+    • Use /webui-verify with the code from the browser to finish Web sign-up
 
     Examples:
     - /undo
-    - /config-set page_size 5";
+    - /config-set page_size 5
+    - /webui-verify code:ABCD12EF";
                 break;
 
             // ================= CONFIG =================

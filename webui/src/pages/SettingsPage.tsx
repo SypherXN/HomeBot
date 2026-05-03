@@ -4,7 +4,7 @@ import TimeZoneSelect from "../components/TimeZoneSelect";
 import { useCalendarZone } from "../calendar/CalendarZoneContext";
 
 export default function SettingsPage() {
-  const { token, setToken, actorUserId, setActorUserId } = useAuth();
+  const { token, setToken, actorUserId, setActorUserId, webUsername, clearSession } = useAuth();
   const { viewerTimeZone, setViewerTimeZone } = useCalendarZone();
 
   return (
@@ -16,19 +16,46 @@ export default function SettingsPage() {
         </p>
       </div>
 
+      <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/30 p-4">
+        <h2 className="text-sm font-semibold text-white">Web sign-in</h2>
+        <p className="max-w-2xl text-sm text-slate-400">
+          Prefer signing in with a household username and password (see <span className="text-slate-300">Sign in</span>{" "}
+          in the sidebar). That stores a short-lived JWT and sets <code className="text-slate-300">actorUserId</code>{" "}
+          from your profile.
+        </p>
+        {webUsername ? (
+          <p className="text-sm text-slate-300">
+            Web session: <strong className="text-white">{webUsername}</strong>
+          </p>
+        ) : (
+          <p className="text-sm text-slate-500">No web username on this browser (legacy API token or not signed in).</p>
+        )}
+        <button
+          type="button"
+          onClick={() => clearSession()}
+          className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
+        >
+          Sign out &amp; clear token
+        </button>
+      </div>
+
       <div className="space-y-3">
         <label htmlFor="settings-token" className="block text-sm font-medium text-slate-300">
-          Bearer token
+          Bearer token (optional)
         </label>
         <input
           id="settings-token"
           type="password"
           autoComplete="off"
-          placeholder="HOMEBOT_API_TOKEN"
+          placeholder="HOMEBOT_API_TOKEN or paste JWT"
           value={token}
           onChange={(e) => setToken(e.target.value)}
           className="w-full max-w-xl rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
+        <p className="max-w-2xl text-xs text-slate-500">
+          Advanced: shared <code className="text-slate-400">HOMEBOT_API_TOKEN</code> still works when the server has
+          one. Web login issues a JWT that is also sent as the bearer.
+        </p>
       </div>
 
       <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/30 p-4">

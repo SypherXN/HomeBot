@@ -40,11 +40,25 @@ export function useApiConnectionStatus(token: string) {
   useEffect(() => {
     void run();
     const id = window.setInterval(() => void run(), 45_000);
+
     const onFocus = () => void run();
+
+    /** Mobile browsers often restore the tab without firing `window` focus; visibility is reliable. */
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void run();
+    };
+
+    const onOnline = () => void run();
+
     window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("online", onOnline);
+
     return () => {
       window.clearInterval(id);
       window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("online", onOnline);
     };
   }, [run]);
 

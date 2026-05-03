@@ -8,6 +8,8 @@ public static class HomeBotDataServices
     public static IServiceCollection AddHomeBotDataServices(this IServiceCollection services)
     {
         services.AddSingleton<DatabaseService>();
+        services.AddSingleton<WebAuthService>();
+        services.AddSingleton<WebAuthDiscordVerificationService>();
         services.AddSingleton<ConfigService>();
         services.AddSingleton<ChannelBindingService>();
         services.AddSingleton<UndoService>();

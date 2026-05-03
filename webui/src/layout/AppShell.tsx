@@ -62,7 +62,7 @@ function connectionLabel(status: ReturnType<typeof useApiConnectionStatus>["stat
 }
 
 export default function AppShell() {
-  const { token } = useAuth();
+  const { token, webUsername } = useAuth();
   const hasToken = token.trim().length > 0;
   const { status } = useApiConnectionStatus(token);
   const conn = connectionLabel(status);
@@ -76,10 +76,15 @@ export default function AppShell() {
             <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-500">
               <span
                 className={`inline-block h-2 w-2 rounded-full ${hasToken ? "bg-emerald-500" : "bg-amber-500"}`}
-                title={hasToken ? "API token set" : "No API token"}
+                title={hasToken ? "Bearer set (API token or web session)" : "No bearer token"}
               />
               API
             </div>
+            {webUsername ? (
+              <div className="mt-2 truncate text-xs text-slate-400" title={webUsername}>
+                Signed in as <span className="text-slate-200">{webUsername}</span>
+              </div>
+            ) : null}
           </div>
         </div>
         <nav className="flex flex-wrap gap-1 px-2 pb-3 md:flex-col md:px-2">
@@ -88,6 +93,14 @@ export default function AppShell() {
               {label}
             </NavLink>
           ))}
+          <div className="mt-2 border-t border-slate-800 pt-2 md:mt-3">
+            <NavLink to="/login" className={navClass}>
+              Sign in
+            </NavLink>
+            <NavLink to="/setup" className={navClass}>
+              New account
+            </NavLink>
+          </div>
         </nav>
       </aside>
 

@@ -10,7 +10,7 @@ export type DiscordGuildRosterState = {
   error: string | null;
 };
 
-/** One GET /api/discord/guild/members per token change (use in Workspace to share across many pickers). */
+/** One GET /api/discord/guild/members per token change (shared across pickers on feature pages). */
 export function useDiscordGuildRoster(token: string): DiscordGuildRosterState {
   const [data, setData] = useState<DiscordGuildMembersResponse | null>(null);
   const [loading, setLoading] = useState(false);

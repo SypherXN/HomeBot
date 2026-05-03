@@ -37,6 +37,8 @@ internal sealed class ApiTestHarness : IAsyncDisposable
 
         var sc = new ServiceCollection();
         sc.AddSingleton(_ => new DatabaseService(dbPath));
+        sc.AddSingleton<WebAuthService>();
+        sc.AddSingleton<WebAuthDiscordVerificationService>();
         sc.AddSingleton<ConfigService>();
         sc.AddSingleton<ChannelBindingService>();
         sc.AddSingleton<UndoService>();

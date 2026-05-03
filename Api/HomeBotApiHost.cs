@@ -56,11 +56,32 @@ public static class HomeBotApiHost
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(apiToken))
+            var isAuthPublic =
+                context.Request.Path.StartsWithSegments("/api/auth/login") ||
+                context.Request.Path.StartsWithSegments("/api/auth/bootstrap") ||
+                context.Request.Path.StartsWithSegments("/api/auth/register") ||
+                context.Request.Path.StartsWithSegments("/api/auth/discord/start") ||
+                context.Request.Path.StartsWithSegments("/api/auth/discord/status") ||
+                context.Request.Path.StartsWithSegments("/api/auth/discord/complete-bootstrap") ||
+                context.Request.Path.StartsWithSegments("/api/auth/discord/complete-register");
+
+            if (isAuthPublic)
+            {
+                await next();
+                return;
+            }
+
+            var jwtSecret = WebAuthService.ReadJwtSecret();
+            var jwtOk = WebAuthService.IsJwtSecretConfigured(jwtSecret);
+            var staticOk = !string.IsNullOrWhiteSpace(apiToken);
+
+            if (!staticOk && !jwtOk)
             {
                 context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
                 await context.Response.WriteAsJsonAsync(
-                    new ApiErrorBody("API token not configured.", "service_unavailable"));
+                    new ApiErrorBody(
+                        "API authentication not configured: set HOMEBOT_API_TOKEN and/or HOMEBOT_WEB_JWT_SECRET (min 32 UTF-8 bytes).",
+                        "service_unavailable"));
                 return;
             }
 
@@ -76,7 +97,13 @@ public static class HomeBotApiHost
             }
 
             var token = authHeader[prefix.Length..].Trim();
-            if (!string.Equals(token, apiToken, StringComparison.Ordinal))
+            var accepted = false;
+            if (staticOk && string.Equals(token, apiToken, StringComparison.Ordinal))
+                accepted = true;
+            else if (jwtOk && HomeBotJwtTokens.TryValidate(token, jwtSecret!, out _, out _))
+                accepted = true;
+
+            if (!accepted)
             {
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 await context.Response.WriteAsJsonAsync(
@@ -99,7 +126,7 @@ public static class HomeBotApiHost
             name = "HomeBot API",
             version = "phase3",
             features = new[] { "buy", "wishlist", "money", "calendar", "undo" },
-            docs = "Mutations require Authorization: Bearer and (where noted) query actorUserId=DISCORD_USER_ID.",
+            docs = "Authorization: Bearer accepts HOMEBOT_API_TOKEN and/or HS256 JWTs from POST /api/auth/login. Web sign-up: POST /api/auth/discord/start then /webui-verify in Discord, then complete-* . Mutations use query actorUserId=DISCORD_USER_ID where noted.",
             openApi = "/openapi/v1.json",
             restExamples = new
             {
@@ -115,6 +142,7 @@ public static class HomeBotApiHost
 
         HomeBotApiPhase3.MapOpenApiDocument(app);
 
+        app.MapHomeBotAuthApi(root, apiToken);
         app.MapHomeBotApi(root);
     }
 
