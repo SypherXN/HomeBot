@@ -15,11 +15,13 @@ public sealed class ApiWebAuthTests : IDisposable
     private readonly ServiceProvider _services;
     private readonly WebApplication _app;
     private readonly HttpClient _client;
+    private readonly string? _restoreJwtSecret;
     private const string StaticToken = "static-api-token";
     private const string JwtSecret = "0123456789abcdef0123456789abcdef"; // 32 chars
 
     public ApiWebAuthTests()
     {
+        _restoreJwtSecret = Environment.GetEnvironmentVariable("HOMEBOT_WEB_JWT_SECRET");
         Environment.SetEnvironmentVariable("HOMEBOT_WEB_JWT_SECRET", JwtSecret);
 
         _dbPath = Path.Combine(Path.GetTempPath(), $"homebot_webauth_{Guid.NewGuid():N}.db");
@@ -30,6 +32,7 @@ public sealed class ApiWebAuthTests : IDisposable
         sc.AddSingleton(_ => new DatabaseService(_dbPath));
         sc.AddSingleton<WebAuthService>();
         sc.AddSingleton<WebAuthDiscordVerificationService>();
+        sc.AddSingleton<DiscordOAuthService>();
         sc.AddSingleton<ConfigService>();
         sc.AddSingleton<ChannelBindingService>();
         sc.AddSingleton<UndoService>();
@@ -41,6 +44,7 @@ public sealed class ApiWebAuthTests : IDisposable
         sc.AddSingleton<DiscordSocketHolder>();
         sc.AddSingleton<DiscordGuildDirectoryService>();
         sc.AddSingleton<IDiscordChannelNotifier, DiscordChannelNotifier>();
+        sc.AddSingleton<DiscordAuthAuditNotifier>();
         _services = sc.BuildServiceProvider();
 
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
@@ -49,7 +53,14 @@ public sealed class ApiWebAuthTests : IDisposable
         });
 
         HomeBotApiHost.AddApiCors(builder);
-        builder.AddPhase3Services(maxRequestBodyBytes: 65536, mutationPermitsPerMinute: 100_000);
+        builder.AddPhase3Services(
+            maxRequestBodyBytes: 65536,
+            mutationPermitsPerMinute: 100_000,
+            authLoginPerMinute: 100_000,
+            oauthConsumePerMinute: 100_000,
+            oauthBrowserPerMinute: 100_000,
+            authAccountWritePerMinute: 100_000,
+            discordStatusPollPerMinute: 100_000);
         builder.WebHost.UseTestServer();
 
         _app = builder.Build();
@@ -61,7 +72,7 @@ public sealed class ApiWebAuthTests : IDisposable
 
     public void Dispose()
     {
-        Environment.SetEnvironmentVariable("HOMEBOT_WEB_JWT_SECRET", null);
+        Environment.SetEnvironmentVariable("HOMEBOT_WEB_JWT_SECRET", _restoreJwtSecret);
 
         try
         {

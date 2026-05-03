@@ -39,6 +39,7 @@ internal sealed class ApiTestHarness : IAsyncDisposable
         sc.AddSingleton(_ => new DatabaseService(dbPath));
         sc.AddSingleton<WebAuthService>();
         sc.AddSingleton<WebAuthDiscordVerificationService>();
+        sc.AddSingleton<DiscordOAuthService>();
         sc.AddSingleton<ConfigService>();
         sc.AddSingleton<ChannelBindingService>();
         sc.AddSingleton<UndoService>();
@@ -50,6 +51,7 @@ internal sealed class ApiTestHarness : IAsyncDisposable
         sc.AddSingleton<DiscordSocketHolder>();
         sc.AddSingleton<DiscordGuildDirectoryService>();
         sc.AddSingleton<IDiscordChannelNotifier, DiscordChannelNotifier>();
+        sc.AddSingleton<DiscordAuthAuditNotifier>();
         var services = sc.BuildServiceProvider();
 
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions

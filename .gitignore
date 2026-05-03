@@ -23,6 +23,17 @@ _testout3/
 _testout4/
 out-build/
 out-build2/
+.build-out/
+
+# --- Test / coverage artifacts (HomeBot.Tests/*.cs stays in git; only outputs ignored) ---
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+coverage/
+coverage-report/
+*.binlog
+BenchmarkDotNet.Artifacts/
 
 # --- IDE ---
 .vs/

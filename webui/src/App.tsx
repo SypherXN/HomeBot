@@ -5,6 +5,7 @@ import CalendarPage from "./pages/CalendarPage";
 import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
 import MoneyPage from "./pages/MoneyPage";
+import OAuthCallbackPage from "./pages/OAuthCallbackPage";
 import SettingsPage from "./pages/SettingsPage";
 import SetupPage from "./pages/SetupPage";
 import WishlistPage from "./pages/WishlistPage";
@@ -12,6 +13,7 @@ import WishlistPage from "./pages/WishlistPage";
 export default function App() {
   return (
     <Routes>
+      <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
       <Route element={<AppShell />}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/settings" element={<SettingsPage />} />

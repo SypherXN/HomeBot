@@ -1,8 +1,8 @@
 # Refined HomeBot WebUI Adaptation Plan
 
-**Last updated:** 2026-05-02 — aligned with repo state after **calendar time zones** (viewer zone + per-event zones + API range window), **Phase 4 shell polish** (API connection status in the header, richer **Dashboard** snapshots), and **route simplification** (no dedicated `/health` or `/undo` pages; **Workspace** removed from the app router).
+**Last updated:** 2026-05-02 — aligned with repo state after **web household auth** (JWT username/password, Discord-verified bootstrap/register, **optional Discord OAuth** browser sign-in), **`/login` / `/setup` / `/oauth/callback`** routes, **Discord auth audit** (`/setup-set audit #channel`), **auth resilience** (per-IP **rate limits** on public auth routes via `HomeBotApiPhase3`; **non-Development** startup **fails** if Discord OAuth env is only partly set unless **`HOMEBOT_ALLOW_PARTIAL_OAUTH_ENV=true`**), **operational UX** (`HomeBotApiHost.ResolveCorsOrigins` merges OAuth SPA origin; **`LogOperationalWarnings`** at API boot), **router `basename`**, env templates (**`.env.example`**, README), **tests** (`ApiAuthRateLimitTests`, assembly **`DisableTestParallelization`** for process-global JWT env), plus earlier work: **calendar time zones**, **Phase 4 shell**, **route simplification** (no `/health` / `/undo`; **Workspace** removed).
 
-**How to use this doc (agents):** Treat the [Implementation snapshot](#implementation-snapshot) and [WebUI routes and pages](#webui-routes-and-pages) sections as source of truth for what exists. Prefer opening the cited files over inferring behavior. Phases 1–3 and backend API work are **shipped**; Phase 4 product pages are **shipped** for buy, wishlist, money, and **calendar**, with the optional UX polish items below either **done** or explicitly **deferred**.
+**How to use this doc (agents):** Treat the [Implementation snapshot](#implementation-snapshot) and [WebUI routes and pages](#webui-routes-and-pages) sections as source of truth for what exists. Prefer opening the cited files over inferring behavior. Phases 1–3 and backend API work are **shipped**; Phase 4 includes feature pages **and** sign-in / account flows; Phase 5 (identity) is **partially shipped** for single-household JWT + optional OAuth (no multi-tenant SSO).
 
 ---
 
@@ -28,39 +28,46 @@
 | Calendar list filter | **Shipped** — `GET /api/calendar` and `GET /api/calendar/items?type=task|event&page=…` |
 | Calendar create / PATCH body `timezone` | **Shipped** — optional on create and update; wall times interpreted in that zone; defaults to household Settings timezone (`Models/ApiRequests.cs`). |
 | SQLite / DI | `Composition/HomeBotDataServices.cs`; tests may use `DatabaseService(path)`. |
-| HTTP host | **Minimal APIs** — `Api/HomeBotApiRegistration.cs`, `Api/HomeBotApiHost.cs` (not MVC). |
+| HTTP host | **Minimal APIs** — `Api/HomeBotApiRegistration.cs`, **`Api/HomeBotAuthApi.cs`**, **`Api/HomeBotDiscordOAuthApi.cs`**, `Api/HomeBotApiHost.cs` (not MVC). |
 | Process layout | Same process: optional Discord + optional Kestrel (`Program.cs`). API-only: `HOMEBOT_DISCORD_ENABLED=false`, `HOMEBOT_API_ENABLED=true`. |
-| Security (v1) | Bearer `HOMEBOT_API_TOKEN` on `/api/*` except `/api/health`, `/api/meta`, `/openapi/*`; CORS `HOMEBOT_ALLOWED_ORIGINS` or dev default; HTTPS/HSTS when not Development. |
-| Phase 3 | **Shipped** — `Api/HomeBotApiPhase3.cs` (limits, OpenAPI, errors, logging). |
+| Security (v1) | Bearer **`HOMEBOT_API_TOKEN`** and/or **HS256 JWT** (`HOMEBOT_WEB_JWT_SECRET`, ≥32 UTF-8 bytes) on `/api/*` except **`/api/health`**, **`/api/meta`**, **`/openapi/*`**, and **public auth routes** (see [Public auth](#public-auth-no-authorization-header)). **Rate limits:** separate fixed-window policies per client IP for login, OAuth consume/browser, account-write bundle, Discord status poll (`Api/HomeBotApiPhase3.cs` + `RequireRateLimiting` on `HomeBotAuthApi` / `HomeBotDiscordOAuthApi`); **`429`** + `Retry-After` on abuse (env-tunable; see README **Auth rate limits**). CORS **`HOMEBOT_ALLOWED_ORIGINS`** or dev default; **OAuth SPA origin** from **`HOMEBOT_WEB_OAUTH_FRONTEND_URL`** merged into CORS when missing. HTTPS/HSTS when not Development. **Production:** incomplete OAuth triple → startup exception (`HomeBotApiHost.ValidateAuthEnvironmentForHosting` from **`Program`**). |
+| Web users / JWT | **Shipped** — `WebUsers` + `WebAuthService` (`Services/WebAuthService.cs`, `HomeBotJwtTokens`); `POST /api/auth/login` returns JWT + `username` + `discordUserId`; `GET /api/auth/me` (bearer). |
+| Web sign-up (Discord verify in guild) | **Shipped** — `WebAuthDiscordVerificationService` + `POST/GET` under `/api/auth/discord/*` (start, status, complete-bootstrap, complete-register); bot **`/webui-verify`**; optional **`HOMEBOT_WEB_SETUP_TOKEN`** / **`HOMEBOT_WEB_INVITE_TOKEN`**. |
+| Discord OAuth (browser) | **Shipped** — `Services/DiscordOAuthService.cs`, `Api/HomeBotDiscordOAuthApi.cs` (authorize URL, callback, consume); exchange table **`WebOAuthExchangeCodes`**; env `HOMEBOT_DISCORD_OAUTH_*`, **`HOMEBOT_WEB_OAUTH_FRONTEND_URL`**. Signs in only when **`WebUsers.DiscordUserId`** already matches (same row as password login). |
+| Discord auth audit | **Shipped** — `Services/DiscordAuthAuditNotifier.cs` posts to channel bound as feature **`audit`** (`/setup-set audit #channel`) on successful **password** and **Discord OAuth** sign-in. |
+| Integration tests | `HomeBot.Tests/ApiMutationTests.cs`, `ApiPhase3Tests.cs`, **`ApiWebAuthTests.cs`**, **`ApiAuthRateLimitTests.cs`**. |
+| Phase 3 | **Shipped** — `Api/HomeBotApiPhase3.cs`: mutation rate limit + **auth-specific** rate limits, max body, OpenAPI, errors, HTTP logging. |
 | Discord notify on API creates | **Shipped** — `IDiscordChannelNotifier` after POST creates (buy, wishlist, money, calendar); needs bindings + connected bot. |
-| Integration tests | `HomeBot.Tests/ApiMutationTests.cs`, `HomeBot.Tests/ApiPhase3Tests.cs`. |
 | Calendar range unit tests | `HomeBot.Tests/CalendarServiceRangeTests.cs` — recurrence + filter + window cap. |
 | Time zone resolver unit tests | `HomeBot.Tests/TimeZoneResolverTests.cs` — cross-platform id resolution / storage id. |
-| WebUI (Vite + React + Tailwind) | **Phase 4 (core)** — **Buy**, **Wishlist**, **Money**, **Calendar** (`CalendarPage.tsx` + `webui/src/calendar/*`); **Dashboard** (parallel fetch of buy / wishlist / money / calendar “today” + upcoming + tasks); **Settings** (token, `actorUserId`, **calendar viewer time zone**); **`AppShell`** header shows **API base URL** + **connection status** (`useApiConnectionStatus`); **`CalendarZoneProvider`** in `main.tsx` for persisted viewer IANA selection + Luxon helpers (`calendarZoned.ts`, `TimeZoneSelect`, `timeZoneOptions.ts`). **No** separate Workspace/health/undo routes. |
+| WebUI (Vite + React + Tailwind) | **Phase 4** — same as before **plus** **`LoginPage`** / **`SetupPage`** / **`OAuthCallbackPage`**; **`AuthContext`** (`token`, `actorUserId`, `webUsername`, `applyWebLogin`); **`BrowserRouter`** **`basename`** from `import.meta.env.BASE_URL` (`main.tsx`). Feature pages unchanged: **Buy**, **Wishlist**, **Money**, **Calendar** + **Dashboard** + **Settings** + shell status. **No** Workspace/health/undo routes. |
 | Discord (household timezone UX) | **Shipped (bot)** — `/timezone-set` (autocomplete), `/timezone-list`, validated `/config-set timezone`; storage prefers **IANA** via `TimeZoneResolver.ToStorageId` so Linux and Windows share the same SQLite. |
 
 **Fixes worth remembering:** SQLite deadlocks avoided by not calling `UndoService.LogAction` while a `DataReader` is open (`BuyService.DeleteItem`), and not calling `DeleteLastAction` inside the same open connection as undo-restore SQL (`UndoService.ApplyLastUndo`).
 
-**Operational:** If API writes succeed but Discord is silent, check `ChannelBindings` for keys `buy`, `wishlist`, `money`, `calendar`.
+**Operational:** If API writes succeed but Discord is silent, check `ChannelBindings` for keys `buy`, `wishlist`, `money`, `calendar`. For **web sign-in audit** lines, bind feature **`audit`** (`/setup-set audit #channel`). **`HomeBotApiHost.LogOperationalWarnings`** (API enabled) prints console hints for missing token/JWT, incomplete OAuth triple, bad redirect URI shape, and CORS merge. Env reference: **`.env.example`**, **`README.md`** — the .NET host does not auto-load `.env`; inject vars via IDE / systemd / Docker / shell. **Tests:** `HomeBot.Tests/AssemblyInfo.cs` sets **`DisableTestParallelization`** because fixtures set process-global **`HOMEBOT_WEB_JWT_SECRET`**.
 
 ---
 
 ## WebUI routes and pages
 
-Router: `webui/src/App.tsx` inside `AppShell` (`webui/src/layout/AppShell.tsx`).
+Router: `webui/src/App.tsx`. **`/oauth/callback`** is a **top-level** route (no `AppShell` chrome) so Discord’s redirect lands on a minimal page; everything else below is wrapped in **`AppShell`**. `webui/src/main.tsx` wraps the tree in **`AuthProvider`** + **`CalendarZoneProvider`** and sets **`BrowserRouter`** **`basename`** from Vite `import.meta.env.BASE_URL` (strip trailing `/`; omit when root).
 
-| Path | Component | Purpose |
-|------|-----------|---------|
-| `/` | `DashboardPage` | Hub with **per-feature snapshots** (buy, wishlist, money summary + recent tx, calendar today / upcoming / tasks) when a bearer token is set; links to feature pages. |
-| `/settings` | `SettingsPage` | API base URL, bearer token, **`actorUserId`**, **calendar viewer time zone** (`TimeZoneSelect` + `CalendarZoneContext`); stored in `localStorage` via `AuthContext` / zone provider. |
-| `/buy` | `BuyPage` | Tag catalog editor, tag filter + sort, add form (roster assignee), list with complete/remove, clear completed, pagination, **Undo last action** under pagination when list non-empty. |
-| `/wishlist` | `WishlistPage` | Same catalog pattern as buy; **owner filter** (everyone vs user); roster or `GET /api/wishlist/owners`; add/complete/remove/clear completed; pagination; **Undo** under pagination. |
-| `/money` | `MoneyPage` | Transactions table (roster-aware names; subline = exact id from `member-{id}` parse); **split expense only** (no non-split expense UI); **record payment**; pairwise **balance** (summary uses roster usernames when possible); pagination; **Undo** under pagination. |
-| `/calendar` | `CalendarPage` | **Month / Week / Day / Agenda** views; `GET /api/calendar/range` for the visible window with **`timeZone`** from the **viewer zone**; **Tasks** side panel (`?type=task`) stacks below on narrow screens; filter (everyone / me / user); **+ Event** / **+ Task** modals (optional event **time zone**); item detail (PATCH / complete / delete); per-row **time zone** hints when event zone differs from display zone; recurring-instance banner; **Undo** in-page. URL state: `?view=` & `?date=`. |
+| Path | Shell? | Component | Purpose |
+|------|--------|-----------|---------|
+| `/oauth/callback` | No | `OAuthCallbackPage` | Reads `oauth_code` / `oauth_error` from query; **`POST /api/auth/discord/oauth/consume`** once (StrictMode-safe); **`applyWebLogin`** → **`navigate("/", { replace: true })`** to **Home** (`DashboardPage`). |
+| `/` | Yes | `DashboardPage` | Hub with **per-feature snapshots** (buy, wishlist, money summary + recent tx, calendar today / upcoming / tasks) when a bearer token is set; links to feature pages. |
+| `/login` | Yes | `LoginPage` | Username/password **`POST /api/auth/login`**; optional **Continue with Discord** → `GET /api/auth/discord/oauth/url` then full-page redirect to Discord. |
+| `/setup` | Yes | `SetupPage` | New household / invite flows: Discord verify (`/api/auth/discord/start` + status polling + complete) or manual bootstrap/register when configured. |
+| `/settings` | Yes | `SettingsPage` | API base URL, bearer token (or JWT from login), **`actorUserId`**, **calendar viewer time zone** (`TimeZoneSelect` + `CalendarZoneContext`); persisted via `AuthContext` / zone provider. |
+| `/buy` | Yes | `BuyPage` | Tag catalog editor, tag filter + sort, add form (roster assignee), list with complete/remove, clear completed, pagination, **Undo last action** under pagination when list non-empty. |
+| `/wishlist` | Yes | `WishlistPage` | Same catalog pattern as buy; **owner filter** (everyone vs user); roster or `GET /api/wishlist/owners`; add/complete/remove/clear completed; pagination; **Undo** under pagination. |
+| `/money` | Yes | `MoneyPage` | Transactions table (roster-aware names; subline = exact id from `member-{id}` parse); **split expense only** (no non-split expense UI); **record payment**; pairwise **balance** (summary uses roster usernames when possible); pagination; **Undo** under pagination. |
+| `/calendar` | Yes | `CalendarPage` | **Month / Week / Day / Agenda** views; `GET /api/calendar/range` for the visible window with **`timeZone`** from the **viewer zone**; **Tasks** side panel (`?type=task`) stacks below on narrow screens; filter (everyone / me / user); **+ Event** / **+ Task** modals (optional event **time zone**); item detail (PATCH / complete / delete); per-row **time zone** hints when event zone differs from display zone; recurring-instance banner; **Undo** in-page. URL state: `?view=` & `?date=`. |
 
 **Removed from the SPA (use feature pages + shell instead):** dedicated `/health` and `/undo` routes and **`WorkspacePage`** — API reachability and token validity are shown in **`AppShell`** (`useApiConnectionStatus`: health + meta + optional authenticated probe); **Undo** remains on **Buy / Wishlist / Money / Calendar** only.
 
-**Nav:** `webui/src/layout/AppShell.tsx` — sidebar: Home, Buy, Wishlist, Money, Calendar, Settings (no Workspace).
+**Nav:** `webui/src/layout/AppShell.tsx` — sidebar: Home, Buy, Wishlist, Money, Calendar, Settings; footer links: **Sign in** (`/login`), **New account** (`/setup`).
 
 ---
 
@@ -68,9 +75,10 @@ Router: `webui/src/App.tsx` inside `AppShell` (`webui/src/layout/AppShell.tsx`).
 
 ### Auth
 
-- `webui/src/auth/AuthContext.tsx` — `token`, `actorUserId`, persistence.
-- **Bearer** — required for almost all API calls.
-- **`actorUserId`** — non-zero Discord snowflake string; required for mutations that send `?actorUserId=` (buy/wishlist add, complete, delete item; money delete; calendar delete/complete; **all** `postUndo` calls).
+- `webui/src/auth/AuthContext.tsx` — **`token`** (API token or JWT from web login), **`actorUserId`**, **`webUsername`**, `applyWebLogin` / `clearSession`; **`localStorage`** keys for token, actor, username.
+- **Sign-in paths:** (1) **Password** — `POST /api/auth/login` → JWT + fills `actorUserId` from profile. (2) **Discord OAuth** — `getDiscordOAuthUrl` → user authorizes on Discord → API callback stores short-lived exchange → browser opens **`/oauth/callback?oauth_code=…`** → `postDiscordOAuthConsume` → same JWT shape as password. OAuth requires server env (`HOMEBOT_DISCORD_OAUTH_*`, `HOMEBOT_WEB_JWT_SECRET`) and an existing **`WebUsers`** row with matching **`DiscordUserId`**.
+- **Bearer** — required for almost all **`/api/*`** calls **after** auth middleware (see **API quick reference** → **Public auth** below).
+- **`actorUserId`** — Discord snowflake string; required for mutations that send `?actorUserId=` (buy/wishlist add, complete, delete item; money delete; calendar delete/complete; **all** `postUndo` calls). Web login sets it from the signed-in user’s **`discordUserId`**.
 
 ### Guild roster
 
@@ -103,6 +111,16 @@ Router: `webui/src/App.tsx` inside `AppShell` (`webui/src/layout/AppShell.tsx`).
 
 ## API quick reference (`actorUserId`)
 
+### Public auth (no `Authorization` header)
+
+- `POST /api/auth/login`, `POST /api/auth/bootstrap`, `POST /api/auth/register`
+- `POST /api/auth/discord/start`, `GET /api/auth/discord/status`, `POST /api/auth/discord/complete-bootstrap`, `POST /api/auth/discord/complete-register`
+- `GET /api/auth/discord/oauth/url`, `GET /api/auth/discord/oauth/callback`, `POST /api/auth/discord/oauth/consume`
+
+These routes are subject to **per-IP rate limiting** (see **`HomeBotApiPhase3`** policies `auth_login`, `auth_account_write`, `auth_discord_status_poll`, `auth_oauth_browser`, `auth_oauth_consume`); excessive traffic returns **`429`** with body **`code: rate_limited`** (same shape as mutation rate limit).
+
+All other **`/api/*`** routes (except **`/api/health`**, **`/api/meta`**, **`/openapi/*`**) require **`Authorization: Bearer`** with either **`HOMEBOT_API_TOKEN`** or a valid **JWT** from login/OAuth consume. **`GET /api/auth/me`** requires bearer.
+
 ### Query `actorUserId` required
 
 - Buy: POST item, POST complete, DELETE item  
@@ -122,7 +140,8 @@ Router: `webui/src/App.tsx` inside `AppShell` (`webui/src/layout/AppShell.tsx`).
 ### Phase 3 artifacts
 
 - Errors: `{ "error", "code" }` — `Api/ApiResults.cs`, `Api/ApiErrorBody.cs`  
-- Mutations: `RequireRateLimiting("mutation")` on write group  
+- Mutations: `RequireRateLimiting("mutation")` on write group under `/api` (feature writes)  
+- **Auth rate limits:** `RequireRateLimiting(...)` on `HomeBotAuthApi` / `HomeBotDiscordOAuthApi` routes; optional overrides in `AddPhase3Services(..., authLoginPerMinute: …)` for tests  
 - Body cap: `HomeBotApiPhase3` + env `HOMEBOT_API_MAX_BODY_BYTES`  
 - OpenAPI: `GET /openapi/v1.json`  
 - Tests configure Phase 3 via `AddPhase3Services(...)`
@@ -135,7 +154,9 @@ Router: `webui/src/App.tsx` inside `AppShell` (`webui/src/layout/AppShell.tsx`).
 
 **Current:** `DiscordSocketHolder` holds `Client`; `Program` assigns client to holder before starting API; `DiscordChannelNotifier` uses holder. Until gateway connected, notify is effectively no-op.
 
-**Files:** `Program.cs`, `Services/DiscordSocketHolder.cs`, `Services/DiscordChannelNotifier.cs`, `Services/DiscordGuildDirectoryService.cs` (guild members for WebUI), `Api/HomeBotApiRegistration.cs`.
+**Auth audit:** `DiscordAuthAuditNotifier` sends a one-line markdown message to the channel bound for feature **`audit`** (`Commands/SetupCommands.cs` **`/setup-set audit #channel`**) after successful **password** or **Discord OAuth** web sign-in (`Api/HomeBotAuthApi.cs`, `Api/HomeBotDiscordOAuthApi.cs`). Uses the same **`IDiscordChannelNotifier`** path as feature POST notifications.
+
+**Files:** `Program.cs`, `Services/DiscordSocketHolder.cs`, `Services/DiscordChannelNotifier.cs`, `Services/DiscordAuthAuditNotifier.cs`, `Services/DiscordGuildDirectoryService.cs` (guild members for WebUI), `Api/HomeBotApiRegistration.cs`, `Api/HomeBotAuthApi.cs`, `Api/HomeBotDiscordOAuthApi.cs`.
 
 ---
 
@@ -151,7 +172,7 @@ Router: `webui/src/App.tsx` inside `AppShell` (`webui/src/layout/AppShell.tsx`).
 
 ### Phase 3 — Validation, errors, limits, OpenAPI
 
-**Shipped** — see `Api/HomeBotApiPhase3.cs`, tests in `HomeBot.Tests`.
+**Shipped** — see `Api/HomeBotApiPhase3.cs` (mutation + **public auth** rate limits), `Api/HomeBotApiHost.cs` (**`ValidateAuthEnvironmentForHosting`**, **`LogOperationalWarnings`**, **`ResolveCorsOrigins`**), tests in `HomeBot.Tests` including **`ApiAuthRateLimitTests`**.
 
 ### Phase 4 — Product Web UI
 
@@ -164,10 +185,13 @@ Router: `webui/src/App.tsx` inside `AppShell` (`webui/src/layout/AppShell.tsx`).
 | Calendar time zones (viewer zone, range `timeZone`, per-event `timezone` / `timeZoneId`) | **Done** — see [Calendar (WebUI + range API)](#calendar-webui--range-api) |
 | Health as dedicated minimal page (optional) | **Superseded** — use **`AppShell`** connection indicator (health/meta; token probe) |
 | Consolidate or remove redundant `/undo` nav entry vs in-page Undo | **Done** — `/undo` route and Workspace **removed**; in-page Undo only |
+| **Login / Setup / OAuth callback** | **Done** — `LoginPage`, `SetupPage`, `OAuthCallbackPage`; `api.ts` auth helpers |
+| **Router basename** (subpath deploys) | **Done** — `main.tsx` + `BrowserRouter` |
+| **Auth rate limits + prod OAuth env guard** | **Done** — `HomeBotApiPhase3` + `HomeBotAuthApi` / `HomeBotDiscordOAuthApi`; `ValidateAuthEnvironmentForHosting` + README / `.env.example` |
 
 ### Phase 5 — Identity
 
-Unchanged: v1 bearer + `actorUserId`; future OAuth / accounts.
+**Partially shipped (single household):** JWT + **`WebUsers`** (`username`, password hash, **`DiscordUserId`**); optional **Discord OAuth** for the same row; optional **`HOMEBOT_API_TOKEN`** for scripts; **`actorUserId`** still used for mutation “who” on domain APIs. **Not in scope:** multi-tenant SSO, refresh tokens, or OAuth-driven account creation without prior **`WebUsers`** row.
 
 ---
 
@@ -178,23 +202,27 @@ Unchanged: v1 bearer + `actorUserId`; future OAuth / accounts.
 | Routes | `webui/src/App.tsx`, `webui/src/layout/AppShell.tsx` |
 | API client | `webui/src/api.ts` |
 | API connection status (shell) | `webui/src/hooks/useApiConnectionStatus.ts` |
+| Auth pages | `webui/src/pages/LoginPage.tsx`, `SetupPage.tsx`, `OAuthCallbackPage.tsx` |
 | Feature pages | `webui/src/pages/BuyPage.tsx`, `WishlistPage.tsx`, `MoneyPage.tsx`, `CalendarPage.tsx` |
 | Calendar UI modules | `webui/src/calendar/` (`MonthView`, `TimeGridView`, `AgendaView`, `TasksPanel`, `AddItemModal`, `ItemDetailModal`, `dateUtils`, `CalendarZoneContext`, `calendarZoned`, `timeZoneOptions`) |
 | Shell / hub / settings | `webui/src/pages/DashboardPage.tsx`, `SettingsPage.tsx`, `auth/AuthContext.tsx`, `components/TimeZoneSelect.tsx` |
-| App entry (zone provider) | `webui/src/main.tsx` (`CalendarZoneProvider`) |
+| App entry (providers + basename) | `webui/src/main.tsx` (`AuthProvider`, `CalendarZoneProvider`, `BrowserRouter`) |
 | Roster hook | `webui/src/hooks/useDiscordGuildRoster.ts` |
-| HTTP registration | `Api/HomeBotApiRegistration.cs` |
-| Host + Phase 3 | `Api/HomeBotApiHost.cs`, `Api/HomeBotApiPhase3.cs` |
+| HTTP registration (features) | `Api/HomeBotApiRegistration.cs` |
+| Web auth APIs | `Api/HomeBotAuthApi.cs`, `Api/HomeBotDiscordOAuthApi.cs` |
+| Host + Phase 3 + auth gate + ops diagnostics | `Api/HomeBotApiHost.cs` (`Configure`, **`ValidateAuthEnvironmentForHosting`**, **`LogOperationalWarnings`**, **`ResolveCorsOrigins`** / **`TryGetOAuthSpaOrigin`**), `Api/HomeBotApiPhase3.cs` |
 | Money JSON ulong | `Serialization/SnowflakeUlongJsonConverter.cs`, `Models/ApiRequests.cs` (money request types) |
 | Calendar range DTO + JSON ulong (nullable) | `Models/CalendarRangeItemModel.cs`, `Serialization/SnowflakeUlongNullableJsonConverter.cs`, `Services/CalendarService.cs` (`GetRange`) |
 | Time zone resolution (API + bot) | `Utils/TimeZoneResolver.cs`, `Utils/HomeBotTimeZones.cs`, `Commands/ConfigCommands.cs`, `Commands/TimezoneAutocompleteHandler.cs` |
 | Error DTOs | `Api/ApiErrorBody.cs`, `Api/ApiResults.cs` |
 | DI | `Composition/HomeBotDataServices.cs` |
+| Web auth services | `Services/WebAuthService.cs`, `Services/WebAuthDiscordVerificationService.cs`, `Services/DiscordOAuthService.cs`, `Services/HomeBotJwtTokens.cs` |
 | Process | `Program.cs` |
-| Discord notify | `Services/DiscordChannelNotifier.cs`, `Utils/DiscordNotifyText.cs` |
-| Bindings | `Services/ChannelBindingService.cs` |
+| Discord notify + audit | `Services/DiscordChannelNotifier.cs`, `Services/DiscordAuthAuditNotifier.cs`, `Utils/DiscordNotifyText.cs` |
+| Bindings | `Services/ChannelBindingService.cs`, `Commands/SetupCommands.cs` |
 | Wishlist tags / owners | `Services/WishlistService.cs` |
-| Tests | `HomeBot.Tests/ApiMutationTests.cs`, `ApiPhase3Tests.cs`, `CalendarServiceRangeTests.cs`, `TimeZoneResolverTests.cs` |
+| Tests | `HomeBot.Tests/ApiMutationTests.cs`, `ApiPhase3Tests.cs`, **`ApiWebAuthTests.cs`**, **`ApiAuthRateLimitTests.cs`**, `CalendarServiceRangeTests.cs`, `TimeZoneResolverTests.cs`; **`HomeBot.Tests/AssemblyInfo.cs`** (xUnit **`DisableTestParallelization`**) |
+| Env docs | **`.env.example`**, **`README.md`**, **`webui/.env.example`** |
 
 ---
 
@@ -203,18 +231,26 @@ Unchanged: v1 bearer + `actorUserId`; future OAuth / accounts.
 ```mermaid
 flowchart LR
   subgraph webui [WebUI Vite React]
-    pages[Buy Wishlist Money Calendar Dashboard Settings]
+    pages[Buy Wishlist Money Calendar Dashboard Settings Login Setup]
+    oauth[OAuthCallback]
     shell[AppShell API status]
   end
   subgraph api [Kestrel Minimal API]
     routes[HomeBotApiRegistration]
+    auth[HomeBotAuthApi HomeBotDiscordOAuthApi]
   end
   pages --> routes
+  oauth --> auth
   shell --> routes
+  shell --> auth
   routes --> svc[Buy Wishlist Money Calendar Undo services]
+  auth --> webauth[WebAuth DiscordOAuth JWT]
   svc --> db[(SQLite)]
+  webauth --> db
   routes --> notify[DiscordChannelNotifier]
+  auth --> audit[DiscordAuthAuditNotifier]
   notify --> ch[Bound channels]
+  audit --> ch
 ```
 
 ---
@@ -222,6 +258,6 @@ flowchart LR
 ## Success criteria (regression mindset)
 
 - Discord commands still work when Discord enabled (shared services).
-- API + tests cover core HTTP paths for buy, wishlist, money, calendar, undo.
-- WebUI: buy / wishlist / money / **calendar** are usable end-to-end with token + `actorUserId` where required (complete/delete/undo on calendar).
-- No secrets in frontend source; bearer enforced server-side; CORS configured for actual UI origin in non-local deploys.
+- API + tests cover core HTTP paths for buy, wishlist, money, calendar, undo, and **web auth** (`ApiWebAuthTests`, **`ApiAuthRateLimitTests`** for login **`429`**).
+- WebUI: buy / wishlist / money / **calendar** are usable end-to-end with token + `actorUserId` where required (complete/delete/undo on calendar); **login** (password or OAuth when configured) yields JWT + populated **`actorUserId`** for the same flows.
+- No secrets in frontend source (`HOMEBOT_WEB_JWT_SECRET` / API token / OAuth client secret stay server-side); bearer enforced server-side on protected routes; CORS + **`HOMEBOT_WEB_OAUTH_FRONTEND_URL`** aligned with actual UI origin in non-local deploys; public auth endpoints return **`429`** when rate-limited; non-Development host refuses **partial** OAuth env (unless explicitly allowed).

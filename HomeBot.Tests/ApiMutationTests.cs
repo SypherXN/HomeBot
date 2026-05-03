@@ -32,6 +32,7 @@ public sealed class ApiMutationTests : IDisposable
         sc.AddSingleton(_ => new DatabaseService(_dbPath));
         sc.AddSingleton<WebAuthService>();
         sc.AddSingleton<WebAuthDiscordVerificationService>();
+        sc.AddSingleton<DiscordOAuthService>();
         sc.AddSingleton<ConfigService>();
         sc.AddSingleton<ChannelBindingService>();
         sc.AddSingleton<UndoService>();
@@ -43,6 +44,7 @@ public sealed class ApiMutationTests : IDisposable
         sc.AddSingleton<DiscordSocketHolder>();
         sc.AddSingleton<DiscordGuildDirectoryService>();
         sc.AddSingleton<IDiscordChannelNotifier, DiscordChannelNotifier>();
+        sc.AddSingleton<DiscordAuthAuditNotifier>();
         _services = sc.BuildServiceProvider();
 
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
@@ -51,7 +53,14 @@ public sealed class ApiMutationTests : IDisposable
         });
 
         HomeBotApiHost.AddApiCors(builder);
-        builder.AddPhase3Services(maxRequestBodyBytes: 65536, mutationPermitsPerMinute: 100_000);
+        builder.AddPhase3Services(
+            maxRequestBodyBytes: 65536,
+            mutationPermitsPerMinute: 100_000,
+            authLoginPerMinute: 100_000,
+            oauthConsumePerMinute: 100_000,
+            oauthBrowserPerMinute: 100_000,
+            authAccountWritePerMinute: 100_000,
+            discordStatusPollPerMinute: 100_000);
         builder.WebHost.UseTestServer();
 
         _app = builder.Build();

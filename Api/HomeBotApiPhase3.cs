@@ -21,6 +21,21 @@ public static class HomeBotApiPhase3
     /// <summary>Default mutation POST/PUT/PATCH/DELETE allowed per IP per minute.</summary>
     public const int DefaultMutationPermitLimitPerMinute = 200;
 
+    /// <summary>Default POST <c>/api/auth/login</c> attempts per client IP per minute.</summary>
+    public const int DefaultAuthLoginPerMinute = 30;
+
+    /// <summary>Default POST <c>/api/auth/discord/oauth/consume</c> per client IP per minute.</summary>
+    public const int DefaultOauthConsumePerMinute = 15;
+
+    /// <summary>Default GET OAuth URL + callback hits per client IP per minute (combined policy).</summary>
+    public const int DefaultOauthBrowserPerMinute = 48;
+
+    /// <summary>Default combined POST bootstrap/register/discord start/complete-* per client IP per minute.</summary>
+    public const int DefaultAuthAccountWritePerMinute = 24;
+
+    /// <summary>Default GET <c>/api/auth/discord/status</c> polls per client IP per minute.</summary>
+    public const int DefaultDiscordStatusPollPerMinute = 120;
+
     /// <summary>
     /// Reads <c>HOMEBOT_API_MAX_BODY_BYTES</c> or <paramref name="defaultBytes"/>.
     /// </summary>
@@ -43,14 +58,64 @@ public static class HomeBotApiPhase3
         return defaultPermits;
     }
 
+    /// <summary>Reads <c>HOMEBOT_API_AUTH_LOGIN_PER_MINUTE</c> or default.</summary>
+    public static int ResolveAuthLoginPerMinute(int defaultPerMinute = DefaultAuthLoginPerMinute)
+    {
+        var raw = Environment.GetEnvironmentVariable("HOMEBOT_API_AUTH_LOGIN_PER_MINUTE");
+        if (int.TryParse(raw, out var n) && n > 0)
+            return n;
+        return defaultPerMinute;
+    }
+
+    /// <summary>Reads <c>HOMEBOT_API_OAUTH_CONSUME_PER_MINUTE</c> or default.</summary>
+    public static int ResolveOauthConsumePerMinute(int defaultPerMinute = DefaultOauthConsumePerMinute)
+    {
+        var raw = Environment.GetEnvironmentVariable("HOMEBOT_API_OAUTH_CONSUME_PER_MINUTE");
+        if (int.TryParse(raw, out var n) && n > 0)
+            return n;
+        return defaultPerMinute;
+    }
+
+    /// <summary>Reads <c>HOMEBOT_API_OAUTH_BROWSER_PER_MINUTE</c> or default.</summary>
+    public static int ResolveOauthBrowserPerMinute(int defaultPerMinute = DefaultOauthBrowserPerMinute)
+    {
+        var raw = Environment.GetEnvironmentVariable("HOMEBOT_API_OAUTH_BROWSER_PER_MINUTE");
+        if (int.TryParse(raw, out var n) && n > 0)
+            return n;
+        return defaultPerMinute;
+    }
+
+    /// <summary>Reads <c>HOMEBOT_API_AUTH_ACCOUNT_WRITE_PER_MINUTE</c> or default.</summary>
+    public static int ResolveAuthAccountWritePerMinute(int defaultPerMinute = DefaultAuthAccountWritePerMinute)
+    {
+        var raw = Environment.GetEnvironmentVariable("HOMEBOT_API_AUTH_ACCOUNT_WRITE_PER_MINUTE");
+        if (int.TryParse(raw, out var n) && n > 0)
+            return n;
+        return defaultPerMinute;
+    }
+
+    /// <summary>Reads <c>HOMEBOT_API_DISCORD_STATUS_POLL_PER_MINUTE</c> or default.</summary>
+    public static int ResolveDiscordStatusPollPerMinute(int defaultPerMinute = DefaultDiscordStatusPollPerMinute)
+    {
+        var raw = Environment.GetEnvironmentVariable("HOMEBOT_API_DISCORD_STATUS_POLL_PER_MINUTE");
+        if (int.TryParse(raw, out var n) && n > 0)
+            return n;
+        return defaultPerMinute;
+    }
+
     /// <summary>
     /// Registers rate limiting, Kestrel body limit, OpenAPI, and HTTP logging.
-    /// Pass explicit <paramref name="maxRequestBodyBytes"/> / <paramref name="mutationPermitsPerMinute"/> in tests; omit to use environment (see <see cref="ResolveMaxRequestBodyBytes"/> / <see cref="ResolveMutationPermitLimit"/>).
+    /// Pass explicit limits in tests; omit to use environment (see <see cref="ResolveMaxRequestBodyBytes"/> / <see cref="ResolveMutationPermitLimit"/> and auth resolver methods).
     /// </summary>
     public static void AddPhase3Services(
         this WebApplicationBuilder builder,
         long? maxRequestBodyBytes = null,
-        int? mutationPermitsPerMinute = null)
+        int? mutationPermitsPerMinute = null,
+        int? authLoginPerMinute = null,
+        int? oauthConsumePerMinute = null,
+        int? oauthBrowserPerMinute = null,
+        int? authAccountWritePerMinute = null,
+        int? discordStatusPollPerMinute = null)
     {
         var maxBody = maxRequestBodyBytes ?? ResolveMaxRequestBodyBytes();
         builder.Services.Configure<KestrelServerOptions>(o =>
@@ -59,6 +124,12 @@ public static class HomeBotApiPhase3
         });
 
         var mutationPermits = mutationPermitsPerMinute ?? ResolveMutationPermitLimit();
+        var loginPermits = authLoginPerMinute ?? ResolveAuthLoginPerMinute();
+        var consumePermits = oauthConsumePerMinute ?? ResolveOauthConsumePerMinute();
+        var browserPermits = oauthBrowserPerMinute ?? ResolveOauthBrowserPerMinute();
+        var accountWritePermits = authAccountWritePerMinute ?? ResolveAuthAccountWritePerMinute();
+        var statusPollPermits = discordStatusPollPerMinute ?? ResolveDiscordStatusPollPerMinute();
+
         builder.Services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -88,6 +159,12 @@ public static class HomeBotApiPhase3
                         QueueLimit = 0
                     });
             });
+
+            AddIpFixedWindowPolicy(options, "auth_login", loginPermits);
+            AddIpFixedWindowPolicy(options, "auth_oauth_consume", consumePermits);
+            AddIpFixedWindowPolicy(options, "auth_oauth_browser", browserPermits);
+            AddIpFixedWindowPolicy(options, "auth_account_write", accountWritePermits);
+            AddIpFixedWindowPolicy(options, "auth_discord_status_poll", statusPollPermits);
         });
 
         builder.Services.AddOpenApi();
@@ -101,6 +178,27 @@ public static class HomeBotApiPhase3
             o.RequestBodyLogLimit = 0;
             o.ResponseBodyLogLimit = 0;
         });
+    }
+
+    private static void AddIpFixedWindowPolicy(RateLimiterOptions options, string name, int permitsPerMinute)
+    {
+        options.AddPolicy(
+            name,
+            httpContext =>
+            {
+                var partitionKey = httpContext.Connection.RemoteIpAddress?.ToString()
+                    ?? httpContext.Connection.Id;
+
+                return RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey,
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = permitsPerMinute,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0,
+                    });
+            });
     }
 
     /// <summary>

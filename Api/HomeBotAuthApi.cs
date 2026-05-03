@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.DependencyInjection;
 
 /// <summary>
@@ -34,13 +35,16 @@ public static class HomeBotAuthApi
             }
 
             var (accessToken, username, discordUserId) = pair.Value;
+            var audit = root.GetRequiredService<DiscordAuthAuditNotifier>();
+            _ = audit.NotifyWebSignInAsync("password", username, discordUserId);
+
             return Results.Ok(new LoginResponse(
                 accessToken,
                 "Bearer",
                 HomeBotJwtTokens.DefaultLifetimeSeconds,
                 username,
                 discordUserId));
-        });
+        }).RequireRateLimiting("auth_login");
 
         app.MapPost("/api/auth/bootstrap", async (HttpRequest http) =>
         {
@@ -64,7 +68,7 @@ public static class HomeBotAuthApi
                 return err;
 
             return Results.Ok(new { ok = true, message = "First web user created. You can sign in at POST /api/auth/login." });
-        });
+        }).RequireRateLimiting("auth_account_write");
 
         app.MapPost("/api/auth/register", async (HttpRequest http) =>
         {
@@ -88,7 +92,7 @@ public static class HomeBotAuthApi
                 return err;
 
             return Results.Ok(new { ok = true, message = "User created. Sign in at POST /api/auth/login." });
-        });
+        }).RequireRateLimiting("auth_account_write");
 
         app.MapPost("/api/auth/discord/start", async (HttpRequest http) =>
         {
@@ -117,7 +121,7 @@ public static class HomeBotAuthApi
                     message =
                         "In your HomeBot Discord server, run /webui-verify and enter this code. Then return here to choose username and password.",
                 });
-        });
+        }).RequireRateLimiting("auth_account_write");
 
         app.MapGet("/api/auth/discord/status", (HttpRequest http) =>
         {
@@ -136,7 +140,7 @@ public static class HomeBotAuthApi
                     expired = st.Expired,
                     expiresAt = st.ExpiresAt,
                 });
-        });
+        }).RequireRateLimiting("auth_discord_status_poll");
 
         app.MapPost("/api/auth/discord/complete-bootstrap", async (HttpRequest http) =>
         {
@@ -160,7 +164,7 @@ public static class HomeBotAuthApi
                 return err;
 
             return Results.Ok(new { ok = true, message = "First web user created. Sign in with your username and password." });
-        });
+        }).RequireRateLimiting("auth_account_write");
 
         app.MapPost("/api/auth/discord/complete-register", async (HttpRequest http) =>
         {
@@ -184,7 +188,7 @@ public static class HomeBotAuthApi
                 return err;
 
             return Results.Ok(new { ok = true, message = "User created. Sign in with your username and password." });
-        });
+        }).RequireRateLimiting("auth_account_write");
 
         app.MapGet("/api/auth/me", (HttpRequest http) =>
         {

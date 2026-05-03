@@ -449,6 +449,8 @@ class Program
         var builder = WebApplication.CreateBuilder();
         var apiToken = Environment.GetEnvironmentVariable("HOMEBOT_API_TOKEN") ?? "";
 
+        HomeBotApiHost.ValidateAuthEnvironmentForHosting(builder.Environment);
+        HomeBotApiHost.LogOperationalWarnings();
         HomeBotApiHost.AddApiCors(builder);
         builder.AddPhase3Services();
 

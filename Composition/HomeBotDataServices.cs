@@ -10,6 +10,7 @@ public static class HomeBotDataServices
         services.AddSingleton<DatabaseService>();
         services.AddSingleton<WebAuthService>();
         services.AddSingleton<WebAuthDiscordVerificationService>();
+        services.AddSingleton<DiscordOAuthService>();
         services.AddSingleton<ConfigService>();
         services.AddSingleton<ChannelBindingService>();
         services.AddSingleton<UndoService>();
@@ -21,6 +22,7 @@ public static class HomeBotDataServices
         services.AddSingleton<DiscordSocketHolder>();
         services.AddSingleton<DiscordGuildDirectoryService>();
         services.AddSingleton<IDiscordChannelNotifier, DiscordChannelNotifier>();
+        services.AddSingleton<DiscordAuthAuditNotifier>();
         return services;
     }
 }

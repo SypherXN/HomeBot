@@ -680,6 +680,25 @@ export function postAuthLogin(username: string, password: string) {
   });
 }
 
+export type DiscordOAuthUrlResponse = {
+  configured: boolean;
+  authorizeUrl: string | null;
+  reason?: string;
+};
+
+/** Whether Discord OAuth is configured and the browser URL to open (no bearer). */
+export function getDiscordOAuthUrl(signal?: AbortSignal) {
+  return apiJson<DiscordOAuthUrlResponse>("/api/auth/discord/oauth/url", { signal });
+}
+
+/** Exchange one-time code from `/oauth/callback` for the same payload as password login (no bearer). */
+export function postDiscordOAuthConsume(code: string) {
+  return apiJson<AuthLoginResponse>("/api/auth/discord/oauth/consume", {
+    method: "POST",
+    body: { code },
+  });
+}
+
 export function postAuthBootstrap(body: {
   username: string;
   password: string;

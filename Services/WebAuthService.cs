@@ -101,6 +101,37 @@ public sealed class WebAuthService
         return (token, username.Trim(), discordUserId);
     }
 
+    /// <summary>
+    /// Issues the same session JWT shape as password login when a <see cref="WebUsers"/> row exists for the Discord id.
+    /// Used by Discord OAuth after the user proves identity with Discord.
+    /// </summary>
+    public (string AccessToken, string Username, string DiscordUserId)? TryIssueJwtForWebUserByDiscordId(string discordUserIdDigits)
+    {
+        var secret = ReadJwtSecret();
+        if (!IsJwtSecretConfigured(secret))
+            return null;
+
+        var d = discordUserIdDigits.Trim();
+        if (!ulong.TryParse(d, NumberStyles.Integer, CultureInfo.InvariantCulture, out var uid) || uid == 0)
+            return null;
+
+        using var conn = _db.GetConnection();
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT Username FROM WebUsers WHERE DiscordUserId = $d";
+        cmd.Parameters.AddWithValue("$d", d);
+        var o = cmd.ExecuteScalar();
+        if (o is null)
+            return null;
+
+        var username = Convert.ToString(o, CultureInfo.InvariantCulture)!.Trim();
+        if (username.Length == 0)
+            return null;
+
+        var token = HomeBotJwtTokens.CreateAccessToken(username, d, secret!);
+        return (token, username, d);
+    }
+
     private IResult? TryInsertUser(string username, string password, string discordUserId)
     {
         var nameErr = ValidateUsername(username);

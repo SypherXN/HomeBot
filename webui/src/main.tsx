@@ -6,9 +6,11 @@ import { CalendarZoneProvider } from "./calendar/CalendarZoneContext";
 import "./index.css";
 import App from "./App.tsx";
 
+const routerBasename = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={routerBasename.length > 0 ? routerBasename : undefined}>
       <AuthProvider>
         <CalendarZoneProvider>
           <App />

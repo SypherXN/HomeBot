@@ -26,7 +26,7 @@ public class HelpCommands : InteractionModuleBase<SocketInteractionContext>
     @"⚙️ General System
 
     • Commands only work in their assigned channels
-    • Use /setup-set to configure channels
+    • Use /setup-set to configure channels (including optional audit for web sign-ins)
     • Use /undo to revert last action
     • Use /config-set to change settings
     • Use /webui-verify with the code from the browser to finish Web sign-up
@@ -69,9 +69,11 @@ public class HelpCommands : InteractionModuleBase<SocketInteractionContext>
     - buy
     - wishlist
     - money
+    - audit (optional — web sign-in log: password + Discord OAuth)
 
     Example:
-    - /setup-set calendar #calendar";
+    - /setup-set calendar #calendar
+    - /setup-set audit #server-log";
                 break;
 
             // ================= CALENDAR =================

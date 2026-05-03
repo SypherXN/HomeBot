@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { postAuthLogin } from "../api";
+import { getDiscordOAuthUrl, postAuthLogin } from "../api";
 import { useAuth } from "../auth/AuthContext";
 
 export default function LoginPage() {
@@ -10,6 +10,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [oauthBusy, setOauthBusy] = useState(false);
+  const [oauthHint, setOauthHint] = useState<string | null>(null);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,14 +28,48 @@ export default function LoginPage() {
     }
   };
 
+  const startDiscordOAuth = async () => {
+    setError(null);
+    setOauthHint(null);
+    setOauthBusy(true);
+    try {
+      const r = await getDiscordOAuthUrl();
+      if (!r.configured || !r.authorizeUrl) {
+        setOauthHint(
+          r.reason ??
+            "The API does not have Discord OAuth env vars set. Use username and password, or ask your admin to configure OAuth."
+        );
+        return;
+      }
+      window.location.href = r.authorizeUrl;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setOauthBusy(false);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-md space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-white">Sign in</h1>
         <p className="mt-1 text-sm text-slate-400">
-          Use the username and password created for this household. The server must have{" "}
-          <code className="rounded bg-slate-900 px-1 text-slate-300">HOMEBOT_WEB_JWT_SECRET</code> set (32+ bytes).
+          Sign in with your household username and password, or with Discord if your admin enabled OAuth. You must
+          already have a web account linked to the same Discord user id (same as password login).
         </p>
+      </div>
+
+      <div className="space-y-2">
+        <button
+          type="button"
+          disabled={oauthBusy}
+          onClick={() => void startDiscordOAuth()}
+          className="w-full rounded-md border border-indigo-500/60 bg-indigo-950/40 px-4 py-2.5 text-sm font-medium text-indigo-100 hover:bg-indigo-900/50 disabled:opacity-50"
+        >
+          {oauthBusy ? "Loading…" : "Continue with Discord"}
+        </button>
+        {oauthHint ? <p className="text-xs text-slate-500">{oauthHint}</p> : null}
+        <p className="text-center text-xs text-slate-500">or use password below</p>
       </div>
 
       {token.trim() ? (

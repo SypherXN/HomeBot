@@ -179,6 +179,16 @@ public class DatabaseService
         CREATE UNIQUE INDEX IF NOT EXISTS IX_WebAuthVerifications_Code ON WebAuthVerifications(Code);";
 
         cmd.ExecuteNonQuery();
+
+        cmd.CommandText = @"
+        CREATE TABLE IF NOT EXISTS WebOAuthExchangeCodes (
+            Code TEXT PRIMARY KEY,
+            Username TEXT NOT NULL,
+            DiscordUserId TEXT NOT NULL,
+            ExpiresAt TEXT NOT NULL
+        );";
+
+        cmd.ExecuteNonQuery();
     }
 
     /// <summary>
