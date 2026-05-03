@@ -96,8 +96,8 @@ Router: `webui/src/App.tsx`. **`/oauth/callback`** is a **top-level** route (no 
 - **Grid data** comes from `GET /api/calendar/range` (not from paging all items). **Tasks** use `GET /api/calendar/items?type=task`.
 - **Viewer time zone:** persisted in `localStorage` (`CalendarZoneContext`), configurable on **Settings** and **Calendar**; passed as query **`timeZone`** on range requests so the server’s window matches what the user sees (`api.ts` `getCalendarRange`). Fallback: browser `Intl` default (`calendarZoned.ts`).
 - **Event time zones:** create/update payloads may include **`timezone`**; list/range rows expose **`timeZoneId`** for display (e.g. Agenda row subline when different from the viewer zone).
-- **Recurrence:** the server expands **daily** / **weekly** into one row per occurrence in the requested window (`isRecurringInstance`). **Complete** and **Delete** in the API still target the **parent row id** — they affect the **entire series**; the detail modal warns when opened from a recurring instance.
-- **Per-instance skip/edit** is not implemented (would need schema/API changes).
+- **Recurrence:** the server expands **daily** / **weekly** into one row per occurrence in the requested window (`isRecurringInstance`). **Complete** and **Delete** on **`/api/calendar/items/{id}`** still target the **parent row** (whole series).
+- **Per-instance:** `POST …/omit-instance`, `POST …/complete-instance`, `PATCH …/instance` (body uses canonical range **`instanceStartUtc`**); range may set **`displayInstanceStartUtc`**, **`isInstanceCompleted`**, **`hasInstanceOverride`**. **Undo** restores exception rows. **Reminders** skip suppressed occurrences.
 
 ### Snowflakes in the browser
 

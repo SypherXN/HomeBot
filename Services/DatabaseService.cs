@@ -152,6 +152,32 @@ public class DatabaseService
         cmd.ExecuteNonQuery();
 
         cmd.CommandText = @"
+        CREATE TABLE IF NOT EXISTS CalendarRecurrenceExceptions (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            CalendarItemId INTEGER NOT NULL,
+            InstanceStartUtc TEXT NOT NULL,
+            ExceptionKind TEXT NOT NULL DEFAULT 'omit',
+            OverrideTitle TEXT,
+            OverrideDescription TEXT,
+            OverrideNotes TEXT,
+            OverrideLink TEXT,
+            OverrideInstanceStartUtc TEXT,
+            OverrideInstanceEndUtc TEXT,
+            InstanceCompleted INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(CalendarItemId, InstanceStartUtc)
+        );";
+
+        cmd.ExecuteNonQuery();
+
+        cmd.CommandText = @"
+        CREATE INDEX IF NOT EXISTS IX_CalendarRecurrenceExceptions_Item
+        ON CalendarRecurrenceExceptions(CalendarItemId);";
+
+        cmd.ExecuteNonQuery();
+
+        MigrateCalendarRecurrenceExceptionsSchema(conn);
+
+        cmd.CommandText = @"
         CREATE TABLE IF NOT EXISTS WebUsers (
             Id INTEGER PRIMARY KEY AUTOINCREMENT,
             Username TEXT NOT NULL COLLATE NOCASE UNIQUE,
@@ -189,6 +215,35 @@ public class DatabaseService
         );";
 
         cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Adds per-instance recurrence columns on older DB files (idempotent).
+    /// </summary>
+    private static void MigrateCalendarRecurrenceExceptionsSchema(SqliteConnection conn)
+    {
+        static void TryAlter(SqliteConnection c, string sql)
+        {
+            using var cmd = c.CreateCommand();
+            cmd.CommandText = sql;
+            try
+            {
+                cmd.ExecuteNonQuery();
+            }
+            catch (SqliteException ex) when (
+                ex.Message.Contains("duplicate column name", StringComparison.OrdinalIgnoreCase))
+            {
+            }
+        }
+
+        TryAlter(conn, "ALTER TABLE CalendarRecurrenceExceptions ADD COLUMN ExceptionKind TEXT NOT NULL DEFAULT 'omit'");
+        TryAlter(conn, "ALTER TABLE CalendarRecurrenceExceptions ADD COLUMN OverrideTitle TEXT");
+        TryAlter(conn, "ALTER TABLE CalendarRecurrenceExceptions ADD COLUMN OverrideDescription TEXT");
+        TryAlter(conn, "ALTER TABLE CalendarRecurrenceExceptions ADD COLUMN OverrideNotes TEXT");
+        TryAlter(conn, "ALTER TABLE CalendarRecurrenceExceptions ADD COLUMN OverrideLink TEXT");
+        TryAlter(conn, "ALTER TABLE CalendarRecurrenceExceptions ADD COLUMN OverrideInstanceStartUtc TEXT");
+        TryAlter(conn, "ALTER TABLE CalendarRecurrenceExceptions ADD COLUMN OverrideInstanceEndUtc TEXT");
+        TryAlter(conn, "ALTER TABLE CalendarRecurrenceExceptions ADD COLUMN InstanceCompleted INTEGER NOT NULL DEFAULT 0");
     }
 
     /// <summary>

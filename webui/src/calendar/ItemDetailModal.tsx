@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
 import { DateTime } from "luxon";
 import {
+  deleteCalendarInstanceOverrides,
   deleteCalendarItem,
   getCalendarItemDetail,
   patchCalendarItem,
+  patchCalendarRecurringInstance,
+  postCalendarCompleteInstance,
   postCalendarItemComplete,
+  postCalendarOmitInstance,
   type CalendarItemDetail,
 } from "../api";
 import { CALENDAR_TIME_ZONE_OPTIONS } from "./timeZoneOptions";
@@ -12,8 +16,12 @@ import { CALENDAR_TIME_ZONE_OPTIONS } from "./timeZoneOptions";
 type Props = {
   open: boolean;
   itemId: number | null;
-  /** When opened from a recurring instance, show a banner that Complete/Delete affect the whole series. */
+  /** When opened from a recurring instance, show options for this occurrence vs the whole series. */
   isRecurringInstance?: boolean;
+  /** Canonical UTC slot from the range row (API key for per-instance actions). */
+  instanceStartUtc?: string | null;
+  /** Effective wall time for this occurrence (display override or canonical). */
+  instanceWallClockUtc?: string | null;
   /** Optional pre-known fields used while detail loads (avoids empty modal flash). */
   initialTitle?: string;
   token: string;
@@ -28,6 +36,8 @@ export default function ItemDetailModal({
   open,
   itemId,
   isRecurringInstance,
+  instanceStartUtc,
+  instanceWallClockUtc,
   initialTitle,
   token,
   actorUserId,
@@ -42,11 +52,13 @@ export default function ItemDetailModal({
   const [title, setTitle] = useState("");
   const [startDate, setStartDate] = useState("");
   const [startTime, setStartTime] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [endTime, setEndTime] = useState("");
   const [eventTz, setEventTz] = useState("UTC");
   const [description, setDescription] = useState("");
   const [notes, setNotes] = useState("");
   const [link, setLink] = useState("");
-  const [busy, setBusy] = useState<"save" | "complete" | "delete" | null>(null);
+  const [busy, setBusy] = useState<"save" | "complete" | "completeOne" | "delete" | "omit" | "clear" | null>(null);
 
   useEffect(() => {
     if (!open || itemId == null) return;
@@ -54,26 +66,63 @@ export default function ItemDetailModal({
     setTitle(initialTitle ?? "");
     setStartDate("");
     setStartTime("");
+    setEndDate("");
+    setEndTime("");
     setEventTz("UTC");
     setDescription("");
     setNotes("");
     setLink("");
     setLoading(true);
     let cancelled = false;
-    getCalendarItemDetail(token, itemId)
+    const detailReq =
+      isRecurringInstance && instanceStartUtc?.trim()
+        ? getCalendarItemDetail(token, itemId, { instanceStartUtc: instanceStartUtc.trim() })
+        : getCalendarItemDetail(token, itemId);
+    detailReq
       .then((d) => {
         if (cancelled) return;
         setDetail(d);
         setTitle(d.title);
         const tz = (d.timezone && d.timezone.trim()) || "UTC";
         setEventTz(tz);
-        const wall = d.start.trim() ? utcStorageToWallParts(d.start, tz) : null;
-        if (wall) {
-          setStartDate(wall.date);
-          setStartTime(wall.time);
+        const anchorIso = (instanceWallClockUtc ?? instanceStartUtc)?.trim();
+        if (isRecurringInstance && anchorIso) {
+          const inst = utcIsoZToWallParts(anchorIso, tz);
+          if (inst) {
+            setStartDate(inst.date);
+            setStartTime(inst.time);
+          } else {
+            const wall = d.start.trim() ? utcStorageToWallParts(d.start, tz) : null;
+            if (wall) {
+              setStartDate(wall.date);
+              setStartTime(wall.time);
+            } else {
+              setStartDate("");
+              setStartTime("09:00");
+            }
+          }
         } else {
-          setStartDate("");
-          setStartTime("09:00");
+          const wall = d.start.trim() ? utcStorageToWallParts(d.start, tz) : null;
+          if (wall) {
+            setStartDate(wall.date);
+            setStartTime(wall.time);
+          } else {
+            setStartDate("");
+            setStartTime("09:00");
+          }
+        }
+        if (isRecurringInstance && d.end?.trim()) {
+          const endWall = utcStorageToWallParts(d.end, tz);
+          if (endWall) {
+            setEndDate(endWall.date);
+            setEndTime(endWall.time);
+          } else {
+            setEndDate("");
+            setEndTime("");
+          }
+        } else {
+          setEndDate("");
+          setEndTime("");
         }
         setDescription(d.description);
         setNotes(d.notes);
@@ -86,13 +135,71 @@ export default function ItemDetailModal({
     return () => {
       cancelled = true;
     };
-  }, [open, itemId, token, initialTitle, onError]);
+  }, [open, itemId, token, initialTitle, onError, isRecurringInstance, instanceStartUtc, instanceWallClockUtc]);
 
   if (!open || itemId == null) return null;
 
   const canActor = /^\d+$/.test(actorUserId.trim()) && actorUserId.trim() !== "0";
 
   async function handleSave() {
+    if (isRecurringInstance && instanceStartUtc?.trim()) {
+      if (!canActor) {
+        onError("Set actorUserId in Settings to save per-instance changes.");
+        return;
+      }
+      if (!detail?.start.trim()) {
+        onError("This item has no scheduled start.");
+        return;
+      }
+      if (!startDate.trim()) {
+        onError("Start date is required.");
+        return;
+      }
+      setBusy("save");
+      try {
+        let overrideIso: string;
+        try {
+          overrideIso = wallDateTimeToUtcIsoZ(startDate, startTime, eventTz);
+        } catch {
+          onError("Invalid start date or time.");
+          return;
+        }
+        const patchBody: {
+          instanceStartUtc: string;
+          title?: string;
+          description?: string;
+          notes?: string;
+          link?: string;
+          overrideInstanceStartUtc: string;
+          overrideInstanceEndUtc?: string;
+        } = {
+          instanceStartUtc: instanceStartUtc.trim(),
+          title: title.trim() || undefined,
+          description: description.trim() || undefined,
+          notes: notes.trim() || undefined,
+          link: link.trim() || undefined,
+          overrideInstanceStartUtc: overrideIso,
+        };
+        if (endDate.trim()) {
+          try {
+            patchBody.overrideInstanceEndUtc = wallDateTimeToUtcIsoZ(endDate, endTime, eventTz);
+          } catch {
+            onError("Invalid end date or time.");
+            return;
+          }
+        }
+        await patchCalendarRecurringInstance(token, actorUserId.trim(), itemId!, patchBody);
+        onSuccess("Saved this occurrence.");
+        onChanged();
+        onClose();
+      } catch (err) {
+        onError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setBusy(null);
+      }
+      return;
+    }
+
     setBusy("save");
     try {
       const startPayload =
@@ -117,6 +224,76 @@ export default function ItemDetailModal({
     }
   }
 
+  const canPerInstanceActions =
+    Boolean(isRecurringInstance && instanceStartUtc?.trim()) && canActor;
+
+  async function handleOmitThisOccurrence() {
+    if (!canActor || !instanceStartUtc?.trim()) {
+      onError("Set actorUserId in Settings, or open this event from the calendar grid.");
+      return;
+    }
+    if (!window.confirm("Hide only this occurrence? The rest of the series stays on the calendar. You can Undo.")) {
+      return;
+    }
+    setBusy("omit");
+    try {
+      await postCalendarOmitInstance(token, actorUserId.trim(), itemId!, instanceStartUtc.trim());
+      onSuccess("This occurrence was hidden.");
+      onChanged();
+      onClose();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleClearInstanceOverrides() {
+    if (!canActor || !instanceStartUtc?.trim()) {
+      onError("Set actorUserId in Settings, or open this event from the calendar grid.");
+      return;
+    }
+    if (
+      !window.confirm(
+        "Remove all overrides for this day (visibility, completion, title, times)? The series default returns. You can Undo."
+      )
+    ) {
+      return;
+    }
+    setBusy("clear");
+    try {
+      await deleteCalendarInstanceOverrides(token, actorUserId.trim(), itemId!, instanceStartUtc.trim());
+      onSuccess("This day's overrides were cleared.");
+      onChanged();
+      onClose();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleCompleteThisOccurrence() {
+    if (!canActor || !instanceStartUtc?.trim()) {
+      onError("Set actorUserId in Settings, or open this event from the calendar grid.");
+      return;
+    }
+    if (!window.confirm("Mark only this day complete? The series stays active. You can Undo.")) {
+      return;
+    }
+    setBusy("completeOne");
+    try {
+      await postCalendarCompleteInstance(token, actorUserId.trim(), itemId!, instanceStartUtc.trim());
+      onSuccess("This occurrence was marked complete.");
+      onChanged();
+      onClose();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function handleComplete() {
     if (!canActor) {
       onError("Set actorUserId in Settings to complete items.");
@@ -125,7 +302,7 @@ export default function ItemDetailModal({
     setBusy("complete");
     try {
       await postCalendarItemComplete(token, actorUserId.trim(), itemId!);
-      onSuccess(isRecurringInstance ? "Series marked complete." : "Marked complete.");
+      onSuccess(isRecurringInstance ? "Entire series marked complete." : "Marked complete.");
       onChanged();
       onClose();
     } catch (err) {
@@ -140,7 +317,7 @@ export default function ItemDetailModal({
       onError("Set actorUserId in Settings to delete items.");
       return;
     }
-    if (!window.confirm(isRecurringInstance ? "Delete the entire recurring series?" : "Delete this item?")) {
+    if (!window.confirm(isRecurringInstance ? "Delete the entire recurring series (all dates)?" : "Delete this item?")) {
       return;
     }
     setBusy("delete");
@@ -184,8 +361,10 @@ export default function ItemDetailModal({
 
         {isRecurringInstance && (
           <p className="mb-4 rounded-lg border border-amber-700/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-100">
-            This is a recurring event. <strong>Complete</strong> and <strong>Delete</strong> affect the entire series.
-            Per-instance edits are not supported yet.
+            Recurring event opened from the grid. <strong>Save changes</strong> applies to <em>this day only</em>{" "}
+            (title, notes, link, start and optional end time). <strong>Hide</strong> removes this day from the
+            calendar. <strong>Complete this day</strong> keeps it visible but struck through. <strong>Complete series</strong>{" "}
+            / <strong>Delete series</strong> affect the whole series.
           </p>
         )}
 
@@ -228,6 +407,26 @@ export default function ItemDetailModal({
                     />
                   </Field>
                 </div>
+                {isRecurringInstance ? (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="End date (this day only, optional)">
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className={inputClass}
+                      />
+                    </Field>
+                    <Field label="End time">
+                      <input
+                        type="time"
+                        value={endTime}
+                        onChange={(e) => setEndTime(e.target.value)}
+                        className={inputClass}
+                      />
+                    </Field>
+                  </div>
+                ) : null}
               </>
             ) : (
               <p className="text-xs text-slate-500">This row has no scheduled start (task-style).</p>
@@ -252,18 +451,54 @@ export default function ItemDetailModal({
                 <dd className="text-slate-200">{detail.allDay ? "yes" : "no"}</dd>
                 <dt>Reminder</dt>
                 <dd className="text-slate-200">{detail.reminder || "—"}</dd>
+                {detail.recurrence ? (
+                  <>
+                    <dt>Recurrence</dt>
+                    <dd className="text-slate-200">{detail.recurrence}</dd>
+                  </>
+                ) : null}
               </dl>
             </div>
 
             <div className="flex flex-col gap-2 border-t border-slate-800 pt-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap gap-2">
+                {canPerInstanceActions ? (
+                  <button
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() => void handleOmitThisOccurrence()}
+                    className="rounded-lg border border-sky-600 bg-sky-900/40 px-3 py-2 text-sm text-sky-100 hover:bg-sky-900/60 disabled:opacity-50"
+                  >
+                    {busy === "omit" ? "…" : "Hide this occurrence"}
+                  </button>
+                ) : null}
+                {canPerInstanceActions ? (
+                  <button
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() => void handleCompleteThisOccurrence()}
+                    className="rounded-lg border border-emerald-600/80 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-100 hover:bg-emerald-950/60 disabled:opacity-50"
+                  >
+                    {busy === "completeOne" ? "…" : "Complete this day"}
+                  </button>
+                ) : null}
+                {canPerInstanceActions ? (
+                  <button
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() => void handleClearInstanceOverrides()}
+                    className="rounded-lg border border-amber-600/80 bg-amber-950/40 px-3 py-2 text-sm text-amber-100 hover:bg-amber-950/60 disabled:opacity-50"
+                  >
+                    {busy === "clear" ? "…" : "Reset this day"}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   disabled={!canActor || busy !== null}
                   onClick={() => void handleComplete()}
                   className="rounded-lg border border-emerald-700 bg-emerald-900/40 px-3 py-2 text-sm text-emerald-100 hover:bg-emerald-900/60 disabled:opacity-50"
                 >
-                  {busy === "complete" ? "…" : "Complete"}
+                  {busy === "complete" ? "…" : isRecurringInstance ? "Complete series" : "Complete"}
                 </button>
                 <button
                   type="button"
@@ -271,7 +506,7 @@ export default function ItemDetailModal({
                   onClick={() => void handleDelete()}
                   className="rounded-lg border border-red-800/80 bg-red-950/40 px-3 py-2 text-sm text-red-100 hover:bg-red-950/70 disabled:opacity-50"
                 >
-                  {busy === "delete" ? "…" : "Delete"}
+                  {busy === "delete" ? "…" : isRecurringInstance ? "Delete series" : "Delete"}
                 </button>
               </div>
               <div className="flex gap-2">
@@ -306,6 +541,19 @@ function utcStorageToWallParts(raw: string, zone: string): { date: string; time:
   const dt = DateTime.fromFormat(raw.trim(), "yyyy-MM-dd HH:mm", { zone: "utc" }).setZone(zone);
   if (!dt.isValid) return null;
   return { date: dt.toFormat("yyyy-MM-dd"), time: dt.toFormat("HH:mm") };
+}
+
+function utcIsoZToWallParts(isoUtc: string, zone: string): { date: string; time: string } | null {
+  const dt = DateTime.fromISO(isoUtc.trim(), { zone: "utc" }).setZone(zone);
+  if (!dt.isValid) return null;
+  return { date: dt.toFormat("yyyy-MM-dd"), time: dt.toFormat("HH:mm") };
+}
+
+function wallDateTimeToUtcIsoZ(date: string, timeHm: string, zone: string): string {
+  const iso = `${date.trim()}T${normalizeHmDetail(timeHm)}`;
+  const dt = DateTime.fromISO(iso, { zone: zone.trim() || "UTC" });
+  if (!dt.isValid) throw new Error("invalid");
+  return dt.toUTC().toFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
 }
 
 function normalizeHmDetail(t: string): string {

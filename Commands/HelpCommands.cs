@@ -86,6 +86,12 @@ public class HelpCommands : InteractionModuleBase<SocketInteractionContext>
     /calendar-today
     /calendar-upcoming
     /calendar-view
+    /calendar-complete /calendar-delete /calendar-edit
+
+    Recurring — one day only (UTC key like 2026-04-16T09:00:00Z):
+    /calendar-instance-omit
+    /calendar-instance-complete
+    /calendar-instance-edit
 
     Household timezone: /timezone-set or /config-set timezone <IANA>
 

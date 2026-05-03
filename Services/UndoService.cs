@@ -320,6 +320,77 @@ public class UndoService
                     applied = true;
                 }
             }
+            else if (entity == "calendar_rec_ex")
+            {
+                if (type == "create")
+                {
+                    var cmd = conn.CreateCommand();
+                    cmd.CommandText = "DELETE FROM CalendarRecurrenceExceptions WHERE Id = $id";
+                    cmd.Parameters.AddWithValue("$id", id);
+                    cmd.ExecuteNonQuery();
+                    applied = true;
+                }
+                else if (type == "update")
+                {
+                    var prev = JsonSerializer.Deserialize<RecurrenceExceptionUndoModel>(data);
+                    if (prev == null)
+                        return UndoApplyResult.Fail("❌ Failed to undo recurrence exception change.");
+
+                    var cmd = conn.CreateCommand();
+                    cmd.CommandText = @"
+                        UPDATE CalendarRecurrenceExceptions
+                        SET CalendarItemId = $cid,
+                            InstanceStartUtc = $iso,
+                            ExceptionKind = $kind,
+                            OverrideTitle = $title,
+                            OverrideDescription = $desc,
+                            OverrideNotes = $notes,
+                            OverrideLink = $link,
+                            OverrideInstanceStartUtc = $os,
+                            OverrideInstanceEndUtc = $oe,
+                            InstanceCompleted = $ic
+                        WHERE Id = $id";
+                    cmd.Parameters.AddWithValue("$id", prev.Id);
+                    cmd.Parameters.AddWithValue("$cid", prev.CalendarItemId);
+                    cmd.Parameters.AddWithValue("$iso", prev.InstanceStartUtc);
+                    cmd.Parameters.AddWithValue("$kind", prev.ExceptionKind);
+                    cmd.Parameters.AddWithValue("$title", string.IsNullOrEmpty(prev.OverrideTitle) ? DBNull.Value : prev.OverrideTitle);
+                    cmd.Parameters.AddWithValue("$desc", string.IsNullOrEmpty(prev.OverrideDescription) ? DBNull.Value : prev.OverrideDescription);
+                    cmd.Parameters.AddWithValue("$notes", string.IsNullOrEmpty(prev.OverrideNotes) ? DBNull.Value : prev.OverrideNotes);
+                    cmd.Parameters.AddWithValue("$link", string.IsNullOrEmpty(prev.OverrideLink) ? DBNull.Value : prev.OverrideLink);
+                    cmd.Parameters.AddWithValue("$os", string.IsNullOrEmpty(prev.OverrideInstanceStartUtc) ? DBNull.Value : prev.OverrideInstanceStartUtc);
+                    cmd.Parameters.AddWithValue("$oe", string.IsNullOrEmpty(prev.OverrideInstanceEndUtc) ? DBNull.Value : prev.OverrideInstanceEndUtc);
+                    cmd.Parameters.AddWithValue("$ic", prev.InstanceCompleted);
+                    cmd.ExecuteNonQuery();
+                    applied = true;
+                }
+                else if (type == "delete")
+                {
+                    var prev = JsonSerializer.Deserialize<RecurrenceExceptionUndoModel>(data);
+                    if (prev == null)
+                        return UndoApplyResult.Fail("❌ Failed to restore recurrence exception.");
+
+                    var cmd = conn.CreateCommand();
+                    cmd.CommandText = @"
+                        INSERT INTO CalendarRecurrenceExceptions
+                        (Id, CalendarItemId, InstanceStartUtc, ExceptionKind, OverrideTitle, OverrideDescription, OverrideNotes, OverrideLink,
+                         OverrideInstanceStartUtc, OverrideInstanceEndUtc, InstanceCompleted)
+                        VALUES ($id, $cid, $iso, $kind, $title, $desc, $notes, $link, $os, $oe, $ic)";
+                    cmd.Parameters.AddWithValue("$id", prev.Id);
+                    cmd.Parameters.AddWithValue("$cid", prev.CalendarItemId);
+                    cmd.Parameters.AddWithValue("$iso", prev.InstanceStartUtc);
+                    cmd.Parameters.AddWithValue("$kind", prev.ExceptionKind);
+                    cmd.Parameters.AddWithValue("$title", string.IsNullOrEmpty(prev.OverrideTitle) ? DBNull.Value : prev.OverrideTitle);
+                    cmd.Parameters.AddWithValue("$desc", string.IsNullOrEmpty(prev.OverrideDescription) ? DBNull.Value : prev.OverrideDescription);
+                    cmd.Parameters.AddWithValue("$notes", string.IsNullOrEmpty(prev.OverrideNotes) ? DBNull.Value : prev.OverrideNotes);
+                    cmd.Parameters.AddWithValue("$link", string.IsNullOrEmpty(prev.OverrideLink) ? DBNull.Value : prev.OverrideLink);
+                    cmd.Parameters.AddWithValue("$os", string.IsNullOrEmpty(prev.OverrideInstanceStartUtc) ? DBNull.Value : prev.OverrideInstanceStartUtc);
+                    cmd.Parameters.AddWithValue("$oe", string.IsNullOrEmpty(prev.OverrideInstanceEndUtc) ? DBNull.Value : prev.OverrideInstanceEndUtc);
+                    cmd.Parameters.AddWithValue("$ic", prev.InstanceCompleted);
+                    cmd.ExecuteNonQuery();
+                    applied = true;
+                }
+            }
 
                 if (!applied)
                     return UndoApplyResult.Fail("❌ Nothing to undo for that action.");

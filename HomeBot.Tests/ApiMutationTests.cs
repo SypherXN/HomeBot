@@ -315,6 +315,125 @@ public sealed class ApiMutationTests : IDisposable
     }
 
     [Fact]
+    public async Task Calendar_daily_omit_instance_hides_from_range()
+    {
+        _services.GetRequiredService<ConfigService>().Set("timezone", "UTC");
+
+        var post = await _client.PostAsJsonAsync(
+            "/api/calendar/items",
+            new
+            {
+                title = "ApiDailyOmit",
+                start = "2026-04-10 09:00",
+                allDay = false,
+                assignToEveryone = false,
+                recurrence = "daily",
+                timezone = "UTC",
+            });
+
+        Assert.True(
+            post.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created,
+            await post.Content.ReadAsStringAsync());
+
+        var list = await _client.GetFromJsonAsync<JsonElement>("/api/calendar/items?page=0");
+        var items = list.GetProperty("items");
+        int id = 0;
+        foreach (var el in items.EnumerateArray())
+        {
+            if (el.GetProperty("title").GetString() == "ApiDailyOmit")
+            {
+                id = el.GetProperty("id").GetInt32();
+                break;
+            }
+        }
+
+        Assert.NotEqual(0, id);
+
+        static async Task<int> CountRangeAsync(HttpClient client, int parentId)
+        {
+            var res = await client.GetAsync(
+                "/api/calendar/range?from=2026-04-15&to=2026-04-18&timeZone=UTC");
+            res.EnsureSuccessStatusCode();
+            using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+            var root = doc.RootElement;
+            Assert.Equal(JsonValueKind.Array, root.ValueKind);
+            var n = 0;
+            foreach (var row in root.EnumerateArray())
+            {
+                if (row.GetProperty("id").GetInt32() == parentId)
+                    n++;
+            }
+
+            return n;
+        }
+
+        Assert.Equal(3, await CountRangeAsync(_client, id));
+
+        var omit = await _client.PostAsJsonAsync(
+            $"/api/calendar/items/{id}/omit-instance?actorUserId={Actor}",
+            new { instanceStartUtc = "2026-04-16T09:00:00Z" });
+        Assert.Equal(HttpStatusCode.OK, omit.StatusCode);
+
+        Assert.Equal(2, await CountRangeAsync(_client, id));
+    }
+
+    [Fact]
+    public async Task Calendar_daily_complete_instance_flags_range_row()
+    {
+        _services.GetRequiredService<ConfigService>().Set("timezone", "UTC");
+
+        var post = await _client.PostAsJsonAsync(
+            "/api/calendar/items",
+            new
+            {
+                title = "ApiDailyCompleteOne",
+                start = "2026-04-10 09:00",
+                allDay = false,
+                assignToEveryone = false,
+                recurrence = "daily",
+                timezone = "UTC",
+            });
+
+        post.EnsureSuccessStatusCode();
+
+        var list = await _client.GetFromJsonAsync<JsonElement>("/api/calendar/items?page=0");
+        var items = list.GetProperty("items");
+        int id = 0;
+        foreach (var el in items.EnumerateArray())
+        {
+            if (el.GetProperty("title").GetString() == "ApiDailyCompleteOne")
+            {
+                id = el.GetProperty("id").GetInt32();
+                break;
+            }
+        }
+
+        Assert.NotEqual(0, id);
+
+        var done = await _client.PostAsJsonAsync(
+            $"/api/calendar/items/{id}/complete-instance?actorUserId={Actor}",
+            new { instanceStartUtc = "2026-04-16T09:00:00Z" });
+        Assert.Equal(HttpStatusCode.OK, done.StatusCode);
+
+        var res = await _client.GetAsync("/api/calendar/range?from=2026-04-15&to=2026-04-18&timeZone=UTC");
+        res.EnsureSuccessStatusCode();
+        using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+        var found = false;
+        foreach (var row in doc.RootElement.EnumerateArray())
+        {
+            if (row.GetProperty("id").GetInt32() != id)
+                continue;
+            if (row.GetProperty("instanceStartUtc").GetString() != "2026-04-16T09:00:00Z")
+                continue;
+            Assert.True(row.GetProperty("isInstanceCompleted").GetBoolean());
+            found = true;
+            break;
+        }
+
+        Assert.True(found);
+    }
+
+    [Fact]
     public async Task Undo_after_buy_delete_restores()
     {
         const string name = "UndoRestoreBuy";

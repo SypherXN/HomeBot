@@ -121,6 +121,26 @@ public sealed class CalendarItemCreateRequest
     public string? Timezone { get; set; }
 }
 
+/// <summary>POST omit-instance / complete-instance: canonical occurrence start (range <c>instanceStartUtc</c>).</summary>
+public sealed class CalendarInstanceOmitRequest
+{
+    public string InstanceStartUtc { get; set; } = "";
+}
+
+/// <summary>Per-instance PATCH on a recurring series occurrence.</summary>
+public sealed class CalendarInstancePatchRequest
+{
+    public string InstanceStartUtc { get; set; } = "";
+    public string? Title { get; set; }
+    public string? Description { get; set; }
+    public string? Notes { get; set; }
+    public string? Link { get; set; }
+    /// <summary>UTC ISO occurrence start override (e.g. move this day only).</summary>
+    public string? OverrideInstanceStartUtc { get; set; }
+    /// <summary>UTC ISO occurrence end override.</summary>
+    public string? OverrideInstanceEndUtc { get; set; }
+}
+
 public sealed class CalendarItemPatchRequest
 {
     public string? Title { get; set; }

@@ -290,6 +290,8 @@ export type CalendarListItem = {
   reminderText: string;
   recurrenceText: string;
   hasLink: boolean;
+  /** Present when this row is one recurrence occurrence (today/upcoming/range parity). */
+  instanceStartUtc?: string | null;
 };
 
 export type PagedCalendarList = {
@@ -308,6 +310,8 @@ export type PagedCalendarList = {
 export type CalendarRangeItem = {
   id: number;
   title: string;
+  description?: string;
+  notes?: string;
   type: string;
   allDay: boolean;
   assignedTo?: string | null;
@@ -316,9 +320,15 @@ export type CalendarRangeItem = {
   recurrenceText: string;
   recurrence: string;
   hasLink: boolean;
+  /** Canonical recurrence slot (API identity for per-instance actions). */
   instanceStartUtc: string;
+  /** When set, use for layout/display time (per-instance time override). */
+  displayInstanceStartUtc?: string | null;
   instanceEndUtc?: string | null;
+  displayInstanceEndUtc?: string | null;
   isRecurringInstance: boolean;
+  isInstanceCompleted?: boolean;
+  hasInstanceOverride?: boolean;
   /** IANA / Windows id for the event row (recurrence expansion used this zone). */
   timeZoneId?: string;
 };
@@ -329,9 +339,14 @@ export type CalendarItemDetail = {
   notes: string;
   link: string;
   start: string;
+  /** UTC storage `yyyy-MM-dd HH:mm` when an end exists for this detail context. */
+  end?: string;
   allDay: boolean;
   reminder: string;
   timezone: string;
+  recurrence?: string;
+  /** Echo when detail was requested for one recurrence slot. */
+  instanceStartUtc?: string | null;
 };
 
 export type CalendarItemTypeFilter = "task" | "event";
@@ -379,8 +394,11 @@ export function getCalendarRange(
   return apiJson<CalendarRangeItem[]>(`/api/calendar/range?${q.toString()}`, { token });
 }
 
-export function getCalendarItemDetail(token: string, id: number) {
-  return apiJson<CalendarItemDetail>(`/api/calendar/items/${id}`, { token });
+export function getCalendarItemDetail(token: string, id: number, opts?: { instanceStartUtc?: string }) {
+  const q = new URLSearchParams();
+  if (opts?.instanceStartUtc?.trim()) q.set("instanceStartUtc", opts.instanceStartUtc.trim());
+  const suffix = q.toString() ? `?${q.toString()}` : "";
+  return apiJson<CalendarItemDetail>(`/api/calendar/items/${id}${suffix}`, { token });
 }
 
 // ——— Mutations (require bearer token; most need actorUserId query) ———
@@ -651,6 +669,56 @@ export function patchCalendarItem(
 export function postCalendarItemComplete(token: string, actorUserId: string, id: number) {
   const path = mergeQuery(`/api/calendar/items/${id}/complete`, { actorUserId });
   return apiJson<unknown>(path, { token, method: "POST" });
+}
+
+/** Hide one occurrence of a recurring item (same as range row `instanceStartUtc`). */
+export function postCalendarOmitInstance(token: string, actorUserId: string, id: number, instanceStartUtc: string) {
+  const path = mergeQuery(`/api/calendar/items/${id}/omit-instance`, { actorUserId });
+  return apiJson<unknown>(path, {
+    token,
+    method: "POST",
+    body: { instanceStartUtc },
+  });
+}
+
+/** Mark one recurring occurrence complete (series stays active). */
+export function postCalendarCompleteInstance(token: string, actorUserId: string, id: number, instanceStartUtc: string) {
+  const path = mergeQuery(`/api/calendar/items/${id}/complete-instance`, { actorUserId });
+  return apiJson<unknown>(path, {
+    token,
+    method: "POST",
+    body: { instanceStartUtc },
+  });
+}
+
+/** PATCH fields for a single recurrence occurrence (canonical `instanceStartUtc`). */
+export function patchCalendarRecurringInstance(
+  token: string,
+  actorUserId: string,
+  id: number,
+  body: {
+    instanceStartUtc: string;
+    title?: string;
+    description?: string;
+    notes?: string;
+    link?: string;
+    overrideInstanceStartUtc?: string;
+    overrideInstanceEndUtc?: string;
+  }
+) {
+  const path = mergeQuery(`/api/calendar/items/${id}/instance`, { actorUserId });
+  return apiJson<unknown>(path, { token, method: "PATCH", body });
+}
+
+/** Removes omit / complete-this-day / modify row for one occurrence (Undo restores it). */
+export function deleteCalendarInstanceOverrides(
+  token: string,
+  actorUserId: string,
+  id: number,
+  instanceStartUtc: string
+) {
+  const path = mergeQuery(`/api/calendar/items/${id}/instance`, { actorUserId, instanceStartUtc });
+  return apiJson<unknown>(path, { token, method: "DELETE" });
 }
 
 export function deleteCalendarItem(token: string, actorUserId: string, id: number) {

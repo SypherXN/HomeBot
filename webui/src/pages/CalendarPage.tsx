@@ -82,7 +82,15 @@ export default function CalendarPage() {
   type ModalState =
     | { kind: "none" }
     | { kind: "add"; mode: "event" | "task"; ymd?: string }
-    | { kind: "detail"; itemId: number; isRecurring?: boolean; title?: string };
+    | {
+        kind: "detail";
+        itemId: number;
+        isRecurring?: boolean;
+        title?: string;
+        instanceStartUtc?: string;
+        /** Wall position on calendar (display override or canonical). */
+        instanceWallClockUtc?: string;
+      };
   const [modal, setModal] = useState<ModalState>({ kind: "none" });
 
   const rangeYmd = useMemo(
@@ -287,6 +295,8 @@ export default function CalendarPage() {
                   itemId: ev.id,
                   isRecurring: ev.isRecurringInstance,
                   title: ev.title,
+                  instanceStartUtc: ev.instanceStartUtc,
+                  instanceWallClockUtc: ev.displayInstanceStartUtc ?? ev.instanceStartUtc,
                 })
               }
             />
@@ -302,6 +312,8 @@ export default function CalendarPage() {
                   itemId: ev.id,
                   isRecurring: ev.isRecurringInstance,
                   title: ev.title,
+                  instanceStartUtc: ev.instanceStartUtc,
+                  instanceWallClockUtc: ev.displayInstanceStartUtc ?? ev.instanceStartUtc,
                 })
               }
             />
@@ -317,6 +329,8 @@ export default function CalendarPage() {
                   itemId: ev.id,
                   isRecurring: ev.isRecurringInstance,
                   title: ev.title,
+                  instanceStartUtc: ev.instanceStartUtc,
+                  instanceWallClockUtc: ev.displayInstanceStartUtc ?? ev.instanceStartUtc,
                 })
               }
             />
@@ -331,6 +345,8 @@ export default function CalendarPage() {
                   itemId: ev.id,
                   isRecurring: ev.isRecurringInstance,
                   title: ev.title,
+                  instanceStartUtc: ev.instanceStartUtc,
+                  instanceWallClockUtc: ev.displayInstanceStartUtc ?? ev.instanceStartUtc,
                 })
               }
             />
@@ -391,6 +407,8 @@ export default function CalendarPage() {
         open={modal.kind === "detail"}
         itemId={modal.kind === "detail" ? modal.itemId : null}
         isRecurringInstance={modal.kind === "detail" ? modal.isRecurring : false}
+        instanceStartUtc={modal.kind === "detail" ? modal.instanceStartUtc : null}
+        instanceWallClockUtc={modal.kind === "detail" ? modal.instanceWallClockUtc : null}
         initialTitle={modal.kind === "detail" ? modal.title : ""}
         token={tok}
         actorUserId={actor}

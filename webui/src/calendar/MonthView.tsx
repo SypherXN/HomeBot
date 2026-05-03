@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { CalendarRangeItem } from "../api";
 import { SHORT_WEEKDAYS } from "./dateUtils";
-import { formatTimeInZone, monthGridCells, ymdInZone } from "./calendarZoned";
+import { formatTimeInZone, monthGridCells, rangeInstanceStartUtc, ymdInZone } from "./calendarZoned";
 
 type Props = {
   anchorYmd: string;
@@ -74,12 +74,12 @@ export default function MonthView({ anchorYmd, displayZone, events, onPickDay, o
                         onPickEvent(ev);
                       }
                     }}
-                    className="truncate rounded bg-blue-900/60 px-1.5 py-0.5 text-[11px] font-medium text-blue-100 hover:bg-blue-800/70"
-                    title={`${ev.title}${ev.allDay ? "" : ` · ${formatTimeInZone(ev.instanceStartUtc, displayZone)}`}`}
+                    className={`truncate rounded bg-blue-900/60 px-1.5 py-0.5 text-[11px] font-medium text-blue-100 hover:bg-blue-800/70 ${ev.isInstanceCompleted ? "opacity-70 line-through" : ""}`}
+                    title={`${ev.title}${ev.allDay ? "" : ` · ${formatTimeInZone(rangeInstanceStartUtc(ev), displayZone)}`}`}
                   >
                     {!ev.allDay && (
                       <span className="mr-1 text-[10px] text-blue-300">
-                        {formatTimeInZone(ev.instanceStartUtc, displayZone)}
+                        {formatTimeInZone(rangeInstanceStartUtc(ev), displayZone)}
                       </span>
                     )}
                     {ev.title}
@@ -103,7 +103,7 @@ function buildGrid(anchorYmd: string, displayZone: string, events: CalendarRange
     events: [] as CalendarRangeItem[],
   }));
   for (const ev of events) {
-    const y = ymdInZone(ev.instanceStartUtc, displayZone);
+    const y = ymdInZone(rangeInstanceStartUtc(ev), displayZone);
     const idx = cells.findIndex((c) => c.ymd === y);
     if (idx >= 0) cells[idx].events.push(ev);
   }

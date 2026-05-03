@@ -17,4 +17,7 @@ public class CalendarListItemModel
     public string RecurrenceText { get; set; } = "";
     public bool HasLink { get; set; }
     public DateTime SortDate { get; set; } = DateTime.MaxValue;
+
+    /// <summary>When set, this row is one recurrence occurrence (canonical key matches range API).</summary>
+    public string? InstanceStartUtc { get; set; }
 }

@@ -33,6 +33,24 @@ public class ReminderService
         }
     }
 
+    private static void AdvanceRecurringStart(SqliteConnection conn, int id, DateTime currentStart, string recurrence)
+    {
+        DateTime next = currentStart;
+        if (recurrence == "daily")
+            next = currentStart.AddDays(1);
+        else if (recurrence == "weekly")
+            next = currentStart.AddDays(7);
+
+        var updateCmd = conn.CreateCommand();
+        updateCmd.CommandText = @"
+            UPDATE CalendarItems
+            SET StartDateTime = $next, ReminderSent = 0
+            WHERE Id = $id";
+        updateCmd.Parameters.AddWithValue("$next", next.ToString("yyyy-MM-dd HH:mm"));
+        updateCmd.Parameters.AddWithValue("$id", id);
+        updateCmd.ExecuteNonQuery();
+    }
+
     /// <summary>
     /// Checks active reminders and sends due notifications.
     /// </summary>
@@ -86,7 +104,51 @@ public class ReminderService
             if (!double.TryParse(offsetStr, out var seconds))
                 continue;
 
-            var reminderTime = start.AddSeconds(-seconds);
+            var titleForMessage = title;
+            var eventTimeForReminder = start;
+            var suppressSend = false;
+
+            if (!string.IsNullOrWhiteSpace(recurrence))
+            {
+                try
+                {
+                    var instanceKey = CalendarService.NormalizeDbStartToInstanceKeyUtc(startStr);
+                    if (CalendarService.TryLoadRecurrenceExceptionForReminder(
+                            conn,
+                            id,
+                            instanceKey,
+                            out var overrideTitle,
+                            out var overrideStartZ,
+                            out suppressSend))
+                    {
+                        if (suppressSend)
+                        {
+                            AdvanceRecurringStart(conn, id, start, recurrence);
+                            continue;
+                        }
+
+                        if (!string.IsNullOrEmpty(overrideTitle))
+                            titleForMessage = overrideTitle;
+                        if (!string.IsNullOrWhiteSpace(overrideStartZ) &&
+                            DateTimeOffset.TryParse(
+                                overrideStartZ,
+                                System.Globalization.CultureInfo.InvariantCulture,
+                                System.Globalization.DateTimeStyles.AssumeUniversal |
+                                System.Globalization.DateTimeStyles.AdjustToUniversal,
+                                out var dto))
+                        {
+                            eventTimeForReminder = dto.UtcDateTime;
+                        }
+                    }
+                }
+                catch
+                {
+                    // Bad start string — skip this row.
+                    continue;
+                }
+            }
+
+            var reminderTime = eventTimeForReminder.AddSeconds(-seconds);
 
             if (reminderSent == 0 && now >= reminderTime)
             {
@@ -102,36 +164,18 @@ public class ReminderService
                     await channel.SendMessageAsync(
                         $"⏰ Reminder: {mention}\n" +
                         $"🆔 ID: #{id}\n" +
-                        $"📝 Name: {title}\n" +
-                        $"📅 Event Time: {start}",
+                        $"📝 Name: {titleForMessage}\n" +
+                        $"📅 Event Time: {eventTimeForReminder}",
                         allowedMentions: AllowedMentions.All
                     );
                 }
 
-                // --- RECURRENCE LOGIC ---
                 if (!string.IsNullOrWhiteSpace(recurrence))
                 {
-                    DateTime next = start;
-
-                    if (recurrence == "daily")
-                        next = start.AddDays(1);
-                    else if (recurrence == "weekly")
-                        next = start.AddDays(7);
-
-                    var updateCmd = conn.CreateCommand();
-                    updateCmd.CommandText = @"
-                        UPDATE CalendarItems
-                        SET StartDateTime = $next, ReminderSent = 0
-                        WHERE Id = $id";
-
-                    updateCmd.Parameters.AddWithValue("$next", next.ToString("yyyy-MM-dd HH:mm"));
-                    updateCmd.Parameters.AddWithValue("$id", id);
-
-                    updateCmd.ExecuteNonQuery();
+                    AdvanceRecurringStart(conn, id, start, recurrence);
                 }
                 else
                 {
-                    // normal one-time reminder
                     var updateCmd = conn.CreateCommand();
                     updateCmd.CommandText = @"
                         UPDATE CalendarItems

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { DateTime } from "luxon";
 import type { CalendarRangeItem } from "../api";
-import { formatTimeInZone, wallMinutesInZone, ymdInZone } from "./calendarZoned";
+import { formatTimeInZone, rangeInstanceEndUtc, rangeInstanceStartUtc, wallMinutesInZone, ymdInZone } from "./calendarZoned";
 
 type Props = {
   /** Calendar columns as `YYYY-MM-DD` in <see cref="displayZone"/>. */
@@ -70,7 +70,7 @@ export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent
                     key={`${ev.id}@${ev.instanceStartUtc}`}
                     type="button"
                     onClick={() => onPickEvent(ev)}
-                    className="truncate rounded bg-amber-900/60 px-2 py-0.5 text-left text-[11px] font-medium text-amber-100 hover:bg-amber-800/70"
+                    className={`truncate rounded bg-amber-900/60 px-2 py-0.5 text-left text-[11px] font-medium text-amber-100 hover:bg-amber-800/70 ${ev.isInstanceCompleted ? "opacity-70 line-through" : ""}`}
                     title={ev.title}
                   >
                     {ev.title}
@@ -114,10 +114,12 @@ export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent
                 />
               ))}
               {timed.map((ev) => {
-                const startMin = Math.max(0, wallMinutesInZone(ev.instanceStartUtc, displayZone) - HOUR_START * 60);
-                const endMinRaw = ev.instanceEndUtc
-                  ? wallMinutesInZone(ev.instanceEndUtc, displayZone)
-                  : wallMinutesInZone(ev.instanceStartUtc, displayZone) + 60;
+                const startIso = rangeInstanceStartUtc(ev);
+                const endIso = rangeInstanceEndUtc(ev);
+                const startMin = Math.max(0, wallMinutesInZone(startIso, displayZone) - HOUR_START * 60);
+                const endMinRaw = endIso
+                  ? wallMinutesInZone(endIso, displayZone)
+                  : wallMinutesInZone(startIso, displayZone) + 60;
                 const endMin = Math.min((HOUR_END - HOUR_START + 1) * 60, endMinRaw - HOUR_START * 60);
                 const top = (startMin / 60) * HOUR_HEIGHT_PX;
                 const height = Math.max(20, ((endMin - startMin) / 60) * HOUR_HEIGHT_PX - 2);
@@ -127,7 +129,7 @@ export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent
                     key={`${ev.id}@${ev.instanceStartUtc}`}
                     type="button"
                     onClick={() => onPickEvent(ev)}
-                    className="absolute left-1 right-1 overflow-hidden rounded bg-blue-700/70 px-2 py-1 text-left text-xs text-white shadow-sm hover:bg-blue-600/80"
+                    className={`absolute left-1 right-1 overflow-hidden rounded bg-blue-700/70 px-2 py-1 text-left text-xs text-white shadow-sm hover:bg-blue-600/80 ${ev.isInstanceCompleted ? "opacity-70 line-through" : ""}`}
                     style={{ top: `${top}px`, height: `${height}px` }}
                     title={ev.title}
                   >
@@ -136,8 +138,10 @@ export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent
                       {ev.isRecurringInstance && <span className="ml-1 text-blue-200">↻</span>}
                     </div>
                     <div className="truncate text-[10px] text-blue-100">
-                      {formatTimeInZone(ev.instanceStartUtc, displayZone)}
-                      {ev.instanceEndUtc ? ` – ${formatTimeInZone(ev.instanceEndUtc, displayZone)}` : ""}
+                      {formatTimeInZone(rangeInstanceStartUtc(ev), displayZone)}
+                      {rangeInstanceEndUtc(ev)
+                        ? ` – ${formatTimeInZone(rangeInstanceEndUtc(ev)!, displayZone)}`
+                        : ""}
                     </div>
                   </button>
                 );
@@ -167,7 +171,7 @@ function splitAllDayAndTimed(
     timed.set(y, []);
   }
   for (const ev of events) {
-    const y = ymdInZone(ev.instanceStartUtc, displayZone);
+    const y = ymdInZone(rangeInstanceStartUtc(ev), displayZone);
     if (!dayYmds.includes(y)) continue;
     const target = ev.allDay ? all.get(y) : timed.get(y);
     if (target) target.push(ev);

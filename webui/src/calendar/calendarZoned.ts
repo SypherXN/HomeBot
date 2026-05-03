@@ -1,6 +1,21 @@
 import { DateTime } from "luxon";
+import type { CalendarRangeItem } from "../api";
 
 export type CalendarViewMode = "month" | "week" | "day" | "agenda";
+
+/** Layout / display start: per-instance time override when present. */
+export function rangeInstanceStartUtc(
+  ev: Pick<CalendarRangeItem, "instanceStartUtc" | "displayInstanceStartUtc">
+): string {
+  return ev.displayInstanceStartUtc?.trim() || ev.instanceStartUtc;
+}
+
+/** Layout / display end for timed or overridden ranges. */
+export function rangeInstanceEndUtc(
+  ev: Pick<CalendarRangeItem, "instanceEndUtc" | "displayInstanceEndUtc">
+): string | null | undefined {
+  return ev.displayInstanceEndUtc?.trim() || ev.instanceEndUtc;
+}
 
 /** When empty, use the browser's IANA zone. */
 export function effectiveTimeZone(stored: string): string {

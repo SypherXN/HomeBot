@@ -187,17 +187,19 @@ public static class HomeBotApiRegistration
             return Results.Ok(calendarService.GetList(page, string.IsNullOrWhiteSpace(typeFilter) ? null : typeFilter));
         });
 
-        app.MapGet("/api/calendar/{id:int}", (int id) =>
+        app.MapGet("/api/calendar/{id:int}", (HttpRequest request, int id) =>
         {
             var calendarService = root.GetRequiredService<CalendarService>();
-            var item = calendarService.GetItem(id);
+            var inst = request.Query["instanceStartUtc"].ToString();
+            var item = calendarService.GetItem(id, string.IsNullOrWhiteSpace(inst) ? null : inst);
             return item is null ? ApiResults.NotFound("Calendar item not found.") : Results.Ok(item);
         });
 
-        app.MapGet("/api/calendar/items/{id:int}", (int id) =>
+        app.MapGet("/api/calendar/items/{id:int}", (HttpRequest request, int id) =>
         {
             var calendarService = root.GetRequiredService<CalendarService>();
-            var item = calendarService.GetItem(id);
+            var inst = request.Query["instanceStartUtc"].ToString();
+            var item = calendarService.GetItem(id, string.IsNullOrWhiteSpace(inst) ? null : inst);
             return item is null ? ApiResults.NotFound("Calendar item not found.") : Results.Ok(item);
         });
 
@@ -781,6 +783,113 @@ public static class HomeBotApiRegistration
                 return ApiResults.Validation(idErr);
 
             root.GetRequiredService<CalendarService>().CompleteItem(id, actor);
+            return Results.Ok(new { ok = true });
+        });
+
+        w.MapPost("/calendar/items/{id:int}/omit-instance", (HttpRequest http, int id, CalendarInstanceOmitRequest? body) =>
+        {
+            if (!TryActor(http.Query, out var actor, out var err))
+                return err!;
+            if (body is null || string.IsNullOrWhiteSpace(body.InstanceStartUtc))
+                return ApiResults.BadRequest("instanceStartUtc is required.", "missing_body");
+
+            var idErr = Validation.ValidateId(id);
+            if (idErr != null)
+                return ApiResults.Validation(idErr);
+
+            try
+            {
+                root.GetRequiredService<CalendarService>().OmitRecurrenceInstance(id, body.InstanceStartUtc, actor);
+            }
+            catch (ArgumentException ex)
+            {
+                return ApiResults.BadRequest(ex.Message, "calendar_omit_invalid");
+            }
+            catch (InvalidOperationException ex)
+            {
+                return ApiResults.BadRequest(ex.Message, "calendar_omit_invalid");
+            }
+
+            return Results.Ok(new { ok = true });
+        });
+
+        w.MapPost("/calendar/items/{id:int}/complete-instance", (HttpRequest http, int id, CalendarInstanceOmitRequest? body) =>
+        {
+            if (!TryActor(http.Query, out var actor, out var err))
+                return err!;
+            if (body is null || string.IsNullOrWhiteSpace(body.InstanceStartUtc))
+                return ApiResults.BadRequest("instanceStartUtc is required.", "missing_body");
+
+            var idErr = Validation.ValidateId(id);
+            if (idErr != null)
+                return ApiResults.Validation(idErr);
+
+            try
+            {
+                root.GetRequiredService<CalendarService>().CompleteRecurrenceInstance(id, body.InstanceStartUtc, actor);
+            }
+            catch (ArgumentException ex)
+            {
+                return ApiResults.BadRequest(ex.Message, "calendar_instance_invalid");
+            }
+            catch (InvalidOperationException ex)
+            {
+                return ApiResults.BadRequest(ex.Message, "calendar_instance_invalid");
+            }
+
+            return Results.Ok(new { ok = true });
+        });
+
+        w.MapPatch("/calendar/items/{id:int}/instance", (HttpRequest http, int id, CalendarInstancePatchRequest? body) =>
+        {
+            if (!TryActor(http.Query, out var actor, out var err))
+                return err!;
+            if (body is null || string.IsNullOrWhiteSpace(body.InstanceStartUtc))
+                return ApiResults.BadRequest("instanceStartUtc is required.", "missing_body");
+
+            var idErr = Validation.ValidateId(id);
+            if (idErr != null)
+                return ApiResults.Validation(idErr);
+
+            try
+            {
+                root.GetRequiredService<CalendarService>().PatchRecurrenceInstance(id, body, actor);
+            }
+            catch (ArgumentException ex)
+            {
+                return ApiResults.BadRequest(ex.Message, "calendar_instance_invalid");
+            }
+            catch (InvalidOperationException ex)
+            {
+                return ApiResults.BadRequest(ex.Message, "calendar_instance_invalid");
+            }
+
+            return Results.Ok(new { ok = true });
+        });
+
+        w.MapDelete("/calendar/items/{id:int}/instance", (HttpRequest http, int id) =>
+        {
+            if (!TryActor(http.Query, out var actor, out var err))
+                return err!;
+            var iso = http.Query["instanceStartUtc"].ToString();
+            if (string.IsNullOrWhiteSpace(iso))
+                return ApiResults.BadRequest("Query parameter 'instanceStartUtc' is required.", "missing_instance");
+
+            var idErr = Validation.ValidateId(id);
+            if (idErr != null)
+                return ApiResults.Validation(idErr);
+
+            try
+            {
+                var cleared = root.GetRequiredService<CalendarService>().ClearRecurrenceInstance(id, iso, actor);
+                if (!cleared)
+                    return ApiResults.NotFound("No per-instance row for that occurrence.");
+            }
+            catch (InvalidOperationException ex)
+            {
+                return ApiResults.BadRequest(ex.Message, "calendar_instance_invalid");
+            }
+
             return Results.Ok(new { ok = true });
         });
 

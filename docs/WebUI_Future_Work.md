@@ -15,14 +15,15 @@ These are **already in the repo**; they stay out of the backlog below.
 | **API URL from the phone / LAN** | **Auto-detection:** on Vite **dev (5173)** or **preview (4173)**, the UI uses **same hostname + port 5050** unless you save an override. **Settings → API server** still allows a manual URL and **Reset to build default**. See `webui/src/apiBaseUrl.ts`. |
 | **Setup documentation** | **[SETUP.md](../SETUP.md)** — Windows and Ubuntu, env var “where to get each value,” **systemd start on reboot**, **LAN / phone** (CORS, firewall, `--host`), GitHub Pages + Actions workflow example. |
 | **Repo hygiene** | **`.gitignore`** expanded for build outputs, logs, SQLite sidecars, local `appsettings.*.local.json`, etc. |
+| **Calendar — per-instance recurrence** | Extended **`CalendarRecurrenceExceptions`** (`ExceptionKind`, overrides, `InstanceCompleted`). API: **`POST …/omit-instance`**, **`POST …/complete-instance`**, **`PATCH …/instance`** (canonical `instanceStartUtc` + optional fields). Range rows include **`displayInstanceStartUtc`**, **`isInstanceCompleted`**, **`hasInstanceOverride`**. Reminders skip omitted / completed-this-day / completed modified instances. Discord: **`/calendar-instance-omit`**, **`/calendar-instance-complete`**, **`/calendar-instance-edit`**. WebUI detail modal from grid: hide, complete this day, save for this day, complete/delete series. **Undo** restores exception rows (`calendar_rec_ex` create/update). |
 
 ---
 
-## Calendar — per-instance recurrence (skip / edit / complete)
+## Calendar — per-instance recurrence (future polish)
 
-**Today:** Recurring items expand in range responses; **Complete** and **Delete** apply to the **entire series**. The WebUI warns in the item detail flow when opened from a recurring instance.
+**Today:** Per-instance **hide**, **complete this day**, **edit this day** (title/notes/link/time override), **reminders** skip omitted/completed/suppressed instances, **Discord** `/calendar-instance-*`, and **Undo** for exception rows are implemented (see Recently addressed table).
 
-**What implementing it does:** Lets users change, skip, or complete **one occurrence** without altering the whole series. Requires **new persistence and API** (e.g. exception/overrides keyed by parent id + instance date), updates to range expansion, and WebUI actions bound to instance identity—not a UI-only change.
+**Possible follow-ups:** richer Today/Upcoming views that expand recurrence like the Web range; per-instance **end** override UX; optional “clear override” API.
 
 ---
 

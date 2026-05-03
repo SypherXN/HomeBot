@@ -242,4 +242,73 @@ public class CalendarCommands : InteractionModuleBase<SocketInteractionContext>
         var result = await _calendar.BuildUpcoming(user?.Id);
         await RespondAsync(embed: result.embed, components: result.components);
     }
+
+    /// <summary>
+    /// Hides one occurrence of a recurring calendar item (same UTC key as the web range row).
+    /// </summary>
+    [SlashCommand("calendar-instance-omit", "Hide one recurring occurrence")]
+    public async Task InstanceOmit(int id, string instance_start_utc)
+    {
+        try
+        {
+            _calendar.OmitRecurrenceInstance(id, instance_start_utc, Context.User.Id);
+            await RespondAsync("🚫 That occurrence is hidden from the calendar. Undo reverses it.");
+        }
+        catch (Exception ex)
+        {
+            await RespondAsync($"❌ {ex.Message}", ephemeral: true);
+        }
+    }
+
+    /// <summary>
+    /// Marks one occurrence of a recurring item complete (series stays active).
+    /// </summary>
+    [SlashCommand("calendar-instance-complete", "Complete one recurring occurrence")]
+    public async Task InstanceComplete(int id, string instance_start_utc)
+    {
+        try
+        {
+            _calendar.CompleteRecurrenceInstance(id, instance_start_utc, Context.User.Id);
+            await RespondAsync("✔ That day is marked complete on the calendar. Undo reverses it.");
+        }
+        catch (Exception ex)
+        {
+            await RespondAsync($"❌ {ex.Message}", ephemeral: true);
+        }
+    }
+
+    /// <summary>
+    /// Edits title/description/notes/link and optional UTC start/end overrides for one recurrence occurrence.
+    /// </summary>
+    [SlashCommand("calendar-instance-edit", "Edit one recurring occurrence")]
+    public async Task InstanceEdit(
+        int id,
+        string instance_start_utc,
+        string title = "",
+        string description = "",
+        string notes = "",
+        string link = "",
+        string override_start_utc = "",
+        string override_end_utc = "")
+    {
+        try
+        {
+            var patch = new CalendarInstancePatchRequest
+            {
+                InstanceStartUtc = instance_start_utc,
+                Title = string.IsNullOrWhiteSpace(title) ? null : title,
+                Description = string.IsNullOrWhiteSpace(description) ? null : description,
+                Notes = string.IsNullOrWhiteSpace(notes) ? null : notes,
+                Link = string.IsNullOrWhiteSpace(link) ? null : link,
+                OverrideInstanceStartUtc = string.IsNullOrWhiteSpace(override_start_utc) ? null : override_start_utc,
+                OverrideInstanceEndUtc = string.IsNullOrWhiteSpace(override_end_utc) ? null : override_end_utc,
+            };
+            _calendar.PatchRecurrenceInstance(id, patch, Context.User.Id);
+            await RespondAsync("✏️ That occurrence was updated. Undo reverses it.");
+        }
+        catch (Exception ex)
+        {
+            await RespondAsync($"❌ {ex.Message}", ephemeral: true);
+        }
+    }
 }

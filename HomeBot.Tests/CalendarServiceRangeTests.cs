@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -195,5 +196,162 @@ public sealed class CalendarServiceRangeTests : IDisposable
         var instances = _calendar.GetRange(from, to, null);
 
         Assert.Empty(instances);
+    }
+
+    [Fact]
+    public void Daily_omitted_instance_is_excluded_from_range()
+    {
+        _calendar.AddItem("Daily", "event", "2026-04-10 09:00", "", false, "", null, "", "", "", "daily", "UTC");
+        var id = QueryLastCalendarItemId();
+        _calendar.OmitRecurrenceInstance(id, "2026-04-16T09:00:00Z", 999UL);
+
+        var instances = _calendar.GetRange(
+            new DateTime(2026, 4, 15),
+            new DateTime(2026, 4, 18),
+            null);
+
+        Assert.Equal(2, instances.Count);
+        Assert.Equal("2026-04-15T09:00:00Z", instances[0].InstanceStartUtc);
+        Assert.Equal("2026-04-17T09:00:00Z", instances[1].InstanceStartUtc);
+    }
+
+    [Fact]
+    public void Omit_recurrence_undo_restores_instance_in_range()
+    {
+        var undo = _services.GetRequiredService<UndoService>();
+        _calendar.AddItem("Daily", "event", "2026-04-10 09:00", "", false, "", null, "", "", "", "daily", "UTC");
+        var id = QueryLastCalendarItemId();
+        _calendar.OmitRecurrenceInstance(id, "2026-04-16T09:00:00Z", 42UL);
+
+        var mid = _calendar.GetRange(
+            new DateTime(2026, 4, 15),
+            new DateTime(2026, 4, 18),
+            null);
+        Assert.Equal(2, mid.Count);
+
+        var r = undo.ApplyLastUndo(42UL);
+        Assert.True(r.IsSuccess);
+
+        var after = _calendar.GetRange(
+            new DateTime(2026, 4, 15),
+            new DateTime(2026, 4, 18),
+            null);
+        Assert.Equal(3, after.Count);
+        Assert.Contains(after, i => i.InstanceStartUtc == "2026-04-16T09:00:00Z");
+    }
+
+    [Fact]
+    public void Completed_instance_is_flagged_in_range()
+    {
+        _calendar.AddItem("Daily", "event", "2026-04-10 09:00", "", false, "", null, "", "", "", "daily", "UTC");
+        var id = QueryLastCalendarItemId();
+        _calendar.CompleteRecurrenceInstance(id, "2026-04-16T09:00:00Z", 1UL);
+
+        var instances = _calendar.GetRange(
+            new DateTime(2026, 4, 15),
+            new DateTime(2026, 4, 18),
+            null);
+
+        var apr16 = Assert.Single(instances, i => i.InstanceStartUtc == "2026-04-16T09:00:00Z");
+        Assert.True(apr16.IsInstanceCompleted);
+    }
+
+    [Fact]
+    public void Patch_instance_title_applies_in_range()
+    {
+        _calendar.AddItem("Daily", "event", "2026-04-10 09:00", "", false, "", null, "", "", "", "daily", "UTC");
+        var id = QueryLastCalendarItemId();
+        _calendar.PatchRecurrenceInstance(
+            id,
+            new CalendarInstancePatchRequest { InstanceStartUtc = "2026-04-16T09:00:00Z", Title = "One-off title" },
+            1UL);
+
+        var instances = _calendar.GetRange(
+            new DateTime(2026, 4, 15),
+            new DateTime(2026, 4, 18),
+            null);
+
+        var apr16 = Assert.Single(instances, i => i.InstanceStartUtc == "2026-04-16T09:00:00Z");
+        Assert.Equal("One-off title", apr16.Title);
+        Assert.True(apr16.HasInstanceOverride);
+    }
+
+    [Fact]
+    public void Patch_instance_time_sets_display_start_in_range()
+    {
+        _calendar.AddItem("Daily", "event", "2026-04-10 09:00", "", false, "", null, "", "", "", "daily", "UTC");
+        var id = QueryLastCalendarItemId();
+        _calendar.PatchRecurrenceInstance(
+            id,
+            new CalendarInstancePatchRequest
+            {
+                InstanceStartUtc = "2026-04-16T09:00:00Z",
+                OverrideInstanceStartUtc = "2026-04-16T15:30:00Z",
+            },
+            1UL);
+
+        var instances = _calendar.GetRange(
+            new DateTime(2026, 4, 15),
+            new DateTime(2026, 4, 18),
+            null);
+
+        var apr16 = Assert.Single(instances, i => i.InstanceStartUtc == "2026-04-16T09:00:00Z");
+        Assert.Equal("2026-04-16T15:30:00Z", apr16.DisplayInstanceStartUtc);
+    }
+
+    [Fact]
+    public void GetItem_for_instance_merges_title_time_and_span_end()
+    {
+        _calendar.AddItem("Daily", "event", "2026-04-10 09:00", "2026-04-10 10:00", false, "", null, "", "", "", "daily", "UTC");
+        var id = QueryLastCalendarItemId();
+        _calendar.PatchRecurrenceInstance(
+            id,
+            new CalendarInstancePatchRequest
+            {
+                InstanceStartUtc = "2026-04-16T09:00:00Z",
+                Title = "T16",
+                OverrideInstanceStartUtc = "2026-04-16T12:00:00Z",
+            },
+            1UL);
+
+        var d = _calendar.GetItem(id, "2026-04-16T09:00:00Z");
+        Assert.NotNull(d);
+        Assert.Equal("T16", d.Title);
+        Assert.Equal("2026-04-16 12:00", d.Start);
+        Assert.Equal("2026-04-16 13:00", d.End);
+        Assert.Equal("2026-04-16T09:00:00Z", d.InstanceStartUtc);
+    }
+
+    [Fact]
+    public void ClearRecurrenceInstance_undo_restores_modify_row()
+    {
+        _calendar.AddItem("Daily", "event", "2026-04-10 09:00", "", false, "", null, "", "", "", "daily", "UTC");
+        var id = QueryLastCalendarItemId();
+        _calendar.PatchRecurrenceInstance(
+            id,
+            new CalendarInstancePatchRequest { InstanceStartUtc = "2026-04-16T09:00:00Z", Title = "X" },
+            42UL);
+
+        Assert.True(_calendar.ClearRecurrenceInstance(id, "2026-04-16T09:00:00Z", 42UL));
+        var d = _calendar.GetItem(id, "2026-04-16T09:00:00Z");
+        Assert.NotNull(d);
+        Assert.Equal("Daily", d.Title);
+
+        var undo = _services.GetRequiredService<UndoService>();
+        var r = undo.ApplyLastUndo(42UL);
+        Assert.True(r.IsSuccess);
+
+        d = _calendar.GetItem(id, "2026-04-16T09:00:00Z");
+        Assert.NotNull(d);
+        Assert.Equal("X", d.Title);
+    }
+
+    private int QueryLastCalendarItemId()
+    {
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT Id FROM CalendarItems ORDER BY Id DESC LIMIT 1";
+        return Convert.ToInt32(cmd.ExecuteScalar()!);
     }
 }

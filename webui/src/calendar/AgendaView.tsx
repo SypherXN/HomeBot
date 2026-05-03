@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { CalendarRangeItem } from "../api";
-import { formatLongDateYmd, formatTimeInZone, ymdInZone } from "./calendarZoned";
+import { formatLongDateYmd, formatTimeInZone, rangeInstanceEndUtc, rangeInstanceStartUtc, ymdInZone } from "./calendarZoned";
 
 type Props = {
   events: CalendarRangeItem[];
@@ -34,7 +34,7 @@ export default function AgendaView({ events, displayZone, onPickEvent }: Props) 
                 <button
                   type="button"
                   onClick={() => onPickEvent(ev)}
-                  className="flex w-full flex-col gap-1 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-3 text-left hover:border-slate-700 hover:bg-slate-900/70"
+                  className={`flex w-full flex-col gap-1 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-3 text-left hover:border-slate-700 hover:bg-slate-900/70 ${ev.isInstanceCompleted ? "opacity-70 line-through" : ""}`}
                 >
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="truncate text-sm font-medium text-slate-100">
@@ -48,9 +48,9 @@ export default function AgendaView({ events, displayZone, onPickEvent }: Props) 
                     <span className="shrink-0 text-xs text-slate-400">
                       {ev.allDay
                         ? "all-day"
-                        : `${formatTimeInZone(ev.instanceStartUtc, displayZone)}${
-                            ev.instanceEndUtc
-                              ? ` – ${formatTimeInZone(ev.instanceEndUtc, displayZone)}`
+                        : `${formatTimeInZone(rangeInstanceStartUtc(ev), displayZone)}${
+                            rangeInstanceEndUtc(ev)
+                              ? ` – ${formatTimeInZone(rangeInstanceEndUtc(ev)!, displayZone)}`
                               : ""
                           }`}
                     </span>
@@ -81,10 +81,12 @@ export default function AgendaView({ events, displayZone, onPickEvent }: Props) 
 }
 
 function groupByDay(events: CalendarRangeItem[], displayZone: string): DayBucket[] {
-  const sorted = [...events].sort((a, b) => a.instanceStartUtc.localeCompare(b.instanceStartUtc));
+  const sorted = [...events].sort((a, b) =>
+    rangeInstanceStartUtc(a).localeCompare(rangeInstanceStartUtc(b))
+  );
   const buckets: DayBucket[] = [];
   for (const ev of sorted) {
-    const y = ymdInZone(ev.instanceStartUtc, displayZone);
+    const y = ymdInZone(rangeInstanceStartUtc(ev), displayZone);
     const last = buckets[buckets.length - 1];
     if (last && last.ymd === y) {
       last.events.push(ev);

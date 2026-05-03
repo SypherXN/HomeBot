@@ -35,6 +35,9 @@ public static class CommandFeatureMap
             // --- CALENDAR ---
             "calendar-add" => "calendar",
             "calendar-list" => "calendar",
+            "calendar-instance-omit" => "calendar",
+            "calendar-instance-complete" => "calendar",
+            "calendar-instance-edit" => "calendar",
 
             // --- SYSTEM (no restriction) ---
             "setup-set" => null,

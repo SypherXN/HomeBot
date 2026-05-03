@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.Globalization;
+using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Discord;
 
@@ -407,37 +409,133 @@ public class CalendarService
     }
 
     /// <summary>
-    /// Returns one calendar item for detail view rendering.
+    /// Returns one calendar item for detail view rendering. When <paramref name="instanceStartUtcRaw"/> is set on a
+    /// recurring series, merges that occurrence's exception overrides (same canonical key as range rows).
     /// </summary>
-    public CalendarItemDetailModel? GetItem(int id)
+    public CalendarItemDetailModel? GetItem(int id, string? instanceStartUtcRaw = null)
     {
         using var conn = _db.GetConnection();
         conn.Open();
 
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            SELECT Title, Description, Notes, Link, StartDateTime, AllDay, ReminderOffset, COALESCE(Timezone, '') AS ItemTz
+            SELECT Title, Description, Notes, Link, StartDateTime, EndDateTime, AllDay, ReminderOffset,
+                   COALESCE(Timezone, '') AS ItemTz, COALESCE(Recurrence, '') AS Recur
             FROM CalendarItems
-            WHERE Id = $id";
+            WHERE Id = $id AND Status = 'active'";
 
         cmd.Parameters.AddWithValue("$id", id);
 
-        using var reader = cmd.ExecuteReader();
+        string seriesStartRaw;
+        string seriesEndRaw;
+        CalendarItemDetailModel detail;
+        using (var reader = cmd.ExecuteReader())
+        {
+            if (!reader.Read())
+                return null;
 
-        if (!reader.Read())
+            seriesStartRaw = reader.IsDBNull(4) ? "" : reader.GetString(4);
+            seriesEndRaw = reader.IsDBNull(5) ? "" : reader.GetString(5);
+            detail = new CalendarItemDetailModel
+            {
+                Title = reader.GetString(0),
+                Description = reader.IsDBNull(1) ? "" : reader.GetString(1),
+                Notes = reader.IsDBNull(2) ? "" : reader.GetString(2),
+                Link = reader.IsDBNull(3) ? "" : reader.GetString(3),
+                Start = seriesStartRaw,
+                End = seriesEndRaw.Trim(),
+                AllDay = reader.GetInt32(6) == 1,
+                Reminder = reader.IsDBNull(7) ? "" : reader.GetString(7),
+                Timezone = reader.IsDBNull(8) ? "" : reader.GetString(8),
+                Recurrence = reader.IsDBNull(9) ? "" : reader.GetString(9),
+            };
+        }
+
+        if (string.IsNullOrWhiteSpace(instanceStartUtcRaw) || string.IsNullOrWhiteSpace(detail.Recurrence))
+            return detail;
+
+        var normalizedIso = NormalizeCalendarInstanceStartUtc(instanceStartUtcRaw);
+        var ex = ReadRecurrenceExceptionUndo(conn, null, id, normalizedIso);
+        if (ex != null && string.Equals(ex.ExceptionKind, "omit", StringComparison.OrdinalIgnoreCase))
             return null;
 
-        return new CalendarItemDetailModel
+        if (!DateTimeOffset.TryParse(
+                normalizedIso,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var canonDto))
         {
-            Title = reader.GetString(0),
-            Description = reader.IsDBNull(1) ? "" : reader.GetString(1),
-            Notes = reader.IsDBNull(2) ? "" : reader.GetString(2),
-            Link = reader.IsDBNull(3) ? "" : reader.GetString(3),
-            Start = reader.IsDBNull(4) ? "" : reader.GetString(4),
-            AllDay = reader.GetInt32(5) == 1,
-            Reminder = reader.IsDBNull(6) ? "" : reader.GetString(6),
-            Timezone = reader.IsDBNull(7) ? "" : reader.GetString(7)
-        };
+            return detail;
+        }
+
+        var canonUtc = canonDto.UtcDateTime;
+        if (ex != null && !string.IsNullOrWhiteSpace(ex.OverrideInstanceStartUtc) &&
+            DateTimeOffset.TryParse(
+                ex.OverrideInstanceStartUtc,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var overS))
+        {
+            detail.Start = UtcInstantToStorageString(overS.UtcDateTime);
+        }
+        else
+        {
+            detail.Start = UtcInstantToStorageString(canonUtc);
+        }
+
+        if (ex != null && !string.IsNullOrWhiteSpace(ex.OverrideInstanceEndUtc) &&
+            DateTimeOffset.TryParse(
+                ex.OverrideInstanceEndUtc,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var overE))
+        {
+            detail.End = UtcInstantToStorageString(overE.UtcDateTime);
+        }
+        else if (TryParseUtcStorage(seriesStartRaw, out var serStartUtc) &&
+                 TryParseUtcStorage(seriesEndRaw, out var serEndUtc) &&
+                 serEndUtc > serStartUtc &&
+                 TryParseUtcStorage(detail.Start, out var effStartUtc))
+        {
+            var span = serEndUtc - serStartUtc;
+            detail.End = UtcInstantToStorageString(effStartUtc + span);
+        }
+
+        if (ex != null)
+        {
+            if (ex.OverrideTitle != null)
+                detail.Title = ex.OverrideTitle;
+            if (ex.OverrideDescription != null)
+                detail.Description = ex.OverrideDescription;
+            if (ex.OverrideNotes != null)
+                detail.Notes = ex.OverrideNotes;
+            if (ex.OverrideLink != null)
+                detail.Link = ex.OverrideLink;
+        }
+
+        detail.InstanceStartUtc = normalizedIso;
+        return detail;
+    }
+
+    private static bool TryParseUtcStorage(string raw, out DateTime utc)
+    {
+        utc = default;
+        if (string.IsNullOrWhiteSpace(raw))
+            return false;
+        if (!DateTime.TryParse(
+                raw.Trim(),
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var dt))
+            return false;
+        utc = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+        return true;
+    }
+
+    private static string UtcInstantToStorageString(DateTime utc)
+    {
+        utc = DateTime.SpecifyKind(utc, DateTimeKind.Utc);
+        return utc.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
     }
 
     /// <summary>
@@ -465,45 +563,14 @@ public class CalendarService
     {
         using var conn = _db.GetConnection();
         conn.Open();
-        int pageSize = GetPageSize(conn);
-        var todayStart = DateTime.Today;
-        var todayEnd = todayStart.AddDays(1);
+        var pageSize = GetPageSize(conn);
 
-        var cmd = conn.CreateCommand();
-        cmd.CommandText = @"
-            SELECT Id, Title, Type, StartDateTime, AllDay, AssignedTo
-            FROM CalendarItems
-            WHERE Status = 'active'
-        ";
-
-        using var reader = cmd.ExecuteReader();
-        var allItems = new List<CalendarListItemModel>();
-        while (reader.Read())
-        {
-            var type = reader.GetString(2);
-            var dateStr = reader.IsDBNull(3) ? "" : reader.GetString(3);
-            var assigned = reader.IsDBNull(5) ? null : (ulong?)reader.GetInt64(5);
-
-            if (userFilter.HasValue && assigned.HasValue && assigned.Value != userFilter.Value && assigned.Value != 0)
-                continue;
-
-            if (type != "task")
-            {
-                if (string.IsNullOrWhiteSpace(dateStr) || !DateTime.TryParse(dateStr, out var dt))
-                    continue;
-                if (dt < todayStart || dt >= todayEnd)
-                    continue;
-            }
-
-            allItems.Add(new CalendarListItemModel
-            {
-                Id = reader.GetInt32(0),
-                Title = reader.GetString(1),
-                Type = type,
-                AssignedTo = assigned,
-                AssignedToMemberLabel = HouseholdIdentity.MemberLabel(assigned)
-            });
-        }
+        var householdTz = GetTimezone();
+        var todayLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, householdTz).Date;
+        var range = GetRange(todayLocal, todayLocal.AddDays(1), userFilter, householdTz.Id);
+        var events = range.Select(MapRangeOccurrenceToListItem).ToList();
+        var tasks = LoadActiveTasksOnly(conn, userFilter);
+        var allItems = events.Concat(tasks).OrderBy(x => x.SortDate).ToList();
 
         var paged = allItems.Skip(page * pageSize).Take(pageSize).ToList();
         return new PagedResult<CalendarListItemModel>
@@ -542,49 +609,20 @@ public class CalendarService
     {
         using var conn = _db.GetConnection();
         conn.Open();
-        int pageSize = GetPageSize(conn);
-        var now = DateTime.Now;
+        var pageSize = GetPageSize(conn);
+        var nowUtc = DateTime.UtcNow;
 
-        var cmd = conn.CreateCommand();
-        cmd.CommandText = @"
-            SELECT Id, Title, Type, StartDateTime, AssignedTo
-            FROM CalendarItems
-            WHERE Status = 'active'
-        ";
+        var householdTz = GetTimezone();
+        var fromLocal = TimeZoneInfo.ConvertTimeFromUtc(nowUtc, householdTz).Date;
+        var toLocal = fromLocal.AddDays(RangeMaxDays);
+        var range = GetRange(fromLocal, toLocal, userFilter, householdTz.Id);
+        var events = range
+            .Select(MapRangeOccurrenceToListItem)
+            .Where(e => GetOccurrenceSortUtcFromListItem(e) >= nowUtc)
+            .ToList();
 
-        using var reader = cmd.ExecuteReader();
-        var allItems = new List<CalendarListItemModel>();
-        while (reader.Read())
-        {
-            var type = reader.GetString(2);
-            var dateStr = reader.IsDBNull(3) ? "" : reader.GetString(3);
-            var assigned = reader.IsDBNull(4) ? null : (ulong?)reader.GetInt64(4);
-
-            if (userFilter.HasValue && assigned.HasValue && assigned.Value != userFilter.Value && assigned.Value != 0)
-                continue;
-
-            var dt = DateTime.MaxValue;
-            if (type != "task")
-            {
-                if (!DateTime.TryParse(dateStr, out dt))
-                    continue;
-                if (dt < now)
-                    continue;
-            }
-
-            allItems.Add(new CalendarListItemModel
-            {
-                Id = reader.GetInt32(0),
-                Title = reader.GetString(1),
-                Type = type,
-                AssignedTo = assigned,
-                AssignedToMemberLabel = HouseholdIdentity.MemberLabel(assigned),
-                DateText = dt.ToString(),
-                SortDate = dt
-            });
-        }
-
-        var sorted = allItems.OrderBy(x => x.SortDate).ToList();
+        var tasks = LoadActiveTasksOnly(conn, userFilter);
+        var sorted = events.Concat(tasks).OrderBy(x => x.SortDate).ToList();
         var paged = sorted.Skip(page * pageSize).Take(pageSize).ToList();
         return new PagedResult<CalendarListItemModel>
         {
@@ -595,6 +633,147 @@ public class CalendarService
             HasNext = sorted.Count > (page + 1) * pageSize,
             HasPrev = page > 0
         };
+    }
+
+    private static DateTime GetOccurrenceSortUtcFromListItem(CalendarListItemModel item)
+    {
+        if (string.IsNullOrWhiteSpace(item.InstanceStartUtc))
+            return item.SortDate;
+        var iso = item.InstanceStartUtc.Trim();
+        if (!DateTimeOffset.TryParse(
+                iso,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var dto))
+            return item.SortDate;
+        return dto.UtcDateTime;
+    }
+
+    private static CalendarListItemModel MapRangeOccurrenceToListItem(CalendarRangeItemModel r)
+    {
+        var startIso = string.IsNullOrWhiteSpace(r.DisplayInstanceStartUtc) ? r.InstanceStartUtc : r.DisplayInstanceStartUtc!;
+        if (!DateTimeOffset.TryParse(
+                startIso,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var dto))
+        {
+            return new CalendarListItemModel
+            {
+                Id = r.Id,
+                Title = r.Title,
+                Type = r.Type,
+                DateText = startIso,
+                AllDay = r.AllDay,
+                AssignedTo = r.AssignedTo,
+                AssignedToMemberLabel = r.AssignedToMemberLabel,
+                ReminderText = r.ReminderText,
+                RecurrenceText = r.RecurrenceText,
+                HasLink = r.HasLink,
+                SortDate = DateTime.UtcNow,
+                InstanceStartUtc = r.InstanceStartUtc,
+            };
+        }
+
+        var utc = dto.UtcDateTime;
+        var rowTz = TimeZoneResolver.Resolve(
+            string.IsNullOrWhiteSpace(r.TimeZoneId) ? null : r.TimeZoneId.Trim(),
+            TimeZoneResolver.DefaultHouseholdTimeZoneId);
+        DateTime local;
+        try
+        {
+            local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), rowTz);
+        }
+        catch
+        {
+            local = utc;
+        }
+
+        return new CalendarListItemModel
+        {
+            Id = r.Id,
+            Title = r.Title,
+            Type = r.Type,
+            DateText = local.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture),
+            AllDay = r.AllDay,
+            AssignedTo = r.AssignedTo,
+            AssignedToMemberLabel = r.AssignedToMemberLabel,
+            ReminderText = r.ReminderText,
+            RecurrenceText = r.RecurrenceText,
+            HasLink = r.HasLink,
+            SortDate = local,
+            InstanceStartUtc = r.InstanceStartUtc,
+        };
+    }
+
+    private List<CalendarListItemModel> LoadActiveTasksOnly(SqliteConnection conn, ulong? userFilter)
+    {
+        var householdTz = GetTimezone();
+        var list = new List<CalendarListItemModel>();
+        var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT Id, Title, Type, StartDateTime, AllDay, AssignedTo, Link, ReminderOffset, Recurrence,
+                   COALESCE(Timezone, '') AS ItemTz
+            FROM CalendarItems
+            WHERE Status = 'active'
+              AND Type = 'task'";
+
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            var assigned = reader.IsDBNull(5) ? null : (ulong?)reader.GetInt64(5);
+            if (userFilter.HasValue && assigned.HasValue && assigned.Value != userFilter.Value && assigned.Value != 0)
+                continue;
+
+            var rowTzId = reader.IsDBNull(9) ? "" : reader.GetString(9);
+            var rowTz = TimeZoneResolver.Resolve(string.IsNullOrWhiteSpace(rowTzId) ? null : rowTzId, householdTz.Id);
+            var startRaw = reader.IsDBNull(3) ? "" : reader.GetString(3);
+            var dateText = "";
+            var sortDate = DateTime.MaxValue;
+            if (!string.IsNullOrWhiteSpace(startRaw) &&
+                DateTime.TryParse(startRaw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsedUtc))
+            {
+                parsedUtc = DateTime.SpecifyKind(parsedUtc, DateTimeKind.Utc);
+                try
+                {
+                    var local = TimeZoneInfo.ConvertTimeFromUtc(parsedUtc, rowTz);
+                    dateText = local.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+                    sortDate = local;
+                }
+                catch
+                {
+                    dateText = startRaw;
+                }
+            }
+
+            var recurrence = reader.IsDBNull(8) ? "" : reader.GetString(8);
+            var recurrenceText = recurrence switch
+            {
+                "daily" => "🔁 daily",
+                "weekly" => "🔁 weekly",
+                "" => "",
+                _ => $"🔁 {recurrence}"
+            };
+            var reminderRaw = reader.IsDBNull(7) ? "" : reader.GetString(7);
+
+            list.Add(new CalendarListItemModel
+            {
+                Id = reader.GetInt32(0),
+                Title = reader.GetString(1),
+                Type = reader.GetString(2),
+                DateText = dateText,
+                AllDay = reader.GetInt32(4) == 1,
+                AssignedTo = assigned,
+                AssignedToMemberLabel = HouseholdIdentity.MemberLabel(assigned),
+                HasLink = !reader.IsDBNull(6) && !string.IsNullOrWhiteSpace(reader.GetString(6)),
+                ReminderText = ReminderFormatter.Format(reminderRaw),
+                RecurrenceText = recurrenceText,
+                SortDate = sortDate,
+                InstanceStartUtc = null,
+            });
+        }
+
+        return list;
     }
 
     /// <summary>
@@ -628,9 +807,12 @@ public class CalendarService
         using var conn = _db.GetConnection();
         conn.Open();
 
+        var recurrenceExceptions = LoadRecurrenceExceptionMap(conn);
+
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            SELECT Id, Title, Type, StartDateTime, EndDateTime, AllDay, AssignedTo, Link, ReminderOffset, Recurrence, COALESCE(Timezone, '') AS ItemTz
+            SELECT Id, Title, Type, StartDateTime, EndDateTime, AllDay, AssignedTo, Link, ReminderOffset, Recurrence,
+                   COALESCE(Timezone, '') AS ItemTz, COALESCE(Description, '') AS DescCol, COALESCE(Notes, '') AS NotesCol
             FROM CalendarItems
             WHERE Status = 'active' AND StartDateTime IS NOT NULL AND StartDateTime != ''";
 
@@ -639,6 +821,8 @@ public class CalendarService
         while (reader.Read())
         {
             var rowTzId = reader.IsDBNull(10) ? "" : reader.GetString(10);
+            var seriesDescription = reader.IsDBNull(11) ? "" : reader.GetString(11);
+            var seriesNotes = reader.IsDBNull(12) ? "" : reader.GetString(12);
             var rowTz = TimeZoneResolver.Resolve(string.IsNullOrWhiteSpace(rowTzId) ? null : rowTzId, householdTz.Id);
 
             var startRaw = reader.GetString(3);
@@ -690,6 +874,8 @@ public class CalendarService
                 ReminderRaw = reader.IsDBNull(8) ? "" : reader.GetString(8),
                 Recurrence = reader.IsDBNull(9) ? "" : reader.GetString(9),
                 TimezoneId = rowTz.Id,
+                Description = seriesDescription,
+                Notes = seriesNotes,
             };
 
             var winStartDate = TimeZoneInfo.ConvertTimeFromUtc(fromUtc, rowTz).Date;
@@ -701,7 +887,16 @@ public class CalendarService
                     {
                         var firstDay = startLocalRow.Date > winStartDate ? startLocalRow.Date : winStartDate;
                         for (var d = firstDay; d <= winEndDateInclusive; d = d.AddDays(1))
-                            EmitInstance(output, meta, d.Add(startLocalRow.TimeOfDay), duration, rowTz, true, fromUtc, toUtcExclusive);
+                            EmitInstance(
+                                output,
+                                meta,
+                                d.Add(startLocalRow.TimeOfDay),
+                                duration,
+                                rowTz,
+                                true,
+                                fromUtc,
+                                toUtcExclusive,
+                                recurrenceExceptions);
                         break;
                     }
                 case "weekly":
@@ -712,19 +907,524 @@ public class CalendarService
                                 continue;
                             if ((d - startLocalRow.Date).TotalDays % 7 != 0)
                                 continue;
-                            EmitInstance(output, meta, d.Add(startLocalRow.TimeOfDay), duration, rowTz, true, fromUtc, toUtcExclusive);
+                            EmitInstance(
+                                output,
+                                meta,
+                                d.Add(startLocalRow.TimeOfDay),
+                                duration,
+                                rowTz,
+                                true,
+                                fromUtc,
+                                toUtcExclusive,
+                                recurrenceExceptions);
                         }
 
                         break;
                     }
                 default:
-                    EmitInstance(output, meta, startLocalRow, duration, rowTz, false, fromUtc, toUtcExclusive);
+                    EmitInstance(
+                        output,
+                        meta,
+                        startLocalRow,
+                        duration,
+                        rowTz,
+                        false,
+                        fromUtc,
+                        toUtcExclusive,
+                        recurrenceExceptions);
                     break;
             }
         }
 
-        output.Sort((a, b) => string.CompareOrdinal(a.InstanceStartUtc, b.InstanceStartUtc));
+        output.Sort((a, b) =>
+            string.CompareOrdinal(
+                a.DisplayInstanceStartUtc ?? a.InstanceStartUtc,
+                b.DisplayInstanceStartUtc ?? b.InstanceStartUtc));
         return output;
+    }
+
+    /// <summary>
+    /// Normalizes a client-provided occurrence start to the same UTC ISO string used in range expansion.
+    /// </summary>
+    public static string NormalizeCalendarInstanceStartUtc(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            throw new ArgumentException("instanceStartUtc is required.", nameof(raw));
+        if (!DateTimeOffset.TryParse(
+                raw.Trim(),
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var dto))
+            throw new ArgumentException("instanceStartUtc must be a valid UTC or offset datetime.", nameof(raw));
+        return dto.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Converts a stored calendar start (UTC storage or ISO) to the canonical recurrence key used in range and exceptions.
+    /// </summary>
+    public static string NormalizeDbStartToInstanceKeyUtc(string startRaw)
+    {
+        if (string.IsNullOrWhiteSpace(startRaw))
+            throw new ArgumentException("Start is required.", nameof(startRaw));
+        if (!DateTime.TryParse(
+                startRaw.Trim(),
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var utc))
+            throw new ArgumentException("Invalid datetime.", nameof(startRaw));
+        utc = DateTime.SpecifyKind(utc, DateTimeKind.Utc);
+        return utc.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Hides a single occurrence of a recurring calendar item from range expansion (Web UI / API).
+    /// Does not delete the series. Undo removes or restores the exception row.
+    /// </summary>
+    public int OmitRecurrenceInstance(int calendarItemId, string instanceStartUtcRaw, ulong actorUserId)
+    {
+        EnsureRecurringParent(calendarItemId);
+        var iso = NormalizeCalendarInstanceStartUtc(instanceStartUtcRaw);
+
+        using var conn = _db.GetConnection();
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        var before = ReadRecurrenceExceptionUndo(conn, tx, calendarItemId, iso);
+        if (before != null && string.Equals(before.ExceptionKind, "omit", StringComparison.OrdinalIgnoreCase))
+        {
+            tx.Commit();
+            return before.Id;
+        }
+
+        var upsert = conn.CreateCommand();
+        upsert.Transaction = tx;
+        upsert.CommandText = @"
+            INSERT INTO CalendarRecurrenceExceptions
+            (CalendarItemId, InstanceStartUtc, ExceptionKind, OverrideTitle, OverrideDescription, OverrideNotes, OverrideLink,
+             OverrideInstanceStartUtc, OverrideInstanceEndUtc, InstanceCompleted)
+            VALUES ($cid, $iso, 'omit', NULL, NULL, NULL, NULL, NULL, NULL, 0)
+            ON CONFLICT(CalendarItemId, InstanceStartUtc) DO UPDATE SET
+                ExceptionKind = 'omit',
+                OverrideTitle = NULL,
+                OverrideDescription = NULL,
+                OverrideNotes = NULL,
+                OverrideLink = NULL,
+                OverrideInstanceStartUtc = NULL,
+                OverrideInstanceEndUtc = NULL,
+                InstanceCompleted = 0";
+        upsert.Parameters.AddWithValue("$cid", calendarItemId);
+        upsert.Parameters.AddWithValue("$iso", iso);
+        upsert.ExecuteNonQuery();
+
+        var idCmd = conn.CreateCommand();
+        idCmd.Transaction = tx;
+        idCmd.CommandText = "SELECT Id FROM CalendarRecurrenceExceptions WHERE CalendarItemId = $cid AND InstanceStartUtc = $iso";
+        idCmd.Parameters.AddWithValue("$cid", calendarItemId);
+        idCmd.Parameters.AddWithValue("$iso", iso);
+        var exIdObj = idCmd.ExecuteScalar();
+        if (exIdObj is null || exIdObj is DBNull)
+        {
+            tx.Rollback();
+            throw new InvalidOperationException("Could not resolve recurrence exception row.");
+        }
+
+        var exceptionId = Convert.ToInt32(exIdObj);
+        tx.Commit();
+        LogRecurrenceExceptionMutation(actorUserId, before, exceptionId);
+        return exceptionId;
+    }
+
+    /// <summary>
+    /// Marks one occurrence of a recurring item complete (still visible on the calendar with completed styling).
+    /// </summary>
+    public int CompleteRecurrenceInstance(int calendarItemId, string instanceStartUtcRaw, ulong actorUserId)
+    {
+        EnsureRecurringParent(calendarItemId);
+        var iso = NormalizeCalendarInstanceStartUtc(instanceStartUtcRaw);
+
+        using var conn = _db.GetConnection();
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        var before = ReadRecurrenceExceptionUndo(conn, tx, calendarItemId, iso);
+
+        if (before != null && string.Equals(before.ExceptionKind, "omit", StringComparison.OrdinalIgnoreCase))
+        {
+            tx.Rollback();
+            throw new InvalidOperationException("That occurrence is hidden. Undo hide or pick a different day.");
+        }
+
+        if (before != null &&
+            string.Equals(before.ExceptionKind, "complete", StringComparison.OrdinalIgnoreCase))
+        {
+            tx.Commit();
+            return before.Id;
+        }
+
+        if (before != null && string.Equals(before.ExceptionKind, "modify", StringComparison.OrdinalIgnoreCase))
+        {
+            var upd = conn.CreateCommand();
+            upd.Transaction = tx;
+            upd.CommandText = @"
+                UPDATE CalendarRecurrenceExceptions
+                SET InstanceCompleted = 1
+                WHERE Id = $id";
+            upd.Parameters.AddWithValue("$id", before.Id);
+            upd.ExecuteNonQuery();
+            tx.Commit();
+            _undo.LogAction(actorUserId, "update", "calendar_rec_ex", before.Id, JsonSerializer.Serialize(before));
+            return before.Id;
+        }
+
+        var ins = conn.CreateCommand();
+        ins.Transaction = tx;
+        ins.CommandText = @"
+            INSERT INTO CalendarRecurrenceExceptions
+            (CalendarItemId, InstanceStartUtc, ExceptionKind, OverrideTitle, OverrideDescription, OverrideNotes, OverrideLink,
+             OverrideInstanceStartUtc, OverrideInstanceEndUtc, InstanceCompleted)
+            VALUES ($cid, $iso, 'complete', NULL, NULL, NULL, NULL, NULL, NULL, 0)";
+        ins.Parameters.AddWithValue("$cid", calendarItemId);
+        ins.Parameters.AddWithValue("$iso", iso);
+        ins.ExecuteNonQuery();
+
+        var newId = ReadLastInsertRowId(conn, tx);
+        tx.Commit();
+        _undo.LogAction(actorUserId, "create", "calendar_rec_ex", newId, "{}");
+        return newId;
+    }
+
+    /// <summary>
+    /// Applies per-instance field overrides for one recurrence occurrence.
+    /// </summary>
+    public int PatchRecurrenceInstance(int calendarItemId, CalendarInstancePatchRequest patch, ulong actorUserId)
+    {
+        EnsureRecurringParent(calendarItemId);
+        var iso = NormalizeCalendarInstanceStartUtc(patch.InstanceStartUtc);
+
+        using var conn = _db.GetConnection();
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        var before = ReadRecurrenceExceptionUndo(conn, tx, calendarItemId, iso);
+
+        if (before != null && string.Equals(before.ExceptionKind, "omit", StringComparison.OrdinalIgnoreCase))
+        {
+            tx.Rollback();
+            throw new InvalidOperationException("That occurrence is hidden. Undo hide before editing.");
+        }
+
+        string? title = before?.OverrideTitle;
+        string? desc = before?.OverrideDescription;
+        string? notes = before?.OverrideNotes;
+        string? link = before?.OverrideLink;
+        string? oStart = before?.OverrideInstanceStartUtc;
+        string? oEnd = before?.OverrideInstanceEndUtc;
+        var instCompleted = before?.InstanceCompleted ?? 0;
+        var kind = "modify";
+
+        if (before != null && string.Equals(before.ExceptionKind, "complete", StringComparison.OrdinalIgnoreCase))
+        {
+            title = null;
+            desc = null;
+            notes = null;
+            link = null;
+            oStart = null;
+            oEnd = null;
+            instCompleted = 1;
+        }
+        else if (before != null && string.Equals(before.ExceptionKind, "modify", StringComparison.OrdinalIgnoreCase))
+        {
+            instCompleted = before.InstanceCompleted;
+        }
+
+        if (patch.Title != null)
+            title = patch.Title;
+        if (patch.Description != null)
+            desc = patch.Description;
+        if (patch.Notes != null)
+            notes = patch.Notes;
+        if (patch.Link != null)
+            link = patch.Link;
+        if (patch.OverrideInstanceStartUtc != null)
+            oStart = string.IsNullOrWhiteSpace(patch.OverrideInstanceStartUtc)
+                ? null
+                : NormalizeCalendarInstanceStartUtc(patch.OverrideInstanceStartUtc);
+        if (patch.OverrideInstanceEndUtc != null)
+            oEnd = string.IsNullOrWhiteSpace(patch.OverrideInstanceEndUtc)
+                ? null
+                : NormalizeCalendarInstanceStartUtc(patch.OverrideInstanceEndUtc);
+
+        if (before == null)
+        {
+            var hasAny =
+                !string.IsNullOrEmpty(title) ||
+                !string.IsNullOrEmpty(desc) ||
+                !string.IsNullOrEmpty(notes) ||
+                !string.IsNullOrEmpty(link) ||
+                !string.IsNullOrEmpty(oStart) ||
+                !string.IsNullOrEmpty(oEnd) ||
+                instCompleted != 0;
+            if (!hasAny)
+            {
+                tx.Rollback();
+                throw new ArgumentException("Provide at least one field to override for this occurrence.");
+            }
+
+            var ins = conn.CreateCommand();
+            ins.Transaction = tx;
+            ins.CommandText = @"
+                INSERT INTO CalendarRecurrenceExceptions
+                (CalendarItemId, InstanceStartUtc, ExceptionKind, OverrideTitle, OverrideDescription, OverrideNotes, OverrideLink,
+                 OverrideInstanceStartUtc, OverrideInstanceEndUtc, InstanceCompleted)
+                VALUES ($cid, $iso, 'modify', $title, $desc, $notes, $link, $os, $oe, $ic)";
+            ins.Parameters.AddWithValue("$cid", calendarItemId);
+            ins.Parameters.AddWithValue("$iso", iso);
+            ins.Parameters.AddWithValue("$title", string.IsNullOrEmpty(title) ? DBNull.Value : title);
+            ins.Parameters.AddWithValue("$desc", string.IsNullOrEmpty(desc) ? DBNull.Value : desc);
+            ins.Parameters.AddWithValue("$notes", string.IsNullOrEmpty(notes) ? DBNull.Value : notes);
+            ins.Parameters.AddWithValue("$link", string.IsNullOrEmpty(link) ? DBNull.Value : link);
+            ins.Parameters.AddWithValue("$os", string.IsNullOrEmpty(oStart) ? DBNull.Value : oStart);
+            ins.Parameters.AddWithValue("$oe", string.IsNullOrEmpty(oEnd) ? DBNull.Value : oEnd);
+            ins.Parameters.AddWithValue("$ic", instCompleted);
+            ins.ExecuteNonQuery();
+            var newId = ReadLastInsertRowId(conn, tx);
+            tx.Commit();
+            _undo.LogAction(actorUserId, "create", "calendar_rec_ex", newId, "{}");
+            return newId;
+        }
+
+        var updRow = conn.CreateCommand();
+        updRow.Transaction = tx;
+        updRow.CommandText = @"
+            UPDATE CalendarRecurrenceExceptions
+            SET ExceptionKind = $kind,
+                OverrideTitle = $title,
+                OverrideDescription = $desc,
+                OverrideNotes = $notes,
+                OverrideLink = $link,
+                OverrideInstanceStartUtc = $os,
+                OverrideInstanceEndUtc = $oe,
+                InstanceCompleted = $ic
+            WHERE Id = $id";
+        updRow.Parameters.AddWithValue("$id", before.Id);
+        updRow.Parameters.AddWithValue("$kind", kind);
+        updRow.Parameters.AddWithValue("$title", string.IsNullOrEmpty(title) ? DBNull.Value : title);
+        updRow.Parameters.AddWithValue("$desc", string.IsNullOrEmpty(desc) ? DBNull.Value : desc);
+        updRow.Parameters.AddWithValue("$notes", string.IsNullOrEmpty(notes) ? DBNull.Value : notes);
+        updRow.Parameters.AddWithValue("$link", string.IsNullOrEmpty(link) ? DBNull.Value : link);
+        updRow.Parameters.AddWithValue("$os", string.IsNullOrEmpty(oStart) ? DBNull.Value : oStart);
+        updRow.Parameters.AddWithValue("$oe", string.IsNullOrEmpty(oEnd) ? DBNull.Value : oEnd);
+        updRow.Parameters.AddWithValue("$ic", instCompleted);
+        updRow.ExecuteNonQuery();
+
+        tx.Commit();
+        _undo.LogAction(actorUserId, "update", "calendar_rec_ex", before.Id, JsonSerializer.Serialize(before));
+        return before.Id;
+    }
+
+    /// <summary>
+    /// Removes the recurrence exception row for one canonical instance (clears omit, complete-this-day, or modify overrides).
+    /// </summary>
+    /// <returns><c>false</c> when no exception row exists for that slot.</returns>
+    public bool ClearRecurrenceInstance(int calendarItemId, string instanceStartUtcRaw, ulong actorUserId)
+    {
+        EnsureRecurringParent(calendarItemId);
+        var iso = NormalizeCalendarInstanceStartUtc(instanceStartUtcRaw);
+
+        using var conn = _db.GetConnection();
+        conn.Open();
+
+        var before = ReadRecurrenceExceptionUndo(conn, null, calendarItemId, iso);
+        if (before == null)
+            return false;
+
+        var del = conn.CreateCommand();
+        del.CommandText = "DELETE FROM CalendarRecurrenceExceptions WHERE Id = $id";
+        del.Parameters.AddWithValue("$id", before.Id);
+        del.ExecuteNonQuery();
+
+        _undo.LogAction(actorUserId, "delete", "calendar_rec_ex", before.Id, JsonSerializer.Serialize(before));
+        return true;
+    }
+
+    /// <summary>
+    /// Reads recurrence exception state for reminder handling (omit / complete / modified time).
+    /// </summary>
+    public static bool TryLoadRecurrenceExceptionForReminder(
+        SqliteConnection conn,
+        int calendarItemId,
+        string instanceKeyUtcZ,
+        out string? overrideTitle,
+        out string? overrideStartUtcZ,
+        out bool suppressReminder)
+    {
+        overrideTitle = null;
+        overrideStartUtcZ = null;
+        suppressReminder = false;
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT ExceptionKind, InstanceCompleted, OverrideTitle, OverrideInstanceStartUtc
+            FROM CalendarRecurrenceExceptions
+            WHERE CalendarItemId = $cid AND InstanceStartUtc = $iso";
+        cmd.Parameters.AddWithValue("$cid", calendarItemId);
+        cmd.Parameters.AddWithValue("$iso", instanceKeyUtcZ);
+        using var reader = cmd.ExecuteReader();
+        if (!reader.Read())
+            return false;
+
+        var kind = reader.GetString(0);
+        var instDone = reader.GetInt32(1);
+        if (!reader.IsDBNull(2))
+            overrideTitle = reader.GetString(2);
+        if (!reader.IsDBNull(3))
+            overrideStartUtcZ = reader.GetString(3);
+
+        if (string.Equals(kind, "omit", StringComparison.OrdinalIgnoreCase))
+        {
+            suppressReminder = true;
+            return true;
+        }
+
+        if (string.Equals(kind, "complete", StringComparison.OrdinalIgnoreCase))
+        {
+            suppressReminder = true;
+            return true;
+        }
+
+        if (string.Equals(kind, "modify", StringComparison.OrdinalIgnoreCase) && instDone != 0)
+        {
+            suppressReminder = true;
+            return true;
+        }
+
+        return true;
+    }
+
+    private static int ReadLastInsertRowId(SqliteConnection conn, SqliteTransaction? tx)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "SELECT last_insert_rowid()";
+        return Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
+    }
+
+    private void EnsureRecurringParent(int calendarItemId)
+    {
+        using var conn = _db.GetConnection();
+        conn.Open();
+        var get = conn.CreateCommand();
+        get.CommandText = "SELECT Recurrence FROM CalendarItems WHERE Id = $id AND Status = 'active'";
+        get.Parameters.AddWithValue("$id", calendarItemId);
+        var recurrence = get.ExecuteScalar()?.ToString() ?? "";
+        if (string.IsNullOrWhiteSpace(recurrence))
+            throw new InvalidOperationException("Only recurring calendar items support per-instance actions.");
+    }
+
+    private void LogRecurrenceExceptionMutation(ulong actorUserId, RecurrenceExceptionUndoModel? before, int exceptionId)
+    {
+        if (before == null)
+            _undo.LogAction(actorUserId, "create", "calendar_rec_ex", exceptionId, "{}");
+        else
+            _undo.LogAction(actorUserId, "update", "calendar_rec_ex", exceptionId, JsonSerializer.Serialize(before));
+    }
+
+    private static RecurrenceExceptionUndoModel? ReadRecurrenceExceptionUndo(
+        SqliteConnection conn,
+        SqliteTransaction? tx,
+        int calendarItemId,
+        string instanceStartUtc)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = @"
+            SELECT Id, CalendarItemId, InstanceStartUtc, ExceptionKind,
+                   OverrideTitle, OverrideDescription, OverrideNotes, OverrideLink,
+                   OverrideInstanceStartUtc, OverrideInstanceEndUtc, InstanceCompleted
+            FROM CalendarRecurrenceExceptions
+            WHERE CalendarItemId = $cid AND InstanceStartUtc = $iso";
+        cmd.Parameters.AddWithValue("$cid", calendarItemId);
+        cmd.Parameters.AddWithValue("$iso", instanceStartUtc);
+        using var reader = cmd.ExecuteReader();
+        return reader.Read() ? ReadRecurrenceExceptionUndoFromReader(reader) : null;
+    }
+
+    private static RecurrenceExceptionUndoModel? ReadRecurrenceExceptionUndoById(
+        SqliteConnection conn,
+        SqliteTransaction? tx,
+        int id)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = @"
+            SELECT Id, CalendarItemId, InstanceStartUtc, ExceptionKind,
+                   OverrideTitle, OverrideDescription, OverrideNotes, OverrideLink,
+                   OverrideInstanceStartUtc, OverrideInstanceEndUtc, InstanceCompleted
+            FROM CalendarRecurrenceExceptions
+            WHERE Id = $id";
+        cmd.Parameters.AddWithValue("$id", id);
+        using var reader = cmd.ExecuteReader();
+        return reader.Read() ? ReadRecurrenceExceptionUndoFromReader(reader) : null;
+    }
+
+    private static RecurrenceExceptionUndoModel ReadRecurrenceExceptionUndoFromReader(SqliteDataReader reader)
+    {
+        return new RecurrenceExceptionUndoModel
+        {
+            Id = reader.GetInt32(0),
+            CalendarItemId = reader.GetInt32(1),
+            InstanceStartUtc = reader.GetString(2),
+            ExceptionKind = reader.GetString(3),
+            OverrideTitle = reader.IsDBNull(4) ? null : reader.GetString(4),
+            OverrideDescription = reader.IsDBNull(5) ? null : reader.GetString(5),
+            OverrideNotes = reader.IsDBNull(6) ? null : reader.GetString(6),
+            OverrideLink = reader.IsDBNull(7) ? null : reader.GetString(7),
+            OverrideInstanceStartUtc = reader.IsDBNull(8) ? null : reader.GetString(8),
+            OverrideInstanceEndUtc = reader.IsDBNull(9) ? null : reader.GetString(9),
+            InstanceCompleted = reader.GetInt32(10),
+        };
+    }
+
+    private static Dictionary<(int CalendarItemId, string InstanceStartUtc), RecurrenceExceptionRow> LoadRecurrenceExceptionMap(
+        SqliteConnection conn)
+    {
+        var map = new Dictionary<(int, string), RecurrenceExceptionRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT CalendarItemId, InstanceStartUtc, ExceptionKind,
+                   OverrideTitle, OverrideDescription, OverrideNotes, OverrideLink,
+                   OverrideInstanceStartUtc, OverrideInstanceEndUtc, InstanceCompleted
+            FROM CalendarRecurrenceExceptions";
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            var row = new RecurrenceExceptionRow
+            {
+                Kind = reader.GetString(2),
+                OverrideTitle = reader.IsDBNull(3) ? null : reader.GetString(3),
+                OverrideDescription = reader.IsDBNull(4) ? null : reader.GetString(4),
+                OverrideNotes = reader.IsDBNull(5) ? null : reader.GetString(5),
+                OverrideLink = reader.IsDBNull(6) ? null : reader.GetString(6),
+                OverrideInstanceStartUtc = reader.IsDBNull(7) ? null : reader.GetString(7),
+                OverrideInstanceEndUtc = reader.IsDBNull(8) ? null : reader.GetString(8),
+                InstanceCompleted = reader.GetInt32(9),
+            };
+            map[(reader.GetInt32(0), reader.GetString(1))] = row;
+        }
+
+        return map;
+    }
+
+    private sealed class RecurrenceExceptionRow
+    {
+        public string Kind = "";
+        public string? OverrideTitle;
+        public string? OverrideDescription;
+        public string? OverrideNotes;
+        public string? OverrideLink;
+        public string? OverrideInstanceStartUtc;
+        public string? OverrideInstanceEndUtc;
+        public int InstanceCompleted;
     }
 
     private struct RangeRowMeta
@@ -738,6 +1438,8 @@ public class CalendarService
         public string ReminderRaw;
         public string Recurrence;
         public string TimezoneId;
+        public string Description;
+        public string Notes;
     }
 
     private static void EmitInstance(
@@ -748,7 +1450,8 @@ public class CalendarService
         TimeZoneInfo tz,
         bool isRecurring,
         DateTime fromUtc,
-        DateTime toUtcExclusive)
+        DateTime toUtcExclusive,
+        Dictionary<(int CalendarItemId, string InstanceStartUtc), RecurrenceExceptionRow> recurrenceExceptions)
     {
         DateTime instanceUtc;
         try
@@ -757,11 +1460,9 @@ public class CalendarService
         }
         catch
         {
-            // Local time is invalid (DST spring-forward gap) — skip this occurrence.
             return;
         }
 
-        string? endIso = null;
         DateTime instanceEndUtc = instanceUtc;
         if (duration.HasValue)
         {
@@ -769,11 +1470,10 @@ public class CalendarService
             {
                 var endLocal = instanceLocal + duration.Value;
                 instanceEndUtc = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(endLocal, DateTimeKind.Unspecified), tz);
-                endIso = instanceEndUtc.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
             }
             catch
             {
-                endIso = null;
+                instanceEndUtc = instanceUtc;
             }
         }
         else if (meta.AllDay)
@@ -783,17 +1483,76 @@ public class CalendarService
                 instanceEndUtc = TimeZoneInfo.ConvertTimeToUtc(
                     DateTime.SpecifyKind(instanceLocal.Date.AddDays(1), DateTimeKind.Unspecified),
                     tz);
-                endIso = instanceEndUtc.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
             }
             catch
             {
                 instanceEndUtc = instanceUtc.AddDays(1);
-                endIso = instanceEndUtc.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
             }
         }
 
-        if (instanceUtc >= toUtcExclusive || instanceEndUtc <= fromUtc)
+        var startIso = instanceUtc.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+        recurrenceExceptions.TryGetValue((meta.Id, startIso), out var ex);
+        if (ex != null && string.Equals(ex.Kind, "omit", StringComparison.OrdinalIgnoreCase))
             return;
+
+        var effectiveStartUtc = instanceUtc;
+        var effectiveEndUtc = instanceEndUtc;
+        if (ex != null && !string.IsNullOrWhiteSpace(ex.OverrideInstanceStartUtc) &&
+            DateTimeOffset.TryParse(
+                ex.OverrideInstanceStartUtc,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var dtoS))
+        {
+            effectiveStartUtc = DateTime.SpecifyKind(dtoS.UtcDateTime, DateTimeKind.Utc);
+        }
+
+        if (ex != null && !string.IsNullOrWhiteSpace(ex.OverrideInstanceEndUtc) &&
+            DateTimeOffset.TryParse(
+                ex.OverrideInstanceEndUtc,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var dtoE))
+        {
+            effectiveEndUtc = DateTime.SpecifyKind(dtoE.UtcDateTime, DateTimeKind.Utc);
+        }
+        else if (ex != null && !string.IsNullOrWhiteSpace(ex.OverrideInstanceStartUtc))
+        {
+            var span = instanceEndUtc - instanceUtc;
+            if (span > TimeSpan.Zero)
+                effectiveEndUtc = effectiveStartUtc + span;
+        }
+
+        if (effectiveStartUtc >= toUtcExclusive || effectiveEndUtc <= fromUtc)
+            return;
+
+        var title = meta.Title;
+        if (ex != null && !string.IsNullOrWhiteSpace(ex.OverrideTitle))
+            title = ex.OverrideTitle!;
+
+        var desc = ex != null && ex.OverrideDescription != null ? ex.OverrideDescription : meta.Description;
+        var notesEff = ex != null && ex.OverrideNotes != null ? ex.OverrideNotes : meta.Notes;
+
+        var linkEff = meta.Link;
+        if (ex != null && !string.IsNullOrWhiteSpace(ex.OverrideLink))
+            linkEff = ex.OverrideLink!;
+
+        var isCompleted = ex != null && (
+            string.Equals(ex.Kind, "complete", StringComparison.OrdinalIgnoreCase) ||
+            (string.Equals(ex.Kind, "modify", StringComparison.OrdinalIgnoreCase) && ex.InstanceCompleted != 0));
+
+        var hasOverride = ex != null && string.Equals(ex.Kind, "modify", StringComparison.OrdinalIgnoreCase);
+
+        string? displayStart = null;
+        string? displayEnd = null;
+        if (effectiveStartUtc != instanceUtc)
+            displayStart = effectiveStartUtc.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+        if (effectiveEndUtc != instanceEndUtc)
+            displayEnd = effectiveEndUtc.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+
+        string? endIso = null;
+        if (duration.HasValue || meta.AllDay)
+            endIso = effectiveEndUtc.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
 
         var recurrenceText = meta.Recurrence switch
         {
@@ -806,18 +1565,24 @@ public class CalendarService
         output.Add(new CalendarRangeItemModel
         {
             Id = meta.Id,
-            Title = meta.Title,
+            Title = title,
+            Description = desc,
+            Notes = notesEff,
             Type = meta.Type,
             AllDay = meta.AllDay,
             AssignedTo = meta.Assigned,
             AssignedToMemberLabel = HouseholdIdentity.MemberLabel(meta.Assigned),
-            HasLink = !string.IsNullOrWhiteSpace(meta.Link),
+            HasLink = !string.IsNullOrWhiteSpace(linkEff),
             ReminderText = ReminderFormatter.Format(meta.ReminderRaw),
             RecurrenceText = recurrenceText,
             Recurrence = meta.Recurrence,
-            InstanceStartUtc = instanceUtc.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture),
+            InstanceStartUtc = startIso,
+            DisplayInstanceStartUtc = displayStart,
             InstanceEndUtc = endIso,
+            DisplayInstanceEndUtc = displayEnd,
             IsRecurringInstance = isRecurring,
+            IsInstanceCompleted = isCompleted,
+            HasInstanceOverride = hasOverride,
             TimeZoneId = meta.TimezoneId,
         });
     }
