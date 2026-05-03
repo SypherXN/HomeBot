@@ -11,13 +11,13 @@ This guide walks through installing prerequisites, running the **.NET** process 
 1. [How configuration works](#how-configuration-works)
 2. [Environment variable reference](#environment-variable-reference)
 3. [Prerequisites](#prerequisites-all-platforms)
-4. Windows — search **§1. Windows**
-5. Ubuntu — search **§2. Ubuntu**
-6. Local testing — search **§3. Local testing**
-7. GitHub Pages (build) — search **§4. GitHub Pages**
-8. GitHub Pages (Actions) — search **§5. GitHub Pages**
-9. Checklist — search **§6. Checklist**
-10. Quick reference — search **§7. Quick reference**
+4. [Windows: install and run](#windows-install-and-run)
+5. [Ubuntu: install and run](#ubuntu-install-and-run)
+6. [Local testing](#local-testing)
+7. [GitHub Pages: static build](#github-pages-static-build)
+8. [GitHub Pages: Actions and hosting](#github-pages-actions-and-hosting)
+9. [Checklist](#checklist-after-everything-is-up)
+10. [Quick reference](#quick-reference-same-machine-dev-copy-paste)
 
 ---
 
@@ -62,8 +62,6 @@ Fill **`.env`** using the **[Environment variable reference](#environment-variab
 | **`HOMEBOT_DISCORD_ENABLED`** | No | Omit, `true`, or **`false`** | **You choose.** Default behavior = Discord **on**. Set **`false`** only for **API-only** (no Discord bot in this process). |
 | **`HOMEBOT_API_ENABLED`** | For Web UI / HTTP | Must be exactly **`true`** (any case) to start the API | **You choose.** Without this, `dotnet run` only runs Discord (if enabled). The React app needs the API. |
 
----
-
 ### Discord bot (when Discord is on)
 
 | Variable | Required? | What to put | Where the value comes from |
@@ -79,8 +77,6 @@ Fill **`.env`** using the **[Environment variable reference](#environment-variab
 4. Open **OAuth2** → **URL Generator** only for **inviting** the bot (scopes `bot` + `applications.commands`, pick permissions). Invite URL is **not** an env var — use it once in a browser.
 5. **`DISCORD_GUILD_ID`** = your server’s ID (steps above).
 
----
-
 ### HTTP API and networking
 
 | Variable | Required? | What to put | Where the value comes from |
@@ -90,8 +86,6 @@ Fill **`.env`** using the **[Environment variable reference](#environment-variab
 | **`HOMEBOT_ALLOWED_ORIGINS`** | If browsers hit the API from non-default origins | Comma‑separated **origins** (no path): `http://localhost:5173,https://youruser.github.io` | **List every place the Web UI is opened in a browser.** If unset, only **`http://localhost:5173`** is allowed (Vite default). **Do not** put your **API** URL here — put the **page** that runs JavaScript (GitHub Pages, your domain, etc.). |
 | **`HOMEBOT_DATABASE_PATH`** | No | File path or full SQLite connection string | **You choose** where the SQLite file lives. Empty → **`homebot.db`** next to the process working directory. Can be `C:\Data\homebot.db` or `/var/lib/homebot/db.sqlite` or `Data Source=…`. |
 
----
-
 ### Web login (JWT)
 
 | Variable | Required? | What to put | Where the value comes from |
@@ -99,8 +93,6 @@ Fill **`.env`** using the **[Environment variable reference](#environment-variab
 | **`HOMEBOT_WEB_JWT_SECRET`** | Yes for web **Sign in**, setup, OAuth | **At least 32 characters** (UTF‑8); longer is fine | **You invent** it (password manager “generate password” is ideal). **Never** put this in the React app or GitHub — **server only**. Used to sign JWTs. |
 | **`HOMEBOT_WEB_SETUP_TOKEN`** | No | Any secret string **you invent** | Optional “extra password” for **first** web user bootstrap when set. If unset, that flow may not require it (see README). |
 | **`HOMEBOT_WEB_INVITE_TOKEN`** | No | Any secret string **you invent** | Optional extra gate for **additional** user registration when set. |
-
----
 
 ### Discord OAuth (optional — “Continue with Discord” on Sign in)
 
@@ -111,14 +103,12 @@ All **three** must be set together, or leave **all** unset. In **Production** (n
 | **`HOMEBOT_DISCORD_OAUTH_CLIENT_ID`** | Numeric **Application** ID | Developer Portal → **Your application** → **OAuth2** → **Client information** → **Client ID**. |
 | **`HOMEBOT_DISCORD_OAUTH_CLIENT_SECRET`** | Short secret string | Same page → **Client secret** → **Reset** / **Copy**. |
 | **`HOMEBOT_DISCORD_OAUTH_REDIRECT_URI`** | Full URL, **exactly** one registered redirect | **Must match** Developer Portal → **OAuth2** → **Redirects** character‑for‑character (`http` vs `https`, port, path, trailing slash). Points to the **API**, not Vite, e.g. **`http://localhost:5050/api/auth/discord/oauth/callback`** or **`https://api.yourdomain.com/api/auth/discord/oauth/callback`**. |
-| **`HOMEBOT_WEB_OAUTH_FRONTEND_URL`** | Where the React app lives | After Discord, the API redirects the browser here + **`/oauth/callback`**. **Local:** `http://localhost:5173`. **GitHub Pages project site:** include the repo path, e.g. **`https://youruser.github.io/HomeBot`** (details in **§4.3 — API + CORS + OAuth for Pages** later in this file). |
+| **`HOMEBOT_WEB_OAUTH_FRONTEND_URL`** | Where the React app lives | After Discord, the API redirects the browser here + **`/oauth/callback`**. **Local:** `http://localhost:5173`. **GitHub Pages project site:** include the repo path, e.g. **`https://youruser.github.io/HomeBot`** (see [API + CORS + OAuth for Pages](#api-cors-oauth-for-pages)). |
 
 **Discord portal checklist for OAuth:**
 
 1. **OAuth2** → **Redirects** → **Add Redirect** → paste the same string as **`HOMEBOT_DISCORD_OAUTH_REDIRECT_URI`**.
 2. Scopes used by HomeBot include **`identify`** (the app requests it in code).
-
----
 
 ### Optional tuning (limits, body size, staging)
 
@@ -134,7 +124,7 @@ All **three** must be set together, or leave **all** unset. In **Production** (n
 | **`HOMEBOT_ALLOW_PARTIAL_OAUTH_ENV`** | **`true`** or omit | **Rare.** Set **`true`** only if you intentionally run **non‑Development** with **incomplete** OAuth client id/secret/redirect (staging). |
 | **`ASPNETCORE_ENVIRONMENT`** | **`Development`** or **`Production`** | Standard .NET. **Development** relaxes some OAuth startup checks; **Production** enables stricter behavior (see README). If unset, tooling may default to **Production** on Linux servers. |
 
----
+<a id="web-ui-vite-variables"></a>
 
 ### Web UI (Vite) variables
 
@@ -145,9 +135,7 @@ These are **not** read by the .NET bot. They are baked in when you run **`npm ru
 | **`VITE_API_BASE_URL`** | `webui/.env` | Base URL of the API **as the browser sees it** | Usually **`http://localhost:5050`** on your PC. In production / GitHub Pages, use your **public API** URL, e.g. **`https://api.example.com`** — **no** trailing slash. |
 | **`VITE_BASE_PATH`** | `webui/.env` | URL path prefix for the SPA | **`/`** for root hosting. For GitHub **project** Pages use **`/YourRepoName/`** (slash at start and end). Must match how the site is served. |
 
-**GitHub Actions:** set `VITE_API_BASE_URL` from a repository **variable** (see **§5.2 — Add a GitHub Actions workflow** later in this file) so you do not commit secrets.
-
----
+**GitHub Actions:** set `VITE_API_BASE_URL` from a repository **variable** (see [Add a GitHub Actions workflow](#add-a-github-actions-workflow)) so you do not commit secrets.
 
 ### Quick “am I missing something?” table
 
@@ -159,7 +147,7 @@ These are **not** read by the .NET bot. They are baked in when you run **`npm ru
 | OAuth works locally but not on server | **`HOMEBOT_WEB_OAUTH_FRONTEND_URL`** must match where the React app really is (including **`/RepoName`** on GitHub project Pages). |
 | `dotnet run` says Discord token missing | Set **`DISCORD_TOKEN`** (and **`DISCORD_GUILD_ID`**) or set **`HOMEBOT_DISCORD_ENABLED=false`**. |
 
-For one-line reminders of defaults, keep **README.md** open alongside this file.
+For one-line reminders of defaults, keep **[README.md](./README.md)** open alongside this file.
 
 ---
 
@@ -179,11 +167,13 @@ Optional for production-style hosting:
 
 ---
 
+<a id="windows-install-and-run"></a>
+
 ## 1. Windows — install toolchain
 
 ### 1.1 .NET 10 SDK
 
-1. Open **https://dotnet.microsoft.com/download**
+1. Open **[.NET downloads](https://dotnet.microsoft.com/download)**.
 2. Download and install the **.NET 10 SDK** for Windows (x64).
 3. Open a **new** PowerShell window and run:
 
@@ -195,7 +185,7 @@ Optional for production-style hosting:
 
 ### 1.2 Node.js (LTS)
 
-1. Open **https://nodejs.org** and install the **LTS** Windows installer.
+1. Open **[nodejs.org](https://nodejs.org)** and install the **LTS** Windows installer.
 2. Open a **new** PowerShell window:
 
    ```powershell
@@ -218,7 +208,7 @@ Fill **`.env`** using **[Environment variable reference](#environment-variable-r
 
 - **`DISCORD_TOKEN`** and **`DISCORD_GUILD_ID`** (if Discord is on — default).
 - **`HOMEBOT_API_ENABLED=true`** for the Web UI.
-- **`HOMEBOT_WEB_JWT_SECRET`** (32+ characters) for web sign-in, and usually **`HOMEBOT_API_TOKEN`** (or rely on JWT only once you understand [README](README.md) **503** behavior).
+- **`HOMEBOT_WEB_JWT_SECRET`** (32+ characters) for web sign-in, and usually **`HOMEBOT_API_TOKEN`** (or rely on JWT only once you understand [README.md](./README.md) **503** behavior).
 
 PowerShell (current session) example before `dotnet run`:
 
@@ -258,9 +248,11 @@ If other machines on your LAN need the API, allow inbound **TCP 5050** (or the p
 
 ---
 
+<a id="ubuntu-install-and-run"></a>
+
 ## 2. Ubuntu (headless Linux) — install toolchain
 
-These steps assume a minimal **Ubuntu 22.04 or 24.04** server (SSH only). Adjust package URLs for your Ubuntu version using Microsoft’s current docs: **https://learn.microsoft.com/dotnet/core/install/linux-ubuntu**
+These steps assume a minimal **Ubuntu 22.04 or 24.04** server (SSH only). Adjust package URLs for your Ubuntu version using Microsoft’s current docs: **[Install .NET on Ubuntu](https://learn.microsoft.com/dotnet/core/install/linux-ubuntu)**.
 
 ### 2.1 Base packages
 
@@ -382,6 +374,8 @@ Prefer TLS on **443** via a proxy instead of exposing **5050** publicly.
 
 ---
 
+<a id="local-testing"></a>
+
 ## 3. Local testing
 
 ### 3.1 .NET unit / integration tests
@@ -415,6 +409,8 @@ npm run lint
 
 ---
 
+<a id="github-pages-static-build"></a>
+
 ## 4. GitHub Pages — build the static Web UI
 
 GitHub Pages serves **static files** from **`webui/dist`**. You must:
@@ -429,7 +425,7 @@ GitHub Pages serves **static files** from **`webui/dist`**. You must:
 | **Project** repository `Owner/HomeBot` | `https://OWNER.github.io/HomeBot/` | **`/HomeBot/`** (leading and trailing slash as in **`webui/.env.example`**) |
 | **User** site repo `Owner/owner.github.io` at root | `https://OWNER.github.io/` | **`/`** |
 
-`vite.config.ts` uses **`process.env.VITE_BASE_PATH ?? '/'`**. The React router **`basename`** comes from Vite’s **`import.meta.env.BASE_URL`**, so it must match this base.
+In **`vite.config.ts`**, the `base` option defaults to **`/`** or uses **`VITE_BASE_PATH`** from the environment. The React router **`basename`** comes from Vite’s **`import.meta.env.BASE_URL`**, so it must match this base.
 
 ### 4.2 Local production build (smoke test before Pages)
 
@@ -446,6 +442,8 @@ npx vite preview --base /HomeBot/
 
 Open the preview URL and confirm assets load (no 404 on `/HomeBot/assets/...`) and API calls hit **`VITE_API_BASE_URL`**.
 
+<a id="api-cors-oauth-for-pages"></a>
+
 ### 4.3 API + CORS + OAuth for Pages
 
 On the **server** that runs HomeBot:
@@ -461,6 +459,8 @@ On the **server** that runs HomeBot:
 
 ---
 
+<a id="github-pages-actions-and-hosting"></a>
+
 ## 5. GitHub Pages — enable hosting and connect the repo
 
 ### 5.1 Enable Pages in the GitHub UI
@@ -470,6 +470,8 @@ On the **server** that runs HomeBot:
 3. Under **Build and deployment** → **Source**, choose **GitHub Actions** (recommended) so the workflow below can deploy **`webui/dist`**.
 
 If you use **Deploy from a branch** instead, you must commit **`webui/dist`** or a **`gh-pages`** branch yourself; the Actions approach avoids committing build output to **`main`**.
+
+<a id="add-a-github-actions-workflow"></a>
 
 ### 5.2 Add a GitHub Actions workflow
 
@@ -533,11 +535,11 @@ jobs:
         uses: actions/deploy-pages@v4
 ```
 
-4. In **Settings** → **Secrets and variables** → **Actions** → **Variables**: create **`HOMEBOT_API_PUBLIC_URL`** = **`https://your-api-host`** (same value you want in **`VITE_API_BASE_URL`**).
+**After the workflow file is in your repo:**
 
-5. Commit and push the workflow. Open **Actions** and confirm the workflow succeeds.
-
-6. **Settings** → **Pages**: after the first successful run, GitHub shows the site URL (e.g. **`https://OWNER.github.io/HomeBot/`**).
+1. In GitHub: **Settings** → **Secrets and variables** → **Actions** → **Variables** → create **`HOMEBOT_API_PUBLIC_URL`** with your public API base (same value you want in **`VITE_API_BASE_URL`**, e.g. **`https://your-api-host`**).
+2. Commit and push the workflow (if you have not already). Open the **Actions** tab and confirm the workflow run succeeds.
+3. **Settings** → **Pages**: after the first successful run, GitHub shows the site URL (for example **`https://OWNER.github.io/HomeBot/`**).
 
 ### 5.3 First-time “Create GitHub Pages environment”
 
@@ -545,10 +547,12 @@ The first **`actions/deploy-pages`** run may prompt you to create the **`github-
 
 ---
 
+<a id="checklist-after-everything-is-up"></a>
+
 ## 6. Checklist after everything is up
 
-| Check | |
-|-------|---|
+| Check | What you want to see |
+|-------|-------------------------|
 | **`GET https://your-api/api/health`** | Returns OK from browser or `curl`. |
 | **Web UI loads** | No 404 for JS/CSS under **`/REPO/`** on GitHub Pages. |
 | **Sign in / API calls** | Browser devtools: requests succeed; CORS errors mean fix **`HOMEBOT_ALLOWED_ORIGINS`**. |
@@ -556,6 +560,8 @@ The first **`actions/deploy-pages`** run may prompt you to create the **`github-
 | **OAuth** (if used) | Discord redirect URI = API callback; **`HOMEBOT_WEB_OAUTH_FRONTEND_URL`** = SPA root including **`/REPO`** for project Pages. |
 
 ---
+
+<a id="quick-reference-same-machine-dev-copy-paste"></a>
 
 ## 7. Quick reference — same machine dev (copy-paste)
 
@@ -578,4 +584,4 @@ cd webui && npm install && npm run dev
 dotnet test HomeBot.Tests/HomeBot.Tests.csproj
 ```
 
-For deeper configuration (rate limits, OAuth partial-env override, database path), see **README.md**.
+For deeper configuration (rate limits, OAuth partial-env override, database path), see **[README.md](./README.md)**.
