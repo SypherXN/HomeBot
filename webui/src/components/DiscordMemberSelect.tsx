@@ -10,6 +10,8 @@ type Props = {
   label?: string;
   className?: string;
   disabled?: boolean;
+  /** Controlled selected user id (optional). */
+  value?: string;
   /**
    * When provided (e.g. from useDiscordGuildRoster in a parent), skips an extra GET — use on pages with many pickers.
    */
@@ -26,6 +28,7 @@ export default function DiscordMemberSelect({
   label = "Pick from server",
   className = "",
   disabled = false,
+  value = "",
   sharedRoster,
 }: Props) {
   const id = useId();
@@ -105,7 +108,7 @@ export default function DiscordMemberSelect({
       <select
         id={id}
         disabled={disabled}
-        defaultValue=""
+        value={value}
         className="box-border min-w-0 w-full max-w-full rounded-md border border-slate-600 bg-slate-900 px-2 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         onChange={(e) => onPickUserId(e.target.value)}
       >

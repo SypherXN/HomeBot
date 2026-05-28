@@ -19,6 +19,8 @@ public static class HomeBotDataServices
         services.AddSingleton<BuyService>();
         services.AddSingleton<WishlistService>();
         services.AddSingleton<MoneyService>();
+        services.AddSingleton<BudgetService>();
+        services.AddSingleton<BudgetNotificationService>();
         services.AddSingleton<CalendarService>();
         services.AddSingleton<DiscordSocketHolder>();
         services.AddSingleton<DiscordGuildDirectoryService>();

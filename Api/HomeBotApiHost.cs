@@ -291,7 +291,7 @@ public static class HomeBotApiHost
         {
             name = "HomeBot API",
             version = "phase3",
-            features = new[] { "buy", "wishlist", "money", "calendar", "undo" },
+            features = new[] { "buy", "wishlist", "money", "budget", "calendar", "undo" },
             docs = "Authorization: Bearer accepts HOMEBOT_API_TOKEN and/or HS256 JWTs from POST /api/auth/login (short-lived access) plus POST /api/auth/refresh with refreshToken for browser sessions. Web sign-up: POST /api/auth/discord/start then /webui-verify in Discord, then complete-* . Mutations use query actorUserId=DISCORD_USER_ID where noted.",
             openApi = "/openapi/v1.json",
             restExamples = new

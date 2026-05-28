@@ -211,6 +211,18 @@ Output is in **`webui/dist`**. Set **`VITE_API_BASE_URL`** at build time if the 
 
 ---
 
+## Quick troubleshooting
+
+- **`http://localhost:5050/` returns 404**: expected. The API root has no homepage route. Verify API with **`/api/health`**, **`/api/meta`**, or **`/openapi/v1.json`** instead.
+- **Web UI says “Cannot reach API”**: in **Settings**, confirm API base URL is **`http://localhost:5050`** (or your real API origin). Also confirm API is running and CORS allows your UI origin.
+- **Web UI says “Token not accepted”**: the bearer in Settings must match server auth:
+  - a configured **`HOMEBOT_API_TOKEN`**, or
+  - a valid JWT issued by web sign-in when **`HOMEBOT_WEB_JWT_SECRET`** is configured.
+  If both server-side auth secrets are missing, protected `/api/*` routes return **503** by design.
+- **Blank page during local dev**: if Vite logs module errors around `recharts`/`es-toolkit`, reinstall deps and use the repo lockfile (`npm install` in `webui`). This repo currently uses a Recharts 2.x line for local stability with the current toolchain.
+
+---
+
 ## Data and safety
 
 - **SQLite** holds items, settings, channel bindings, action log (undo), **`WebUsers`**, Discord verify sessions, and **opaque refresh tokens** (`WebRefreshTokens`) for browser sessions. **Backups:** copy the DB when the process is stopped, and include **`-wal`** / **`-shm`** files if present — see [SETUP.md — Section 20](SETUP.md#20-backing-up-sqlite-homebotdb) and [automated options](SETUP.md#201-automated-backups-optional).

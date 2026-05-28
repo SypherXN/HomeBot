@@ -6,6 +6,7 @@ import DashboardPage from "./pages/DashboardPage";
 import HealthPage from "./pages/HealthPage";
 import LoginPage from "./pages/LoginPage";
 import MoneyPage from "./pages/MoneyPage";
+import BudgetPage from "./pages/BudgetPage";
 import OAuthCallbackPage from "./pages/OAuthCallbackPage";
 import SettingsPage from "./pages/SettingsPage";
 import SetupPage from "./pages/SetupPage";
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="/buy" element={<BuyPage />} />
         <Route path="/wishlist" element={<WishlistPage />} />
         <Route path="/money" element={<MoneyPage />} />
+        <Route path="/budget" element={<BudgetPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/health" element={<HealthPage />} />
         <Route path="/login" element={<LoginPage />} />

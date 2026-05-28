@@ -7,6 +7,8 @@ import {
   getCalendarUpcoming,
   getMoneySummary,
   getMoneyTransactions,
+  getBudgetSummaryMonth,
+  getBudgetSummaryByCategory,
   getWishlistItems,
   type MoneySummary,
   type PagedBuyList,
@@ -49,6 +51,7 @@ type DashboardBundle = {
   wishlist: PagedWishlistList;
   moneyTx: PagedMoneyTransactions;
   moneySummary: MoneySummary | null;
+  budgetMonth: { expenses: number; topCategory: string } | null;
   today: PagedCalendarList;
   upcoming: PagedCalendarList;
   tasks: PagedCalendarList;
@@ -77,7 +80,9 @@ export default function DashboardPage() {
       const n1 = canPairSummary ? roster.members[0].displayName : "";
       const n2 = canPairSummary ? roster.members[1].displayName : "";
 
-      const [buy, wishlist, moneyTx, today, upcoming, tasks, moneySummary] = await Promise.all([
+      const month = new Date().toISOString().slice(0, 7);
+      const [buy, wishlist, moneyTx, today, upcoming, tasks, moneySummary, budgetSummary, budgetCats] =
+        await Promise.all([
         getBuyItems(tok, 0),
         getWishlistItems(tok, 0),
         getMoneyTransactions(tok, 0),
@@ -87,7 +92,17 @@ export default function DashboardPage() {
         canPairSummary && u1 && u2
           ? getMoneySummary(tok, u1, u2, n1, n2).catch(() => null)
           : Promise.resolve(null as MoneySummary | null),
+        getBudgetSummaryMonth(tok, month).catch(() => null),
+        getBudgetSummaryByCategory(tok, month).catch(() => []),
       ]);
+      const topCat = budgetCats[0];
+      const budgetMonth =
+        budgetSummary != null
+          ? {
+              expenses: budgetSummary.totalExpenses,
+              topCategory: topCat ? `${topCat.label} (${topCat.percent}%)` : "—",
+            }
+          : null;
 
       setSlice({
         status: "ready",
@@ -96,6 +111,7 @@ export default function DashboardPage() {
           wishlist,
           moneyTx,
           moneySummary,
+          budgetMonth,
           today,
           upcoming,
           tasks,
@@ -202,6 +218,25 @@ export default function DashboardPage() {
                 ))
               )}
             </ul>
+          </SnapshotCard>
+
+          <SnapshotCard
+            to="/budget"
+            title="Budget"
+            subtitle="This month"
+            stat={
+              slice.value.budgetMonth
+                ? `$${formatMoney(slice.value.budgetMonth.expenses)} spent`
+                : "—"
+            }
+          >
+            {slice.value.budgetMonth ? (
+              <p className="mt-2 text-sm text-slate-400">
+                Top category: {slice.value.budgetMonth.topCategory}
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-slate-500">No budget data yet.</p>
+            )}
           </SnapshotCard>
 
           <SnapshotCard

@@ -42,6 +42,11 @@ function resolvedDefaultBase(): string {
   return inferSameHostApiBase() ?? viteDefault();
 }
 
+/** Current inferred/build default API base (ignores saved localStorage override). */
+export function getDefaultApiBaseUrl(): string {
+  return resolvedDefaultBase();
+}
+
 function readStoredOverride(): string | null {
   if (typeof localStorage === "undefined") return null;
   const saved = localStorage.getItem(STORAGE_KEY)?.trim();

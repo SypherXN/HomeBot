@@ -1,4 +1,4 @@
-﻿using Discord;
+using Discord;
 using Discord.WebSocket;
 using Discord.Interactions;
 using Microsoft.AspNetCore.Builder;
@@ -94,6 +94,9 @@ class Program
         using var scope = _services.CreateScope();
         var reminderService = scope.ServiceProvider.GetRequiredService<ReminderService>();
         _ = reminderService.StartAsync(); // fire and forget
+
+        var budgetAlerts = scope.ServiceProvider.GetRequiredService<BudgetNotificationService>();
+        _ = budgetAlerts.StartAsync(); // fire and forget
 
         // Guild-only registration keeps slash command updates instant while developing.
         var guildId = GetGuildId();

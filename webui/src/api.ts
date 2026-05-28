@@ -140,6 +140,7 @@ export async function apiJson<T>(path: string, options: ApiJsonOptions = {}): Pr
 }
 
 export {
+  getDefaultApiBaseUrl,
   getApiBaseUrl,
   isApiBaseInferred,
   resetApiBaseUrlToDefault,
@@ -951,4 +952,538 @@ export type AuthMeResponse = {
 
 export function getAuthMe(token: string, signal?: AbortSignal) {
   return apiJson<AuthMeResponse>("/api/auth/me", { token, signal });
+}
+
+// ——— Budget ———
+
+export type BudgetCategory = {
+  id: number;
+  name: string;
+  color: string | null;
+  icon: string | null;
+  visibility: string;
+  isTaxDeductible: boolean;
+  sortOrder: number;
+};
+
+export type BudgetTransactionSplit = {
+  id: number;
+  categoryId: number | null;
+  spentByUserId: string | null;
+  amount: number;
+};
+
+export type BudgetSplitInput = {
+  categoryId?: number | null;
+  spentByUserId?: string | null;
+  amount: number;
+};
+
+export type BudgetTransactionListItem = {
+  id: number;
+  type: string;
+  amount: number;
+  amountInput: string | null;
+  categoryId: number | null;
+  categoryName: string | null;
+  spentByUserId: string;
+  spentByMemberLabel: string;
+  accountId: number | null;
+  transferToAccountId: number | null;
+  note: string | null;
+  merchant: string | null;
+  transactionDate: string;
+  clearedAt: string | null;
+  isPending: boolean;
+  currency: string;
+  exchangeRateToHome: number;
+  tags: string[];
+  splits: BudgetTransactionSplit[];
+};
+
+export type PagedBudgetTransactions = {
+  items: BudgetTransactionListItem[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+};
+
+export type BudgetSummarySlice = {
+  key: string;
+  label: string;
+  total: number;
+  percent: number;
+};
+
+export type BudgetMonthSummary = {
+  month: string;
+  totalIncome: number;
+  totalExpenses: number;
+  net: number;
+};
+
+export type BudgetEnvelope = {
+  id: number;
+  month: string;
+  categoryId: number;
+  categoryName: string;
+  targetAmount: number;
+  actualAmount: number;
+  remaining: number;
+  percentUsed: number;
+};
+
+export type BudgetGoal = {
+  id: number;
+  name: string;
+  targetAmount: number;
+  currentAmount: number;
+  targetDate: string | null;
+  categoryId: number | null;
+  percentComplete: number;
+};
+
+export type BudgetAccount = {
+  id: number;
+  name: string;
+  accountType: string;
+  currency: string;
+  creditLimit: number | null;
+  currentBalance: number;
+};
+
+function budgetQuery(path: string, params: Record<string, string | undefined>): string {
+  const q: Record<string, string> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v != null && v !== "") q[k] = v;
+  }
+  return mergeQuery(path, q);
+}
+
+export function getBudgetCategories(token: string) {
+  return apiJson<BudgetCategory[]>("/api/budget/categories", { token });
+}
+
+export type BudgetTransactionListOpts = {
+  month?: string;
+  spentByUserId?: string;
+  categoryId?: string;
+  scope?: string;
+  merchant?: string;
+  noteContains?: string;
+  amountMin?: string;
+  amountMax?: string;
+  tag?: string;
+};
+
+export function getBudgetTransactions(token: string, page: number, opts?: BudgetTransactionListOpts) {
+  const path = budgetQuery("/api/budget/transactions", {
+    page: String(page),
+    month: opts?.month,
+    spentByUserId: opts?.spentByUserId,
+    categoryId: opts?.categoryId,
+    scope: opts?.scope,
+    merchant: opts?.merchant,
+    noteContains: opts?.noteContains,
+    amountMin: opts?.amountMin,
+    amountMax: opts?.amountMax,
+    tag: opts?.tag,
+  });
+  return apiJson<PagedBudgetTransactions>(path, { token });
+}
+
+export function getBudgetTags(token: string) {
+  return apiJson<string[]>("/api/budget/tags", { token });
+}
+
+export function getBudgetSummaryMonth(
+  token: string,
+  month: string,
+  opts?: { spentByUserId?: string; scope?: string }
+) {
+  const path = budgetQuery("/api/budget/summary/month", {
+    month,
+    spentByUserId: opts?.spentByUserId,
+    scope: opts?.scope,
+  });
+  return apiJson<BudgetMonthSummary>(path, { token });
+}
+
+export function getBudgetSummaryByCategory(
+  token: string,
+  month: string,
+  opts?: { spentByUserId?: string; scope?: string }
+) {
+  const path = budgetQuery("/api/budget/summary/by-category", {
+    month,
+    spentByUserId: opts?.spentByUserId,
+    scope: opts?.scope,
+  });
+  return apiJson<BudgetSummarySlice[]>(path, { token });
+}
+
+export function getBudgetSummaryByUser(token: string, month: string, categoryId?: string) {
+  const path = budgetQuery("/api/budget/summary/by-user", { month, categoryId });
+  return apiJson<BudgetSummarySlice[]>(path, { token });
+}
+
+export function postBudgetCategory(
+  token: string,
+  actorUserId: string,
+  body: { name: string; color?: string; visibility?: string; isTaxDeductible?: boolean }
+) {
+  const path = mergeQuery("/api/budget/categories", { actorUserId });
+  return apiJson<{ id: number }>(path, { token, method: "POST", body });
+}
+
+export function postBudgetTransaction(
+  token: string,
+  actorUserId: string,
+  body: {
+    type: string;
+    amountInput: string;
+    categoryId?: number;
+    spentByUserId: string;
+    transactionDate?: string;
+    note?: string;
+    merchant?: string;
+    tags?: string[];
+    splits?: BudgetSplitInput[];
+    currency?: string;
+  }
+) {
+  const path = mergeQuery("/api/budget/transactions", { actorUserId });
+  const spentBy = jsonSnowflakeDigits(body.spentByUserId) ?? body.spentByUserId;
+  const splits = body.splits?.map((s) => ({
+    ...s,
+    spentByUserId: s.spentByUserId
+      ? (jsonSnowflakeDigits(s.spentByUserId) ?? s.spentByUserId)
+      : s.spentByUserId,
+  }));
+  return apiJson<{ id: number }>(path, {
+    token,
+    method: "POST",
+    body: { ...body, spentByUserId: spentBy, splits },
+  });
+}
+
+export function patchBudgetTransaction(
+  token: string,
+  actorUserId: string,
+  id: number,
+  body: {
+    isPending?: boolean;
+    clearedAt?: string | null;
+    tags?: string[];
+    splits?: BudgetSplitInput[];
+  }
+) {
+  const path = mergeQuery(`/api/budget/transactions/${id}`, { actorUserId });
+  return apiJson<unknown>(path, { token, method: "PATCH", body });
+}
+
+export function deleteBudgetTransaction(token: string, actorUserId: string, id: number) {
+  const path = mergeQuery(`/api/budget/transactions/${id}`, { actorUserId });
+  return apiJson<unknown>(path, { token, method: "DELETE" });
+}
+
+export async function postBudgetImportCsv(
+  token: string,
+  actorUserId: string,
+  file: File,
+  spentByUserId: string
+): Promise<{ imported: number }> {
+  const base = getApiBaseUrl().replace(/\/$/, "");
+  const form = new FormData();
+  form.append("file", file);
+  form.append("spentByUserId", jsonSnowflakeDigits(spentByUserId) ?? spentByUserId);
+  const res = await fetch(`${base}/api/budget/import.csv?actorUserId=${encodeURIComponent(actorUserId)}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(err || `Import failed (${res.status})`);
+  }
+  return res.json() as Promise<{ imported: number }>;
+}
+
+export function getBudgetEnvelopes(token: string, month: string) {
+  const path = budgetQuery("/api/budget/envelopes", { month });
+  return apiJson<BudgetEnvelope[]>(path, { token });
+}
+
+export function putBudgetEnvelope(
+  token: string,
+  actorUserId: string,
+  body: { month: string; categoryId: number; targetAmount: number }
+) {
+  const path = mergeQuery("/api/budget/envelopes", { actorUserId });
+  return apiJson<unknown>(path, { token, method: "PUT", body });
+}
+
+export function getBudgetGoals(token: string) {
+  return apiJson<BudgetGoal[]>("/api/budget/goals", { token });
+}
+
+export function postBudgetGoal(
+  token: string,
+  actorUserId: string,
+  body: {
+    name: string;
+    targetAmount: number;
+    currentAmount?: number;
+    targetDate?: string;
+    categoryId?: number;
+  }
+) {
+  const path = mergeQuery("/api/budget/goals", { actorUserId });
+  return apiJson<{ id: number }>(path, { token, method: "POST", body });
+}
+
+export function patchBudgetGoal(
+  token: string,
+  actorUserId: string,
+  id: number,
+  body: {
+    name?: string;
+    targetAmount?: number;
+    currentAmount?: number;
+    targetDate?: string | null;
+    categoryId?: number | null;
+  }
+) {
+  const path = mergeQuery(`/api/budget/goals/${id}`, { actorUserId });
+  return apiJson<unknown>(path, { token, method: "PATCH", body });
+}
+
+export function deleteBudgetGoal(token: string, actorUserId: string, id: number) {
+  const path = mergeQuery(`/api/budget/goals/${id}`, { actorUserId });
+  return apiJson<unknown>(path, { token, method: "DELETE" });
+}
+
+export function getBudgetAccounts(token: string) {
+  return apiJson<BudgetAccount[]>("/api/budget/accounts", { token });
+}
+
+export type BudgetIncomePlan = {
+  month: string;
+  plannedAmount: number;
+  allocatedEnvelopes: number;
+  availableToBudget: number;
+};
+
+export type BudgetForecastCategory = {
+  categoryId: number;
+  categoryName: string;
+  monthToDate: number;
+  projectedMonthEnd: number;
+  envelopeTarget: number | null;
+};
+
+export type BudgetTrendPoint = {
+  month: string;
+  key: string;
+  label: string;
+  total: number;
+};
+
+export type BudgetBill = {
+  id: number;
+  name: string;
+  amountEstimate: number;
+  dueDay: number;
+  categoryId: number | null;
+  isActive: boolean;
+};
+
+export type BudgetRecurring = {
+  id: number;
+  amount: number;
+  cadence: string;
+  nextRunDate: string;
+  type: string;
+  isActive: boolean;
+};
+
+export function getBudgetIncomePlan(token: string, month: string) {
+  return apiJson<BudgetIncomePlan>(budgetQuery("/api/budget/income-plan", { month }), { token });
+}
+
+export function putBudgetIncomePlan(
+  token: string,
+  actorUserId: string,
+  body: { month: string; plannedAmount: number }
+) {
+  const path = mergeQuery("/api/budget/income-plan", { actorUserId });
+  return apiJson<unknown>(path, { token, method: "PUT", body });
+}
+
+export function getBudgetForecast(token: string, month: string) {
+  return apiJson<BudgetForecastCategory[]>(budgetQuery("/api/budget/forecast", { month }), { token });
+}
+
+export function getBudgetTrends(token: string, months = 6, groupBy: "category" | "user" = "category") {
+  const path = budgetQuery("/api/budget/trends", { months: String(months), groupBy });
+  return apiJson<BudgetTrendPoint[]>(path, { token });
+}
+
+export function getBudgetBills(token: string) {
+  return apiJson<BudgetBill[]>("/api/budget/bills", { token });
+}
+
+export function getBudgetRecurring(token: string) {
+  return apiJson<BudgetRecurring[]>("/api/budget/recurring", { token });
+}
+
+export function postBudgetBill(
+  token: string,
+  actorUserId: string,
+  body: { name: string; amountEstimate: number; dueDay: number; categoryId?: number }
+) {
+  const path = mergeQuery("/api/budget/bills", { actorUserId });
+  return apiJson<{ id: number }>(path, { token, method: "POST", body });
+}
+
+export function patchBudgetBill(
+  token: string,
+  actorUserId: string,
+  id: number,
+  body: {
+    name?: string;
+    amountEstimate?: number;
+    dueDay?: number;
+    categoryId?: number;
+    isActive?: boolean;
+  }
+) {
+  const path = mergeQuery(`/api/budget/bills/${id}`, { actorUserId });
+  return apiJson<unknown>(path, { token, method: "PATCH", body });
+}
+
+export function postBudgetBillPay(
+  token: string,
+  actorUserId: string,
+  billId: number,
+  body: { amountInput: string; spentByUserId?: string }
+) {
+  const path = mergeQuery(`/api/budget/bills/${billId}/pay`, { actorUserId });
+  const spentBy = body.spentByUserId
+    ? (jsonSnowflakeDigits(body.spentByUserId) ?? body.spentByUserId)
+    : undefined;
+  return apiJson<{ transactionId: number }>(path, {
+    token,
+    method: "POST",
+    body: { amountInput: body.amountInput, spentByUserId: spentBy ?? "0" },
+  });
+}
+
+export function postBudgetRecurring(
+  token: string,
+  actorUserId: string,
+  body: {
+    amountInput: string;
+    spentByUserId: string;
+    categoryId?: number;
+    cadence?: string;
+    nextRunDate?: string;
+    type?: string;
+    note?: string;
+    merchant?: string;
+  }
+) {
+  const path = mergeQuery("/api/budget/recurring", { actorUserId });
+  const spentBy = jsonSnowflakeDigits(body.spentByUserId) ?? body.spentByUserId;
+  return apiJson<{ id: number }>(path, { token, method: "POST", body: { ...body, spentByUserId: spentBy } });
+}
+
+export function patchBudgetRecurring(
+  token: string,
+  actorUserId: string,
+  id: number,
+  body: {
+    amountInput?: string;
+    spentByUserId?: string;
+    categoryId?: number;
+    cadence?: string;
+    nextRunDate?: string;
+    type?: string;
+    isActive?: boolean;
+  }
+) {
+  const path = mergeQuery(`/api/budget/recurring/${id}`, { actorUserId });
+  const payload = { ...body };
+  if (body.spentByUserId) {
+    payload.spentByUserId = jsonSnowflakeDigits(body.spentByUserId) ?? body.spentByUserId;
+  }
+  return apiJson<unknown>(path, { token, method: "PATCH", body: payload });
+}
+
+export type BudgetAuditEntry = {
+  id: number;
+  entityType: string;
+  entityId: number;
+  actorUserId: string;
+  action: string;
+  dataJson: string | null;
+  createdAt: string;
+};
+
+export type BudgetNotificationItem = {
+  kind: string;
+  message: string;
+};
+
+export type BudgetTaxSummaryLine = {
+  categoryId: number;
+  categoryName: string;
+  total: number;
+};
+
+export type BudgetExchangeRate = {
+  id: number;
+  fromCurrency: string;
+  toCurrency: string;
+  rate: number;
+  effectiveDate: string;
+};
+
+export function getBudgetAudit(token: string, limit = 50) {
+  return apiJson<BudgetAuditEntry[]>(budgetQuery("/api/budget/audit", { limit: String(limit) }), { token });
+}
+
+export function getBudgetNotifications(token: string) {
+  return apiJson<BudgetNotificationItem[]>("/api/budget/notifications", { token });
+}
+
+export function getBudgetTaxSummary(token: string, year: number) {
+  return apiJson<BudgetTaxSummaryLine[]>(budgetQuery("/api/budget/tax-summary", { year: String(year) }), {
+    token,
+  });
+}
+
+export function getBudgetExchangeRates(token: string) {
+  return apiJson<BudgetExchangeRate[]>("/api/budget/exchange-rates", { token });
+}
+
+export function putBudgetExchangeRate(
+  token: string,
+  actorUserId: string,
+  body: { fromCurrency: string; toCurrency: string; rate: number; effectiveDate?: string }
+) {
+  const path = mergeQuery("/api/budget/exchange-rates", { actorUserId });
+  return apiJson<unknown>(path, { token, method: "PUT", body });
+}
+
+export async function downloadBudgetCsv(token: string, from?: string, to?: string) {
+  const path = budgetQuery("/api/budget/export.csv", { from, to });
+  const base = getApiBaseUrl().replace(/\/$/, "");
+  const res = await fetch(`${base}${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Export failed (${res.status})`);
+  return res.text();
 }

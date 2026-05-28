@@ -264,6 +264,47 @@ public class UndoService
                     applied = true;
                 }
             }
+            else if (entity == "budget")
+            {
+                if (type == "delete")
+                {
+                    var item = JsonSerializer.Deserialize<BudgetTransactionListItemModel>(data);
+                    if (item == null)
+                        return UndoApplyResult.Fail("❌ Failed to restore budget transaction.");
+
+                    var cmd = conn.CreateCommand();
+                    cmd.CommandText = @"
+                        INSERT INTO BudgetTransactions
+                        (Id, Type, Amount, AmountInput, CategoryId, SpentByUserId, AccountId, Note, Merchant,
+                         TransactionDate, ClearedAt, IsPending, Currency, ExchangeRateToHome)
+                        VALUES ($id, $type, $amt, $input, $cat, $user, $acc, $note, $merchant, $date,
+                                $cleared, $pend, $cur, $rate)";
+                    cmd.Parameters.AddWithValue("$id", id);
+                    cmd.Parameters.AddWithValue("$type", item.Type);
+                    cmd.Parameters.AddWithValue("$amt", item.Amount);
+                    cmd.Parameters.AddWithValue("$input", (object?)item.AmountInput ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("$cat", (object?)item.CategoryId ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("$user", (long)item.SpentByUserId);
+                    cmd.Parameters.AddWithValue("$acc", (object?)item.AccountId ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("$note", (object?)item.Note ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("$merchant", (object?)item.Merchant ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("$date", item.TransactionDate);
+                    cmd.Parameters.AddWithValue("$cleared", (object?)item.ClearedAt ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("$pend", item.IsPending ? 1 : 0);
+                    cmd.Parameters.AddWithValue("$cur", item.Currency);
+                    cmd.Parameters.AddWithValue("$rate", item.ExchangeRateToHome);
+                    cmd.ExecuteNonQuery();
+                    applied = true;
+                }
+                else if (type == "create")
+                {
+                    var cmd = conn.CreateCommand();
+                    cmd.CommandText = "DELETE FROM BudgetTransactions WHERE Id = $id";
+                    cmd.Parameters.AddWithValue("$id", id);
+                    cmd.ExecuteNonQuery();
+                    applied = true;
+                }
+            }
             else if (entity == "calendar")
             {
                 if (type == "delete")

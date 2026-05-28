@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import { getApiBaseUrl, getBuyTagCatalog, getHealth, getMeta, subscribeApiBaseUrl } from "../api";
+import {
+  getApiBaseUrl,
+  getBuyTagCatalog,
+  getDefaultApiBaseUrl,
+  getHealth,
+  getMeta,
+  setApiBaseUrl,
+  subscribeApiBaseUrl,
+} from "../api";
 
 export type ApiConnectionStatus =
   | { phase: "checking" }
@@ -39,6 +47,22 @@ export function useApiConnectionStatus(token: string) {
       await getMeta();
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
+      // Auto-heal stale saved API URL overrides by probing the inferred/build default once.
+      if (looksLikeNetworkFailure(detail)) {
+        const currentBase = getApiBaseUrl();
+        const fallbackBase = getDefaultApiBaseUrl();
+        if (fallbackBase !== currentBase) {
+          try {
+            const r = await fetch(`${fallbackBase}/api/health`);
+            if (r.ok) {
+              setApiBaseUrl(fallbackBase);
+              return;
+            }
+          } catch {
+            // Ignore and keep original error details below.
+          }
+        }
+      }
       const tip = looksLikeNetworkFailure(detail)
         ? "\n\nTip: Check Settings → API server URL, LAN/firewall, and that HomeBot is running (e.g. port 5050)."
         : "";

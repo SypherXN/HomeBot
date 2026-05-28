@@ -43,6 +43,7 @@ public sealed class ApiAuthRateLimitTests : IDisposable
         sc.AddSingleton<BuyService>();
         sc.AddSingleton<WishlistService>();
         sc.AddSingleton<MoneyService>();
+        sc.AddSingleton<BudgetService>();
         sc.AddSingleton<CalendarService>();
         sc.AddSingleton<DiscordSocketHolder>();
         sc.AddSingleton<DiscordGuildDirectoryService>();

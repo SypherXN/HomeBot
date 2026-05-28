@@ -11,6 +11,7 @@ public static class HomeBotApiRegistration
     {
         MapReads(app, root);
         MapWrites(app, root);
+        BudgetApiRegistration.MapBudgetApi(app, root);
     }
 
     private static bool TryActor(IQueryCollection query, out ulong actor, out IResult? error)

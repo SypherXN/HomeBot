@@ -48,6 +48,7 @@ internal sealed class ApiTestHarness : IAsyncDisposable
         sc.AddSingleton<BuyService>();
         sc.AddSingleton<WishlistService>();
         sc.AddSingleton<MoneyService>();
+        sc.AddSingleton<BudgetService>();
         sc.AddSingleton<CalendarService>();
         sc.AddSingleton<DiscordSocketHolder>();
         sc.AddSingleton<DiscordGuildDirectoryService>();
@@ -127,8 +128,8 @@ public sealed class ApiPhase3Tests
         var text = await r.Content.ReadAsStringAsync();
         Assert.Contains("openapi", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("instanceStartUtc", text, StringComparison.Ordinal);
-        Assert.Contains("Get calendar item", text, StringComparison.Ordinal);
-        Assert.Contains("Delete recurrence exception", text, StringComparison.Ordinal);
+        Assert.Contains("/api/calendar/items/{id}", text, StringComparison.Ordinal);
+        Assert.Contains("/api/calendar/items/{id}/instance", text, StringComparison.Ordinal);
     }
 
     [Fact]

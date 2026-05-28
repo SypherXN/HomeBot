@@ -151,3 +151,163 @@ public sealed class CalendarItemPatchRequest
     public string? Link { get; set; }
     public string? Timezone { get; set; }
 }
+
+public sealed class BudgetCategoryCreateRequest
+{
+    public string Name { get; set; } = "";
+    public string? Color { get; set; }
+    public string? Icon { get; set; }
+    public string? Visibility { get; set; }
+    public bool IsTaxDeductible { get; set; }
+}
+
+public sealed class BudgetCategoryUpdateRequest
+{
+    public string Name { get; set; } = "";
+    public string? Color { get; set; }
+    public string? Icon { get; set; }
+    public string? Visibility { get; set; }
+    public bool IsTaxDeductible { get; set; }
+}
+
+public sealed class BudgetTransactionCreateRequest
+{
+    public string? Type { get; set; }
+    public string AmountInput { get; set; } = "";
+    public int? CategoryId { get; set; }
+    [JsonConverter(typeof(SnowflakeUlongJsonConverter))]
+    public ulong SpentByUserId { get; set; }
+    public string? TransactionDate { get; set; }
+    public string? Note { get; set; }
+    public string? Merchant { get; set; }
+    public int? AccountId { get; set; }
+    public bool IsPending { get; set; }
+    public string? Currency { get; set; }
+    public double ExchangeRateToHome { get; set; } = 1;
+    public List<BudgetTransactionSplitModel>? Splits { get; set; }
+    public List<string>? Tags { get; set; }
+}
+
+public sealed class BudgetTransactionUpdateRequest
+{
+    public string? AmountInput { get; set; }
+    public int? CategoryId { get; set; }
+    [JsonConverter(typeof(SnowflakeUlongNullableJsonConverter))]
+    public ulong? SpentByUserId { get; set; }
+    public string? TransactionDate { get; set; }
+    public string? Note { get; set; }
+    public string? Merchant { get; set; }
+    public bool? IsPending { get; set; }
+    public string? ClearedAt { get; set; }
+    public List<BudgetTransactionSplitModel>? Splits { get; set; }
+    public List<string>? Tags { get; set; }
+}
+
+public sealed class BudgetTransferCreateRequest
+{
+    public string AmountInput { get; set; } = "";
+    public int FromAccountId { get; set; }
+    public int ToAccountId { get; set; }
+    public string? TransactionDate { get; set; }
+    public string? Note { get; set; }
+}
+
+public sealed class BudgetEnvelopeSetRequest
+{
+    public string Month { get; set; } = "";
+    public int CategoryId { get; set; }
+    public double TargetAmount { get; set; }
+}
+
+public sealed class BudgetGoalCreateRequest
+{
+    public string Name { get; set; } = "";
+    public double TargetAmount { get; set; }
+    public double CurrentAmount { get; set; }
+    public string? TargetDate { get; set; }
+    public int? CategoryId { get; set; }
+}
+
+public sealed class BudgetGoalUpdateRequest
+{
+    public string? Name { get; set; }
+    public double? TargetAmount { get; set; }
+    public double? CurrentAmount { get; set; }
+    public string? TargetDate { get; set; }
+    public int? CategoryId { get; set; }
+}
+
+public sealed class BudgetIncomePlanSetRequest
+{
+    public string Month { get; set; } = "";
+    public double PlannedAmount { get; set; }
+}
+
+public sealed class BudgetRecurringCreateRequest
+{
+    public string AmountInput { get; set; } = "";
+    public int? CategoryId { get; set; }
+    [JsonConverter(typeof(SnowflakeUlongJsonConverter))]
+    public ulong SpentByUserId { get; set; }
+    public string? Cadence { get; set; }
+    public string? NextRunDate { get; set; }
+    public string? Type { get; set; }
+    public string? Note { get; set; }
+    public string? Merchant { get; set; }
+    public int? AccountId { get; set; }
+}
+
+public sealed class BudgetBillCreateRequest
+{
+    public string Name { get; set; } = "";
+    public double AmountEstimate { get; set; }
+    public int DueDay { get; set; } = 1;
+    public int? CategoryId { get; set; }
+    public int? CalendarItemId { get; set; }
+}
+
+public sealed class BudgetBillUpdateRequest
+{
+    public string? Name { get; set; }
+    public double? AmountEstimate { get; set; }
+    public int? DueDay { get; set; }
+    public int? CategoryId { get; set; }
+    public bool? IsActive { get; set; }
+}
+
+public sealed class BudgetBillPayRequest
+{
+    public string AmountInput { get; set; } = "";
+    [JsonConverter(typeof(SnowflakeUlongJsonConverter))]
+    public ulong SpentByUserId { get; set; }
+}
+
+public sealed class BudgetRecurringUpdateRequest
+{
+    public string? AmountInput { get; set; }
+    public int? CategoryId { get; set; }
+    [JsonConverter(typeof(SnowflakeUlongNullableJsonConverter))]
+    public ulong? SpentByUserId { get; set; }
+    public string? Cadence { get; set; }
+    public string? NextRunDate { get; set; }
+    public string? Type { get; set; }
+    public string? Note { get; set; }
+    public string? Merchant { get; set; }
+    public bool? IsActive { get; set; }
+}
+
+public sealed class BudgetAccountCreateRequest
+{
+    public string Name { get; set; } = "";
+    public string? AccountType { get; set; }
+    public string? Currency { get; set; }
+    public double? CreditLimit { get; set; }
+}
+
+public sealed class BudgetExchangeRateSetRequest
+{
+    public string FromCurrency { get; set; } = "";
+    public string ToCurrency { get; set; } = "";
+    public double Rate { get; set; }
+    public string? EffectiveDate { get; set; }
+}
