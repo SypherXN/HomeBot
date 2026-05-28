@@ -10,6 +10,8 @@ Everything shares one **SQLite** database (`homebot.db` by default), so Discord,
 
 If you are setting up for the **first time** (Discord application, bot token, `.env`, Windows or **Ubuntu + systemd** auto-start, Web UI, optional **GitHub Pages** and HTTPS), follow **[SETUP.md](SETUP.md)** end to end.
 
+**Ubuntu server (shortest path):** **[docs/UBUNTU_DEPLOY.md](docs/UBUNTU_DEPLOY.md)** — install script, `.env` checklist, one-command updates.
+
 **Short path (after tools are installed):** copy **[`.env.example`](.env.example)** → **`.env`**, **[`webui/.env.example`](webui/.env.example)** → **`webui/.env`**, set **`DISCORD_TOKEN`**, **`DISCORD_GUILD_ID`**, **`HOMEBOT_API_ENABLED=true`**, **`HOMEBOT_API_TOKEN`**, **`HOMEBOT_WEB_JWT_SECRET`** (≥ 32 characters). From the repo root run **`dotnet run`**; in a second terminal run **`cd webui && npm install && npm run dev`**. The .NET process **does not read `.env` by itself** — use PowerShell, your editor’s **envFile**, **[`scripts/run-homebot.ps1`](scripts/run-homebot.ps1)** (Windows), or **`systemd`** **`EnvironmentFile=`** (Linux); [SETUP.md](SETUP.md) documents each.
 
 **GitHub Pages:** use the checked-in **[`pages-webui.yml`](.github/workflows/pages-webui.yml)** workflow (enable **Pages → GitHub Actions**, set **`HOMEBOT_API_PUBLIC_URL`** and optionally **`HOMEBOT_WEBUI_BASE_PATH`**). Full steps: [SETUP.md — Section 13](SETUP.md#13-optional--github-pages-static-web-ui) (**`VITE_*`**, CORS, OAuth).

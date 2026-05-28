@@ -21,7 +21,7 @@ This guide is written for people who have **never** wired up a Discord bot, a sm
 5. [Environment files: `.env` and `webui/.env`](#5-environment-files-env-and-webuienv)
 6. [Run HomeBot on Windows (first time)](#6-run-homebot-on-windows-first-time)
 7. [Windows — start automatically on sign-in or boot](#7-windows-start-automatically-on-sign-in-or-boot)
-8. [Ubuntu server — install, `systemd`, auto-start on reboot](#8-ubuntu-server--install-systemd-auto-start-on-reboot)
+8. [Ubuntu server — install, `systemd`, auto-start on reboot](#8-ubuntu-server--install-systemd-auto-start-on-reboot) — **short path:** [docs/UBUNTU_DEPLOY.md](docs/UBUNTU_DEPLOY.md)
 9. [Web UI on your PC](#9-web-ui-on-your-pc)
 10. [Discord — finish in-server setup (`/setup-set`)](#10-discord--finish-in-server-setup-setup-set)
 11. [Web accounts — sign in, Discord verify, bootstrap](#11-web-accounts--sign-in-discord-verify-bootstrap)
@@ -263,7 +263,20 @@ to verify, or let the next scheduled start pick up changes.
 
 ## 8. Ubuntu server — install, `systemd`, auto-start on reboot
 
-These steps fit a **headless Ubuntu 22.04 or 24.04** server (SSH). Adjust URLs if Microsoft’s docs change: **[Install .NET on Ubuntu](https://learn.microsoft.com/dotnet/core/install/linux-ubuntu)**.
+**Want the shortest path?** Use **[docs/UBUNTU_DEPLOY.md](docs/UBUNTU_DEPLOY.md)** — one install script, one update script, and a small troubleshooting table.
+
+**Quick install (on the server, after cloning or with the repo URL):**
+
+```bash
+sudo bash scripts/ubuntu/install-homebot.sh https://github.com/OWNER/HomeBot.git
+sudo -u homebot nano /opt/homebot/app/.env    # fill DISCORD_TOKEN, DISCORD_GUILD_ID, API secrets
+sudo systemctl restart homebot.service
+curl -sS http://127.0.0.1:5050/api/health
+```
+
+**Updates later:** `sudo bash /opt/homebot/app/scripts/ubuntu/update-homebot.sh`
+
+The subsections below are the **manual equivalent** of the same layout (`/opt/homebot/app`, user **`homebot`**, unit **`homebot.service`**). Adjust URLs if Microsoft’s docs change: **[Install .NET on Ubuntu](https://learn.microsoft.com/dotnet/core/install/linux-ubuntu)**.
 
 ### 8.1 Base packages
 
@@ -337,26 +350,10 @@ Confirm Discord (if enabled) and API logs. Stop with **Ctrl+C**.
 sudo -u homebot bash -c 'cd /opt/homebot/app && dotnet publish -c Release -o /opt/homebot/app/publish'
 ```
 
-Create **`/etc/systemd/system/homebot.service`** (use **`sudo nano`**):
+Copy the example unit (or create the same file by hand):
 
-```ini
-[Unit]
-Description=HomeBot Discord + API
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=homebot
-Group=homebot
-WorkingDirectory=/opt/homebot/app
-EnvironmentFile=/opt/homebot/app/.env
-ExecStart=/usr/bin/dotnet /opt/homebot/app/publish/HomeBot.dll
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
+```bash
+sudo cp /opt/homebot/app/scripts/systemd/homebot.service.example /etc/systemd/system/homebot.service
 ```
 
 - **`WorkingDirectory`**: default SQLite **`homebot.db`** appears here unless **`HOMEBOT_DATABASE_PATH`** overrides.
@@ -387,9 +384,10 @@ Expect **`enabled`**. After **`sudo reboot`**, run **`systemctl status homebot.s
 ### 8.8 Updates after `git pull`
 
 ```bash
-sudo -u homebot bash -c 'cd /opt/homebot/app && git pull && dotnet publish -c Release -o /opt/homebot/app/publish'
-sudo systemctl restart homebot.service
+sudo bash /opt/homebot/app/scripts/ubuntu/update-homebot.sh
 ```
+
+(Manual equivalent: `git pull`, `dotnet publish`, `systemctl restart` — see [docs/UBUNTU_DEPLOY.md](docs/UBUNTU_DEPLOY.md).)
 
 ### 8.9 Optional: restart on any crash
 
