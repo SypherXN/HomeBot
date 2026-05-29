@@ -5,6 +5,7 @@ import {
   patchBudgetBill,
   patchBudgetRecurring,
   postBudgetBill,
+  postBudgetBillCalendarReminder,
   postBudgetBillPay,
   postBudgetRecurring,
   type BudgetBill,
@@ -41,6 +42,8 @@ export default function BudgetBillsRecurring({
   const [billAmount, setBillAmount] = useState("");
   const [billDueDay, setBillDueDay] = useState("1");
   const [billCategory, setBillCategory] = useState("");
+  const [billCalendarReminder, setBillCalendarReminder] = useState(true);
+  const [calendarLinkBusyId, setCalendarLinkBusyId] = useState<number | null>(null);
 
   const [recAmount, setRecAmount] = useState("");
   const [recCadence, setRecCadence] = useState("monthly");
@@ -150,9 +153,30 @@ export default function BudgetBillsRecurring({
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="text-slate-300">
                         {b.name} · day {b.dueDay} · ~${formatMoney(b.amountEstimate)}
+                        {b.calendarItemId != null && (
+                          <span className="ml-1 text-xs text-blue-400">· on calendar</span>
+                        )}
                       </span>
                       {actor && (
                         <span className="flex flex-wrap items-center gap-2">
+                          {b.calendarItemId == null && (
+                            <button
+                              type="button"
+                              disabled={calendarLinkBusyId === b.id}
+                              className="text-xs text-blue-400"
+                              onClick={async () => {
+                                setCalendarLinkBusyId(b.id);
+                                try {
+                                  await postBudgetBillCalendarReminder(token, actor, b.id);
+                                  await onSaved();
+                                } finally {
+                                  setCalendarLinkBusyId(null);
+                                }
+                              }}
+                            >
+                              {calendarLinkBusyId === b.id ? "…" : "Add calendar"}
+                            </button>
+                          )}
                           {payBillId === b.id ? (
                             <>
                               <input
@@ -228,6 +252,7 @@ export default function BudgetBillsRecurring({
                   amountEstimate: Number(billAmount) || 0,
                   dueDay: Number(billDueDay) || 1,
                   categoryId: billCategory ? Number(billCategory) : undefined,
+                  createCalendarReminder: billCalendarReminder,
                 });
                 setBillName("");
                 setBillAmount("");
@@ -268,6 +293,14 @@ export default function BudgetBillsRecurring({
                   </option>
                 ))}
               </select>
+              <label className="flex items-center gap-2 text-xs text-slate-400">
+                <input
+                  type="checkbox"
+                  checked={billCalendarReminder}
+                  onChange={(e) => setBillCalendarReminder(e.target.checked)}
+                />
+                Add monthly calendar reminder on due day
+              </label>
               <button type="submit" className="rounded bg-slate-700 px-2 py-1 text-xs text-white">
                 Add bill
               </button>

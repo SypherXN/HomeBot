@@ -22,7 +22,7 @@ public class CalendarService
     /// <summary>
     /// Inserts a new calendar event or task.
     /// </summary>
-    public void AddItem(
+    public int AddItem(
         string title,
         string type,
         string start,
@@ -66,6 +66,10 @@ public class CalendarService
         cmd.Parameters.AddWithValue("$notes", notes);
 
         cmd.ExecuteNonQuery();
+
+        var idCmd = conn.CreateCommand();
+        idCmd.CommandText = "SELECT last_insert_rowid()";
+        return Convert.ToInt32(idCmd.ExecuteScalar()!);
     }
 
     /// <summary>

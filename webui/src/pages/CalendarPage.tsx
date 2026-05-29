@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
+  downloadCalendarIcs,
   getCalendarItems,
   getCalendarRange,
   postUndo,
@@ -78,6 +79,7 @@ export default function CalendarPage() {
 
   const [banner, setBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [undoBusy, setUndoBusy] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
 
   type ModalState =
     | { kind: "none" }
@@ -217,6 +219,25 @@ export default function CalendarPage() {
     [view, anchorYmd, effectiveViewerZone]
   );
 
+  async function handleExportIcs() {
+    if (!canAuth) return;
+    setExportBusy(true);
+    try {
+      await downloadCalendarIcs(
+        tok,
+        rangeYmd.fromYmd,
+        rangeYmd.toYmd,
+        effectiveViewerZone,
+        userFilter || undefined
+      );
+      showBanner("ok", "Downloaded .ics file for current view range.");
+    } catch (err) {
+      showBanner("err", err instanceof Error ? err.message : String(err));
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
   return (
     <div className="mx-auto min-w-0 max-w-6xl px-3 pb-12 sm:px-4">
       <header className="mb-4 border-b border-slate-800 pb-4">
@@ -270,6 +291,9 @@ export default function CalendarPage() {
         canActor={canActor}
         viewerTimeZone={viewerTimeZone}
         onViewerTimeZone={setViewerTimeZone}
+        onExportIcs={() => void handleExportIcs()}
+        exportBusy={exportBusy}
+        canExport={canAuth}
       />
 
       {rangeError && (
@@ -441,6 +465,9 @@ function Toolbar({
   canActor,
   viewerTimeZone,
   onViewerTimeZone,
+  onExportIcs,
+  exportBusy,
+  canExport,
 }: {
   view: View;
   onViewChange: (v: View) => void;
@@ -458,6 +485,9 @@ function Toolbar({
   canActor: boolean;
   viewerTimeZone: string;
   onViewerTimeZone: (z: string) => void;
+  onExportIcs: () => void;
+  exportBusy: boolean;
+  canExport: boolean;
 }) {
   return (
     <div className="flex min-w-0 w-full flex-col gap-3 rounded-xl border border-slate-800 bg-slate-900/40 p-3">
@@ -470,6 +500,16 @@ function Toolbar({
           >
             Today
           </button>
+          {canExport && (
+            <button
+              type="button"
+              disabled={exportBusy}
+              onClick={onExportIcs}
+              className="shrink-0 rounded-md border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+            >
+              {exportBusy ? "Exporting…" : "Export .ics"}
+            </button>
+          )}
           <button
             type="button"
             onClick={onPrev}

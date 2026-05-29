@@ -15,7 +15,11 @@ public static class BudgetApiRegistration
     {
         app.MapGet("/api/budget/categories", () => Results.Ok(root.GetRequiredService<BudgetService>().GetCategories()));
 
-        app.MapGet("/api/budget/accounts", () => Results.Ok(root.GetRequiredService<BudgetService>().GetAccounts()));
+        app.MapGet("/api/budget/accounts", (HttpRequest request) =>
+        {
+            var includeInactive = string.Equals(request.Query["includeInactive"], "true", StringComparison.OrdinalIgnoreCase);
+            return Results.Ok(root.GetRequiredService<BudgetService>().GetAccounts(activeOnly: !includeInactive));
+        });
 
         app.MapGet("/api/budget/tags", () => Results.Ok(root.GetRequiredService<BudgetService>().GetAllTags()));
 
@@ -155,7 +159,7 @@ public static class BudgetApiRegistration
             return ok ? Results.Ok(new { ok = true }) : ApiResults.NotFound("Category not found.", "not_found");
         });
 
-        w.MapPost("/budget/transactions", (HttpRequest http, BudgetTransactionCreateRequest? body) =>
+        w.MapPost("/budget/transactions", async (HttpRequest http, BudgetTransactionCreateRequest? body) =>
         {
             if (!HomeBotApiRegistrationTryActor.TryActor(http.Query, out var actor, out var err))
                 return err!;
@@ -170,8 +174,9 @@ public static class BudgetApiRegistration
             var rate = body.ExchangeRateToHome <= 0 ? 1 : body.ExchangeRateToHome;
             if (!string.IsNullOrWhiteSpace(body.Currency) && body.Currency != "USD")
                 rate = svc.ResolveExchangeRateToHome(body.Currency, "USD", date);
+            var txType = body.Type ?? "expense";
             var id = svc.CreateTransaction(
-                body.Type ?? "expense",
+                txType,
                 body.AmountInput,
                 body.CategoryId,
                 body.SpentByUserId,
@@ -185,22 +190,27 @@ public static class BudgetApiRegistration
                 body.Splits,
                 body.Tags,
                 actor);
+            await BudgetApiDiscordNotify.TransactionCreatedAsync(
+                root, svc, txType, body.AmountInput, body.CategoryId, body.SpentByUserId);
             return Results.Created($"/api/budget/transactions/{id}", new { id });
         });
 
-        w.MapPost("/budget/transfers", (HttpRequest http, BudgetTransferCreateRequest? body) =>
+        w.MapPost("/budget/transfers", async (HttpRequest http, BudgetTransferCreateRequest? body) =>
         {
             if (!HomeBotApiRegistrationTryActor.TryActor(http.Query, out var actor, out var err))
                 return err!;
             if (body is null)
                 return ApiResults.BadRequest("body required.", "missing_body");
-            var id = root.GetRequiredService<BudgetService>().CreateTransfer(
+            var svc = root.GetRequiredService<BudgetService>();
+            var id = svc.CreateTransfer(
                 body.AmountInput,
                 body.FromAccountId,
                 body.ToAccountId,
                 body.TransactionDate ?? DateTime.UtcNow.ToString("yyyy-MM-dd"),
                 body.Note,
                 actor);
+            await BudgetApiDiscordNotify.TransferCreatedAsync(
+                root, svc, body.AmountInput, body.FromAccountId, body.ToAccountId, actor);
             return Results.Created($"/api/budget/transactions/{id}", new { id });
         });
 
@@ -222,8 +232,20 @@ public static class BudgetApiRegistration
                 body.ClearedAt,
                 body.Splits,
                 body.Tags,
+                body.AccountId,
+                applyAccountId: body.AccountId.HasValue,
                 actor);
             return ok ? Results.Ok(new { ok = true }) : ApiResults.NotFound("Transaction not found.", "not_found");
+        });
+
+        w.MapPatch("/budget/accounts/{id:int}", (HttpRequest http, int id, BudgetAccountUpdateRequest? body) =>
+        {
+            if (!HomeBotApiRegistrationTryActor.TryActor(http.Query, out var actor, out var err))
+                return err!;
+            if (body is null || !body.IsActive.HasValue)
+                return ApiResults.BadRequest("isActive is required.", "missing_fields");
+            var ok = root.GetRequiredService<BudgetService>().SetAccountActive(id, body.IsActive.Value, actor);
+            return ok ? Results.Ok(new { ok = true }) : ApiResults.NotFound("Account not found.", "not_found");
         });
 
         w.MapDelete("/budget/transactions/{id:int}", (HttpRequest http, int id) =>
@@ -304,25 +326,62 @@ public static class BudgetApiRegistration
             return Results.Created($"/api/budget/recurring/{id}", new { id });
         });
 
-        w.MapPost("/budget/bills", (HttpRequest http, BudgetBillCreateRequest? body) =>
+        w.MapPost("/budget/bills", async (HttpRequest http, BudgetBillCreateRequest? body) =>
         {
             if (!HomeBotApiRegistrationTryActor.TryActor(http.Query, out var actor, out var err))
                 return err!;
             if (body is null || string.IsNullOrWhiteSpace(body.Name))
                 return ApiResults.BadRequest("name required.", "missing_name");
-            var id = root.GetRequiredService<BudgetService>().CreateBill(
-                body.Name, body.AmountEstimate, body.DueDay, body.CategoryId, body.CalendarItemId, actor);
-            return Results.Created($"/api/budget/bills/{id}", new { id });
+            var svc = root.GetRequiredService<BudgetService>();
+            int? calId = body.CalendarItemId;
+            var linkedCalendar = false;
+            if (body.CreateCalendarReminder && !calId.HasValue)
+            {
+                calId = BudgetBillCalendarHelper.CreateMonthlyReminder(
+                    root, body.Name.Trim(), body.AmountEstimate, body.DueDay);
+                linkedCalendar = true;
+            }
+
+            var id = svc.CreateBill(
+                body.Name, body.AmountEstimate, body.DueDay, body.CategoryId, calId, actor);
+            await BudgetApiDiscordNotify.BillCreatedAsync(root, body.Name.Trim(), body.DueDay, linkedCalendar);
+            return Results.Created($"/api/budget/bills/{id}", new { id, calendarItemId = calId });
         });
 
-        w.MapPost("/budget/bills/{id:int}/pay", (HttpRequest http, int id, BudgetBillPayRequest? body) =>
+        w.MapPost("/budget/bills/{id:int}/calendar-reminder", async (HttpRequest http, int id) =>
+        {
+            if (!HomeBotApiRegistrationTryActor.TryActor(http.Query, out var actor, out var err))
+                return err!;
+            var svc = root.GetRequiredService<BudgetService>();
+            var bill = svc.GetBills(false).FirstOrDefault(b => b.Id == id);
+            if (bill is null)
+                return ApiResults.NotFound("Bill not found.", "not_found");
+            if (bill.CalendarItemId.HasValue)
+                return ApiResults.BadRequest("Bill already has a calendar reminder.", "already_linked");
+
+            var calId = BudgetBillCalendarHelper.CreateMonthlyReminder(
+                root, bill.Name, bill.AmountEstimate, bill.DueDay);
+            if (!svc.SetBillCalendarItem(id, calId, actor))
+                return ApiResults.NotFound("Bill not found.", "not_found");
+
+            var sTitle = DiscordNotifyText.SanitizeInline($"Bill due: {bill.Name}");
+            await root.GetRequiredService<IDiscordChannelNotifier>().NotifyFeatureChannelAsync(
+                "calendar",
+                $"📅 **Calendar** (via web): added **{sTitle}** (monthly bill reminder)");
+
+            return Results.Ok(new { ok = true, calendarItemId = calId });
+        });
+
+        w.MapPost("/budget/bills/{id:int}/pay", async (HttpRequest http, int id, BudgetBillPayRequest? body) =>
         {
             if (!HomeBotApiRegistrationTryActor.TryActor(http.Query, out var actor, out var err))
                 return err!;
             if (body is null || string.IsNullOrWhiteSpace(body.AmountInput))
                 return ApiResults.BadRequest("amountInput required.", "missing_amount");
+            var svc = root.GetRequiredService<BudgetService>();
             var spender = body.SpentByUserId != 0 ? body.SpentByUserId : actor;
-            var txId = root.GetRequiredService<BudgetService>().MarkBillPaid(id, body.AmountInput, spender, actor);
+            var txId = svc.MarkBillPaid(id, body.AmountInput, spender, actor);
+            await BudgetApiDiscordNotify.BillPaidAsync(root, svc, id, body.AmountInput, spender);
             return Results.Ok(new { transactionId = txId });
         });
 
@@ -389,6 +448,8 @@ public static class BudgetApiRegistration
             var csv = await reader.ReadToEndAsync();
             ulong spender = ulong.TryParse(form["spentByUserId"], out var u) && u != 0 ? u : actor;
             var count = root.GetRequiredService<BudgetService>().ImportCsv(csv, spender, actor);
+            if (count > 0)
+                await BudgetApiDiscordNotify.CsvImportedAsync(root, count, actor);
             return Results.Ok(new { imported = count });
         });
     }

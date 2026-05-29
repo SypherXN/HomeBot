@@ -3,6 +3,8 @@
 #
 # Requires scripts/backup-homebot-sqlite.sh installed and executable (e.g. chmod +x),
 # or set ExecStart to the absolute path inside your clone.
+#
+# For Google Drive off-site copy + retention, use homebot-backup-with-gdrive.*.example instead.
 
 [Unit]
 Description=HomeBot SQLite backup (stop, copy, start)

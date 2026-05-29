@@ -57,8 +57,7 @@ public class BudgetNotificationService
 
     private async Task MaybeSendWeeklyDigestAsync()
     {
-        var now = DateTime.UtcNow;
-        if (now.DayOfWeek != DayOfWeek.Sunday || now.Hour != 17)
+        if (!IsDigestDueNow())
             return;
 
         const string key = "budget_weekly_digest";
@@ -68,5 +67,35 @@ public class BudgetNotificationService
         var text = _budget.BuildDigestText(monthly: false);
         await _notifier.NotifyFeatureChannelAsync("budget", text);
         _budget.MarkNotificationSent(key);
+    }
+
+    internal static bool IsDigestDueNow(DateTime? utcNow = null)
+    {
+        var now = utcNow ?? DateTime.UtcNow;
+        var targetDay = ReadDigestDayOfWeek();
+        var targetHour = ReadDigestUtcHour();
+
+        if (now.DayOfWeek != targetDay || now.Hour != targetHour)
+            return false;
+
+        return true;
+    }
+
+    internal static DayOfWeek ReadDigestDayOfWeek()
+    {
+        var raw = Environment.GetEnvironmentVariable("HOMEBOT_BUDGET_DIGEST_DAY");
+        if (string.IsNullOrWhiteSpace(raw))
+            return DayOfWeek.Sunday;
+        if (int.TryParse(raw, out var n) && n >= 0 && n <= 6)
+            return (DayOfWeek)n;
+        return Enum.TryParse<DayOfWeek>(raw, true, out var d) ? d : DayOfWeek.Sunday;
+    }
+
+    internal static int ReadDigestUtcHour()
+    {
+        var raw = Environment.GetEnvironmentVariable("HOMEBOT_BUDGET_DIGEST_UTC_HOUR");
+        if (int.TryParse(raw, out var h) && h >= 0 && h <= 23)
+            return h;
+        return 17;
     }
 }

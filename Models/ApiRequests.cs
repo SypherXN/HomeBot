@@ -208,6 +208,12 @@ public sealed class BudgetTransactionUpdateRequest
     public string? ClearedAt { get; set; }
     public List<BudgetTransactionSplitModel>? Splits { get; set; }
     public List<string>? Tags { get; set; }
+    public int? AccountId { get; set; }
+}
+
+public sealed class BudgetAccountUpdateRequest
+{
+    public bool? IsActive { get; set; }
 }
 
 public sealed class BudgetTransferCreateRequest
@@ -271,6 +277,8 @@ public sealed class BudgetBillCreateRequest
     public int DueDay { get; set; } = 1;
     public int? CategoryId { get; set; }
     public int? CalendarItemId { get; set; }
+    /// <summary>When true, creates a monthly calendar reminder on the bill due day and links it.</summary>
+    public bool CreateCalendarReminder { get; set; }
 }
 
 public sealed class BudgetBillUpdateRequest

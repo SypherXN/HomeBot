@@ -91,14 +91,10 @@ _NCrunch_*/
 backups/
 
 # --- Private operator-only docs (never push) ---
-PRIVATE_Headless_Ubuntu_From_Windows.md
+PRIVATE_*.md
 
-# --- Optional ops / planning docs (not required to build or run the bot) ---
-docs/OPS.md
-docs/HomeBot_Base_Design.md
-docs/HomeBot_WebUI_Plan.md
-docs/Refined_WebUI_Adaptation_Plan.md
-docs/WebUI_Future_Work.md
+# --- Optional operator notes (tracked FEATURES.md + UBUNTU_DEPLOY.md are the main docs/) ---
+# docs/OPS.md
 
 # --- GitHub Pages CI (optional; self-hosters can add their own workflow or upload dist manually) ---
 .github/workflows/deploy-webui.yml

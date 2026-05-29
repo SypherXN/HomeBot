@@ -187,8 +187,14 @@ public partial class BudgetService
         string? clearedAt,
         List<BudgetTransactionSplitModel>? splits,
         List<string>? tags,
+        int? accountId,
+        bool applyAccountId,
         ulong actor)
     {
+        var existing = GetTransactionById(id);
+        if (existing == null)
+            return false;
+
         using var conn = _db.GetConnection();
         conn.Open();
         using var tx = conn.BeginTransaction();
@@ -196,6 +202,20 @@ public partial class BudgetService
         double? amount = null;
         if (!string.IsNullOrWhiteSpace(amountInput))
             amount = EvaluateAmount(amountInput);
+
+        var effectiveAmount = amount ?? existing.Amount;
+        var effectiveType = existing.Type;
+
+        if (applyAccountId && !string.Equals(effectiveType, "transfer", StringComparison.OrdinalIgnoreCase))
+        {
+            var oldAcc = existing.AccountId ?? GetDefaultAccountId(conn);
+            var newAcc = accountId ?? GetDefaultAccountId(conn);
+            if (oldAcc != newAcc)
+            {
+                ReverseAccountDelta(conn, tx, oldAcc, effectiveType, existing.Amount);
+                ApplyAccountDelta(conn, tx, newAcc, effectiveType, effectiveAmount, null);
+            }
+        }
 
         var sets = new List<string>();
         var cmd = conn.CreateCommand();
@@ -243,7 +263,13 @@ public partial class BudgetService
             cmd.Parameters.AddWithValue("$cleared", string.IsNullOrWhiteSpace(clearedAt) ? DBNull.Value : clearedAt);
         }
 
-        if (sets.Count == 0 && splits == null && tags == null)
+        if (applyAccountId && !string.Equals(effectiveType, "transfer", StringComparison.OrdinalIgnoreCase))
+        {
+            sets.Add("AccountId=$acc");
+            cmd.Parameters.AddWithValue("$acc", accountId ?? GetDefaultAccountId(conn));
+        }
+
+        if (sets.Count == 0 && splits == null && tags == null && !applyAccountId)
             return false;
 
         if (sets.Count > 0)
@@ -459,9 +485,24 @@ public partial class BudgetService
     private static int GetDefaultAccountId(SqliteConnection conn)
     {
         var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT Id FROM BudgetAccounts ORDER BY Id LIMIT 1";
+        cmd.CommandText = "SELECT Id FROM BudgetAccounts WHERE IsActive=1 ORDER BY Id LIMIT 1";
         var v = cmd.ExecuteScalar();
+        if (v == null)
+        {
+            cmd.CommandText = "SELECT Id FROM BudgetAccounts ORDER BY Id LIMIT 1";
+            v = cmd.ExecuteScalar();
+        }
+
         return v == null ? 1 : Convert.ToInt32(v);
+    }
+
+    private static void ReverseAccountDelta(SqliteConnection conn, SqliteTransaction tx, int accountId, string type,
+        double amount)
+    {
+        var reverseType = type.Equals("income", StringComparison.OrdinalIgnoreCase) ? "expense" : "income";
+        if (type.Equals("expense", StringComparison.OrdinalIgnoreCase) ||
+            type.Equals("income", StringComparison.OrdinalIgnoreCase))
+            ApplyAccountDelta(conn, tx, accountId, reverseType, amount, null);
     }
 
     private static void ApplyAccountDelta(SqliteConnection conn, SqliteTransaction tx, int accountId, string type,

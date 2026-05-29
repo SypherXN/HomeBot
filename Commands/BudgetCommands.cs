@@ -84,4 +84,42 @@ public class BudgetCommands : InteractionModuleBase<SocketInteractionContext>
         await _notifier.NotifyFeatureChannelAsync("budget", text);
         await RespondAsync("Digest sent to the budget channel.", ephemeral: true);
     }
+
+    [SlashCommand("budget-list", "Month summary, envelope warnings, and upcoming bills")]
+    public async Task List()
+    {
+        var month = DateTime.UtcNow.ToString("yyyy-MM");
+        var s = _budget.GetMonthSummary(month, null, null, "household");
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"**{month}** — Income ${s.TotalIncome:N2} · Expenses ${s.TotalExpenses:N2} · Net ${s.Net:N2}");
+
+        var envWarnings = _budget.GetEnvelopes(month, null)
+            .Where(e => e.TargetAmount > 0 && e.PercentUsed >= 85)
+            .OrderByDescending(e => e.PercentUsed)
+            .Take(8)
+            .ToList();
+        if (envWarnings.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("**Envelopes:**");
+            foreach (var e in envWarnings)
+                sb.AppendLine($"• {e.CategoryName}: {e.PercentUsed}% of ${e.TargetAmount:N0}");
+        }
+
+        var alerts = _budget.CollectPendingNotifications();
+        var bills = alerts.Where(a => a.Kind == "bill_due").Take(6).ToList();
+        if (bills.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("**Bills:**");
+            foreach (var b in bills)
+                sb.AppendLine($"• {b.Message}");
+        }
+
+        if (envWarnings.Count == 0 && bills.Count == 0)
+            sb.AppendLine();
+        sb.AppendLine("_Use the Web UI for full budget planning._");
+
+        await RespondAsync(sb.ToString());
+    }
 }

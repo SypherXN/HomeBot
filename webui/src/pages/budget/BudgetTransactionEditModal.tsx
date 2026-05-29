@@ -3,6 +3,7 @@ import DiscordMemberSelect from "../../components/DiscordMemberSelect";
 import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster";
 import {
   patchBudgetTransaction,
+  type BudgetAccount,
   type BudgetCategory,
   type BudgetSplitInput,
   type BudgetTransactionListItem,
@@ -16,6 +17,7 @@ type Props = {
   token: string;
   actor: string;
   categories: BudgetCategory[];
+  accounts: BudgetAccount[];
   roster: DiscordGuildRosterState;
   onClose: () => void;
   onSaved: () => Promise<void>;
@@ -27,6 +29,7 @@ export default function BudgetTransactionEditModal({
   token,
   actor,
   categories,
+  accounts,
   roster,
   onClose,
   onSaved,
@@ -41,6 +44,7 @@ export default function BudgetTransactionEditModal({
   const [isPending, setIsPending] = useState(false);
   const [useSplits, setUseSplits] = useState(false);
   const [splits, setSplits] = useState<SplitRow[]>([]);
+  const [accountId, setAccountId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,6 +69,7 @@ export default function BudgetTransactionEditModal({
           }))
         : [{ categoryId: "", spentByUserId: row.spentByUserId, amount: "" }]
     );
+    setAccountId(row.accountId != null ? String(row.accountId) : "");
     setError(null);
   }, [open, row]);
 
@@ -102,6 +107,8 @@ export default function BudgetTransactionEditModal({
           .map((t) => t.trim())
           .filter(Boolean),
         splits: splitPayload,
+        accountId:
+          row!.type !== "transfer" && accountId ? Number(accountId) : undefined,
       });
       await onSaved();
       onClose();
@@ -149,6 +156,20 @@ export default function BudgetTransactionEditModal({
               </option>
             ))}
           </select>
+          {row.type !== "transfer" && accounts.length > 0 && (
+            <select
+              value={accountId}
+              onChange={(e) => setAccountId(e.target.value)}
+              className="w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+            >
+              <option value="">Account (default)</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          )}
           <input
             value={merchant}
             onChange={(e) => setMerchant(e.target.value)}

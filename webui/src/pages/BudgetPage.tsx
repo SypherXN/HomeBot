@@ -5,6 +5,7 @@ import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
 import { validActorId } from "../lib/validation";
 import {
   deleteBudgetTransaction,
+  postUndo,
   getBudgetAccounts,
   getBudgetAudit,
   getBudgetCategories,
@@ -117,6 +118,8 @@ export default function BudgetPage() {
   const [trendMonths, setTrendMonths] = useState(6);
   const [trendGroupBy, setTrendGroupBy] = useState<"category" | "user">("category");
   const [editTx, setEditTx] = useState<BudgetTransactionListItem | null>(null);
+  const [undoBusy, setUndoBusy] = useState(false);
+  const [undoMsg, setUndoMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!tok) return;
@@ -189,6 +192,28 @@ export default function BudgetPage() {
     await load();
   }
 
+  async function handleUndo() {
+    if (!actor) {
+      setUndoMsg("Set actorUserId in Settings to use undo.");
+      return;
+    }
+    setUndoBusy(true);
+    setUndoMsg(null);
+    try {
+      const r = await postUndo(tok, actor);
+      if (!r.undone) {
+        setUndoMsg(r.message?.trim() || "Nothing to undo for this actor.");
+        return;
+      }
+      setUndoMsg("Last action was undone.");
+      await load();
+    } catch (e) {
+      setUndoMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setUndoBusy(false);
+    }
+  }
+
   function applyFilters() {
     setListPage(0);
     setAppliedFilters({ ...filters });
@@ -251,7 +276,22 @@ export default function BudgetPage() {
             <option value="all">Include personal</option>
           </select>
         </div>
+        {actor && (
+          <button
+            type="button"
+            disabled={undoBusy}
+            onClick={() => void handleUndo()}
+            className="rounded-lg border border-amber-700/80 bg-amber-950/40 px-3 py-2 text-sm text-amber-100 hover:bg-amber-950/70 disabled:opacity-50"
+          >
+            {undoBusy ? "Undoing…" : "Undo last action"}
+          </button>
+        )}
       </div>
+      {undoMsg && (
+        <p className="text-sm text-slate-300" role="status">
+          {undoMsg}
+        </p>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {(
@@ -404,6 +444,7 @@ export default function BudgetPage() {
                 token={tok}
                 actor={actor}
                 categories={categories}
+                accounts={accounts}
                 roster={roster}
                 onSaved={load}
               />
@@ -587,6 +628,7 @@ export default function BudgetPage() {
         token={tok}
         actor={actor}
         categories={categories}
+        accounts={accounts}
         roster={roster}
         onClose={() => setEditTx(null)}
         onSaved={load}

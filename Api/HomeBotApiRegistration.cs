@@ -276,6 +276,48 @@ public static class HomeBotApiRegistration
             return Results.Ok(calendarService.GetRange(fromLocal, toLocal, userFilter, windowTz));
         });
 
+        app.MapGet("/api/calendar/export.ics", (HttpRequest request) =>
+        {
+            var calendarService = root.GetRequiredService<CalendarService>();
+
+            var fromStr = request.Query["from"].ToString();
+            var toStr = request.Query["to"].ToString();
+
+            if (!DateTime.TryParseExact(
+                    fromStr,
+                    "yyyy-MM-dd",
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None,
+                    out var fromLocal))
+                return ApiResults.BadRequest("Query 'from' must be YYYY-MM-DD.", "invalid_from");
+
+            if (!DateTime.TryParseExact(
+                    toStr,
+                    "yyyy-MM-dd",
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None,
+                    out var toLocal))
+                return ApiResults.BadRequest("Query 'to' must be YYYY-MM-DD.", "invalid_to");
+
+            if (toLocal <= fromLocal)
+                return ApiResults.BadRequest("Query 'to' must be after 'from'.", "invalid_range");
+
+            if ((toLocal - fromLocal).TotalDays > CalendarService.RangeMaxDays)
+                return ApiResults.BadRequest($"Range too wide (max {CalendarService.RangeMaxDays} days).", "range_too_wide");
+
+            ulong? userFilter = null;
+            if (ulong.TryParse(request.Query["userFilter"], out var userFilterParsed))
+                userFilter = userFilterParsed;
+
+            var windowTz = request.Query["timeZone"].ToString();
+            if (string.IsNullOrWhiteSpace(windowTz))
+                windowTz = null;
+
+            var items = calendarService.GetRange(fromLocal, toLocal, userFilter, windowTz);
+            var ics = CalendarIcsExport.Build(items);
+            return Results.Text(ics, "text/calendar; charset=utf-8");
+        });
+
         app.MapGet("/api/discord/guild/members", async () =>
         {
             var directory = root.GetRequiredService<DiscordGuildDirectoryService>();

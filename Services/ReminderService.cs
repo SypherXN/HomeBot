@@ -26,11 +26,21 @@ public class ReminderService
     /// </summary>
     public async Task StartAsync()
     {
+        var pollSeconds = ReadReminderPollSeconds();
         while (true)
         {
             await CheckReminders();
-            await Task.Delay(10000); // check every 10 seconds
+            await Task.Delay(TimeSpan.FromSeconds(pollSeconds));
         }
+    }
+
+    /// <summary>Default 30s; override with HOMEBOT_REMINDER_POLL_SECONDS (10–300).</summary>
+    private static int ReadReminderPollSeconds()
+    {
+        var raw = Environment.GetEnvironmentVariable("HOMEBOT_REMINDER_POLL_SECONDS");
+        if (!int.TryParse(raw, out var seconds))
+            return 30;
+        return Math.Clamp(seconds, 10, 300);
     }
 
     private static void AdvanceRecurringStart(SqliteConnection conn, int id, DateTime currentStart, string recurrence)

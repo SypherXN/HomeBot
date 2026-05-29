@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { getApiBaseUrl, subscribeApiBaseUrl } from "../api";
 import { useApiConnectionStatus } from "../hooks/useApiConnectionStatus";
+import { useBudgetAlertCount } from "../hooks/useBudgetAlertCount";
 
 const nav: { to: string; label: string; end?: boolean }[] = [
   { to: "/", label: "Home", end: true },
@@ -99,6 +100,7 @@ export default function AppShell() {
   const { token, webUsername } = useAuth();
   const hasToken = token.trim().length > 0;
   const { status } = useApiConnectionStatus(token);
+  const budgetAlertCount = useBudgetAlertCount(token);
   const conn = connectionLabel(status);
   const [apiBaseDisplay, setApiBaseDisplay] = useState(() => getApiBaseUrl());
   useEffect(() => subscribeApiBaseUrl(() => setApiBaseDisplay(getApiBaseUrl())), []);
@@ -126,7 +128,17 @@ export default function AppShell() {
         <nav className="-mx-1 flex flex-nowrap gap-1 overflow-x-auto px-2 pb-3 md:mx-0 md:flex-col md:flex-wrap md:overflow-visible">
           {nav.map(({ to, label, end }) => (
             <NavLink key={to} to={to} end={end ?? false} className={navClass}>
-              {label}
+              <span className="inline-flex items-center gap-1.5">
+                {label}
+                {to === "/budget" && budgetAlertCount > 0 && hasToken ? (
+                  <span
+                    className="rounded-full bg-amber-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
+                    title={`${budgetAlertCount} budget alert(s)`}
+                  >
+                    {budgetAlertCount > 9 ? "9+" : budgetAlertCount}
+                  </span>
+                ) : null}
+              </span>
             </NavLink>
           ))}
           <div className="flex shrink-0 flex-row gap-1 md:mt-2 md:w-full md:flex-col md:gap-1">

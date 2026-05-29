@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
 # Install HomeBot on Ubuntu 22.04 or 24.04 (Discord + API + systemd).
-# Run as root: sudo bash scripts/ubuntu/install-homebot.sh [git-clone-url]
+# Run as root: sudo bash scripts/ubuntu/install-homebot.sh https://github.com/YOUR_USER/HomeBot.git
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=_common.sh
+source "${SCRIPT_DIR}/_common.sh"
 
 REPO_URL="${1:-${HOMEBOT_REPO_URL:-}}"
 INSTALL_ROOT="${HOMEBOT_INSTALL_ROOT:-/opt/homebot}"
-APP_DIR="${INSTALL_ROOT}/app"
+APP_DIR="${HOMEBOT_APP_DIR:-${INSTALL_ROOT}/app}"
 SERVICE_NAME="${HOMEBOT_SERVICE_NAME:-homebot.service}"
-SYSTEMD_UNIT="/etc/systemd/system/${SERVICE_NAME}"
+ENV_FILE="${APP_DIR}/.env"
 
 if [[ "$(id -u)" -ne 0 ]]; then
-  echo "Run as root: sudo bash $0 [git-clone-url]" >&2
+  echo "Run as root: sudo bash $0 https://github.com/YOUR_USER/HomeBot.git" >&2
   exit 1
 fi
 
@@ -39,20 +43,20 @@ case "${UBUNTU_VER}" in
     ;;
 esac
 
-echo "==> Installing packages (git, curl)..."
+echo "==> Installing packages (git, curl, wget)..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq curl git ca-certificates wget
 
 if ! command -v dotnet >/dev/null 2>&1; then
-  echo "==> Installing .NET 10 SDK..."
+  echo "==> Installing .NET 10 SDK (Ubuntu ${UBUNTU_VER})..."
   wget -q "https://packages.microsoft.com/config/ubuntu/${UBUNTU_VER}/packages-microsoft-prod.deb" \
     -O /tmp/packages-microsoft-prod.deb
   dpkg -i /tmp/packages-microsoft-prod.deb
   apt-get update -qq
   apt-get install -y -qq dotnet-sdk-10.0
 fi
-dotnet --version
+echo "==> dotnet $(dotnet --version)"
 
 if ! id homebot &>/dev/null; then
   echo "==> Creating user homebot..."
@@ -69,67 +73,46 @@ else
   echo "==> Repo already exists at ${APP_DIR} (skipping clone)"
 fi
 
-if [[ ! -f "${APP_DIR}/.env" ]]; then
-  echo "==> Creating ${APP_DIR}/.env from .env.example"
-  cp "${APP_DIR}/.env.example" "${APP_DIR}/.env"
-  chown homebot:homebot "${APP_DIR}/.env"
-  chmod 600 "${APP_DIR}/.env"
+if [[ ! -f "${ENV_FILE}" ]]; then
+  echo "==> Creating ${ENV_FILE} from .env.example"
+  cp "${APP_DIR}/.env.example" "${ENV_FILE}"
+  chown homebot:homebot "${ENV_FILE}"
+  chmod 600 "${ENV_FILE}"
 else
-  echo "==> Keeping existing ${APP_DIR}/.env"
+  echo "==> Keeping existing ${ENV_FILE}"
+  chmod 600 "${ENV_FILE}" 2>/dev/null || true
+  chown homebot:homebot "${ENV_FILE}" 2>/dev/null || true
 fi
 
-echo "==> Publishing release build..."
-sudo -u homebot bash -c "cd '${APP_DIR}' && dotnet publish -c Release -o '${APP_DIR}/publish'"
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-UNIT_SRC="${SCRIPT_DIR}/../systemd/homebot.service.example"
-
-echo "==> Installing systemd unit ${SYSTEMD_UNIT}"
-if [[ -f "${UNIT_SRC}" ]]; then
-  cp "${UNIT_SRC}" "${SYSTEMD_UNIT}"
-else
-  cat >"${SYSTEMD_UNIT}" <<EOF
-[Unit]
-Description=HomeBot Discord + API
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=homebot
-Group=homebot
-WorkingDirectory=${APP_DIR}
-EnvironmentFile=${APP_DIR}/.env
-ExecStart=/usr/bin/dotnet ${APP_DIR}/publish/HomeBot.dll
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-EOF
+if systemctl is-active --quiet "${SERVICE_NAME}" 2>/dev/null; then
+  echo "==> Stopping ${SERVICE_NAME} for publish..."
+  systemctl stop "${SERVICE_NAME}"
 fi
 
-systemctl daemon-reload
+echo "==> Publishing release build to ${APP_DIR}/publish ..."
+publish_homebot "${APP_DIR}"
+
+echo "==> Installing systemd unit /etc/systemd/system/${SERVICE_NAME}"
+install_systemd_unit "${APP_DIR}" "${SERVICE_NAME}"
 systemctl enable "${SERVICE_NAME}"
 
-if grep -q '^DISCORD_TOKEN=$' "${APP_DIR}/.env" 2>/dev/null || \
-   grep -q '^HOMEBOT_API_TOKEN=$' "${APP_DIR}/.env" 2>/dev/null; then
-  echo ""
-  echo "==> IMPORTANT: Edit secrets before the service will work:"
-  echo "    sudo -u homebot nano ${APP_DIR}/.env"
-  echo "    Required minimum: DISCORD_TOKEN, DISCORD_GUILD_ID, HOMEBOT_API_ENABLED=true,"
-  echo "    HOMEBOT_API_TOKEN, HOMEBOT_WEB_JWT_SECRET (32+ chars)."
-  echo "    Then: sudo systemctl restart ${SERVICE_NAME}"
-  echo ""
-  echo "    Skipping 'systemctl start' until .env is filled."
+if ! env_file_ready "${ENV_FILE}"; then
+  systemctl stop "${SERVICE_NAME}" 2>/dev/null || true
+  print_env_reminder "${ENV_FILE}" "${SERVICE_NAME}"
+  echo "Guide: ${APP_DIR}/docs/UBUNTU_DEPLOY.md (or docs/SETUP.md in the repo)"
   exit 0
 fi
 
+echo "==> Starting ${SERVICE_NAME}..."
 systemctl restart "${SERVICE_NAME}" || systemctl start "${SERVICE_NAME}"
+sleep 1
 systemctl --no-pager status "${SERVICE_NAME}" || true
 
 echo ""
-echo "Done. API should listen on port 5050 (see HOMEBOT_API_URL in .env)."
-echo "Check: curl -sS http://127.0.0.1:5050/api/health"
-echo "Logs:  journalctl -u ${SERVICE_NAME} -f"
-echo "Guide: docs/UBUNTU_DEPLOY.md"
+echo "Done."
+echo "  Health: curl -sS http://127.0.0.1:5050/api/health"
+echo "  Logs:   journalctl -u ${SERVICE_NAME} -f"
+echo "  Config: sudo -u homebot nano ${ENV_FILE}"
+echo "  Update: sudo bash ${APP_DIR}/scripts/ubuntu/update-homebot.sh"
+echo "  Guide:  ${APP_DIR}/docs/UBUNTU_DEPLOY.md"
+echo "  Backup: ${APP_DIR}/docs/SETUP.md#20-backing-up-sqlite-homebotdb (local §20.1, Google Drive §20.2)"

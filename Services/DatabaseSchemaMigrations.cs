@@ -191,5 +191,11 @@ public static class DatabaseSchemaMigrations
                 ");
             }
         }),
+
+        new SchemaMigrationRunner.Migration("003_budget_accounts_is_active", conn =>
+        {
+            SchemaMigrationRunner.TryAddColumn(conn,
+                "ALTER TABLE BudgetAccounts ADD COLUMN IsActive INTEGER NOT NULL DEFAULT 1");
+        }),
     };
 }

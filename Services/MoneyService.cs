@@ -220,7 +220,7 @@ public class MoneyService
 
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            SELECT Id, Name, Amount, PaidBy, OwedBy, Type
+            SELECT Id, Name, Amount, PaidBy, OwedBy, Type, Description, Notes
             FROM Transactions
             ORDER BY Id DESC";
 
@@ -242,7 +242,9 @@ public class MoneyService
                 PaidByMemberLabel = HouseholdIdentity.MemberLabel(paidBy),
                 OwedBy = owedBy,
                 OwedByMemberLabel = HouseholdIdentity.MemberLabel(owedBy),
-                Type = reader.GetString(5)
+                Type = reader.GetString(5),
+                Description = reader.IsDBNull(6) ? "" : reader.GetString(6),
+                Notes = reader.IsDBNull(7) ? "" : reader.GetString(7)
             });
         }
 

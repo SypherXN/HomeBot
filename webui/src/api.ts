@@ -321,6 +321,8 @@ export type MoneyTransactionListItem = {
   owedBy: string;
   owedByMemberLabel: string;
   type: string;
+  description?: string;
+  notes?: string;
 };
 
 export type PagedMoneyTransactions = {
@@ -1077,6 +1079,7 @@ export type BudgetAccount = {
   currency: string;
   creditLimit: number | null;
   currentBalance: number;
+  isActive?: boolean;
 };
 
 function budgetQuery(path: string, params: Record<string, string | undefined>): string {
@@ -1189,6 +1192,7 @@ export function postBudgetTransaction(
     transactionDate?: string;
     note?: string;
     merchant?: string;
+    accountId?: number;
     tags?: string[];
     splits?: BudgetSplitInput[];
     currency?: string;
@@ -1224,6 +1228,7 @@ export function patchBudgetTransaction(
     clearedAt?: string | null;
     tags?: string[];
     splits?: BudgetSplitInput[];
+    accountId?: number;
   }
 ) {
   const path = mergeQuery(`/api/budget/transactions/${id}`, { actorUserId });
@@ -1323,8 +1328,48 @@ export function deleteBudgetGoal(token: string, actorUserId: string, id: number)
   return apiJson<unknown>(path, { token, method: "DELETE" });
 }
 
-export function getBudgetAccounts(token: string) {
-  return apiJson<BudgetAccount[]>("/api/budget/accounts", { token });
+export function getBudgetAccounts(token: string, includeInactive = false) {
+  const path = includeInactive
+    ? "/api/budget/accounts?includeInactive=true"
+    : "/api/budget/accounts";
+  return apiJson<BudgetAccount[]>(path, { token });
+}
+
+export function patchBudgetAccount(
+  token: string,
+  actorUserId: string,
+  id: number,
+  body: { isActive: boolean }
+) {
+  const path = mergeQuery(`/api/budget/accounts/${id}`, { actorUserId });
+  return apiJson<unknown>(path, { token, method: "PATCH", body });
+}
+
+/** Download calendar .ics for a date range (requires bearer token). */
+export async function downloadCalendarIcs(
+  token: string,
+  from: string,
+  to: string,
+  timeZone: string,
+  userFilter?: string
+): Promise<void> {
+  const q: Record<string, string> = { from, to, timeZone };
+  if (userFilter) q.userFilter = userFilter;
+  const path = mergeQuery("/api/calendar/export.ics", q);
+  const url = `${getApiBaseUrl()}${path}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token.trim()}` },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Export failed (${res.status})`);
+  }
+  const blob = await res.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `homebot-calendar-${from}-to-${to}.ics`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 export function postBudgetAccount(
@@ -1379,6 +1424,7 @@ export type BudgetBill = {
   amountEstimate: number;
   dueDay: number;
   categoryId: number | null;
+  calendarItemId: number | null;
   isActive: boolean;
 };
 
@@ -1424,10 +1470,21 @@ export function getBudgetRecurring(token: string) {
 export function postBudgetBill(
   token: string,
   actorUserId: string,
-  body: { name: string; amountEstimate: number; dueDay: number; categoryId?: number }
+  body: {
+    name: string;
+    amountEstimate: number;
+    dueDay: number;
+    categoryId?: number;
+    createCalendarReminder?: boolean;
+  }
 ) {
   const path = mergeQuery("/api/budget/bills", { actorUserId });
-  return apiJson<{ id: number }>(path, { token, method: "POST", body });
+  return apiJson<{ id: number; calendarItemId?: number | null }>(path, { token, method: "POST", body });
+}
+
+export function postBudgetBillCalendarReminder(token: string, actorUserId: string, billId: number) {
+  const path = mergeQuery(`/api/budget/bills/${billId}/calendar-reminder`, { actorUserId });
+  return apiJson<{ ok: boolean; calendarItemId: number }>(path, { token, method: "POST" });
 }
 
 export function patchBudgetBill(

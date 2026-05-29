@@ -25,7 +25,7 @@ public class HelpCommands : InteractionModuleBase<SocketInteractionContext>
                 embed.Description =
     @"⚙️ General
 
-    • Most feature commands only work in the channel bound with **/setup-set** (calendar, buy, wishlist, money).
+    • Most feature commands only work in the channel bound with **/setup-set** (calendar, buy, wishlist, money, budget).
     • **/setup-set** and **/config-*** work anywhere in the server.
     • **/undo** reverts your last logged action (buy, wishlist, money, calendar, recurrence exceptions, etc.).
     • **/webui-verify** — paste the code from the browser to finish Web account setup (Discord-verified flow).
@@ -41,7 +41,7 @@ public class HelpCommands : InteractionModuleBase<SocketInteractionContext>
                 embed.Description =
     @"🌐 Web UI & HTTP API
 
-    • The household can use a **browser app** (Vite/React) against the same **HTTP API** the bot may host (`/api/...`): buy, wishlist, money, calendar (range, today, upcoming, item detail, per-instance actions), undo, auth.
+    • The household can use a **browser app** (Vite/React) against the same **HTTP API** the bot may host (`/api/...`): buy, wishlist, money, **budget**, calendar (range, today, upcoming, item detail, per-instance actions), undo, auth.
     • Sign-in: password JWT and/or Discord OAuth (when configured); **actorUserId** on mutations records who acted.
     • Data is the **same SQLite** as Discord — not a separate product database.
 
@@ -81,10 +81,12 @@ public class HelpCommands : InteractionModuleBase<SocketInteractionContext>
     - **buy** — /buy-*
     - **wishlist** — /wishlist-*
     - **money** — /money-*
+    - **budget** — /budget-* and budget digest/alerts channel
     - **audit** (optional) — log channel for **web** sign-ins (password + Discord OAuth)
 
     Example:
     - /setup-set calendar #calendar
+    - /setup-set budget #bills
     - /setup-set audit #mod-log";
                 break;
 
@@ -113,7 +115,22 @@ public class HelpCommands : InteractionModuleBase<SocketInteractionContext>
 
     Natural-language dates (examples): tomorrow 6pm, in 2 hours, next monday, 5/1/2026 6pm
 
-    Extras on add: reminder **10m** / **2h** / **1d**; recurrence **daily** / **weekly**";
+    Extras on add: reminder **10m** / **2h** / **1d**; recurrence **daily** / **weekly** / **monthly**";
+                break;
+
+            // ================= BUDGET =================
+            case "budget":
+                embed.Description =
+    @"📊 Budget (slash + web)
+
+    Discord (quick log):
+    - /budget-add — expense or income (category must exist in Web UI first)
+    - /budget-summary — this month income / expenses / net
+    - /budget-list — summary plus envelope warnings and upcoming bills
+    - /budget-digest — post digest to the **budget** channel
+
+    Web UI has envelopes, accounts, bills, goals, CSV, tax, trends.
+    Bind **budget** with /setup-set for channel alerts and digests.";
                 break;
 
             // ================= MONEY =================
@@ -170,12 +187,13 @@ public class HelpCommands : InteractionModuleBase<SocketInteractionContext>
     **setup** — bind features to channels, audit log
     **config** — settings & timezone
     **calendar** — lists, today/upcoming, recurrence per-day
+    **budget** — add, summary, digest, web planning
     **money** — splits, pay, summary, list, edit, delete
     **wishlist** — add, list, view, edit, complete, delete, clear
     **buy** — add, list, complete, delete, edit, clear
 
     Other slash commands:
-    - **/dashboard** — quick today + money pointer
+    - **/dashboard** — today, upcoming, buy, wishlist, budget snapshot
     - **/help** — this menu";
                 break;
         }

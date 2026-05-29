@@ -1,0 +1,18 @@
+# Copy to /etc/systemd/system/homebot-backup-with-gdrive.service
+# Local SQLite backup + Google Drive upload/prune (requires rclone + .env flags).
+#
+#   sudo cp .../homebot-backup-with-gdrive.service.example /etc/systemd/system/homebot-backup-with-gdrive.service
+#   sudo cp .../homebot-backup-with-gdrive.timer.example /etc/systemd/system/homebot-backup-with-gdrive.timer
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now homebot-backup-with-gdrive.timer
+#
+# Load secrets and HOMEBOT_GDRIVE_* from the same .env as HomeBot.
+
+[Unit]
+Description=HomeBot SQLite backup + Google Drive off-site copy
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/opt/homebot/app/.env
+ExecStart=/opt/homebot/app/scripts/backup-homebot-with-gdrive.sh /opt/homebot/app /opt/homebot/backups homebot.service

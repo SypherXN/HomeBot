@@ -1,0 +1,12 @@
+# Copy to /etc/systemd/system/homebot-backup-with-gdrive.timer
+# Weekly Sunday 03:30 (after a typical 03:15 local-only backup if you use both timers).
+
+[Unit]
+Description=Weekly HomeBot backup to Google Drive
+
+[Timer]
+OnCalendar=Sun *-*-* 03:30
+Persistent=true
+
+[Install]
+WantedBy=timers.target

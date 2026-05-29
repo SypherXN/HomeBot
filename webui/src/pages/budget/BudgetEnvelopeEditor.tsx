@@ -25,6 +25,7 @@ export default function BudgetEnvelopeEditor({ token, actor, month, categories, 
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState(false);
   const [copyBusy, setCopyBusy] = useState(false);
+  const [applyBusy, setApplyBusy] = useState(false);
 
   const householdCats = categories.filter((c) => c.visibility !== "personal");
 
@@ -68,17 +69,48 @@ export default function BudgetEnvelopeEditor({ token, actor, month, categories, 
     }
   }
 
+  async function applyPreviousMonthToThisMonth() {
+    if (!actor) return;
+    const prev = priorMonth(month);
+    setApplyBusy(true);
+    try {
+      const prevEnvs = await getBudgetEnvelopes(token, prev);
+      for (const e of prevEnvs) {
+        if (e.targetAmount > 0) {
+          await putBudgetEnvelope(token, actor, {
+            month,
+            categoryId: e.categoryId,
+            targetAmount: e.targetAmount,
+          });
+        }
+      }
+      await onSaved();
+    } finally {
+      setApplyBusy(false);
+    }
+  }
+
   return (
     <form onSubmit={(e) => void saveAll(e)} className="space-y-3">
       {actor && (
-        <button
-          type="button"
-          disabled={copyBusy}
-          onClick={() => void copyFromPreviousMonth()}
-          className="rounded border border-slate-600 bg-slate-800 px-3 py-1 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-50"
-        >
-          {copyBusy ? "Loading…" : `Copy targets from ${priorMonth(month)}`}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={copyBusy}
+            onClick={() => void copyFromPreviousMonth()}
+            className="rounded border border-slate-600 bg-slate-800 px-3 py-1 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+          >
+            {copyBusy ? "Loading…" : `Copy from ${priorMonth(month)} (draft)`}
+          </button>
+          <button
+            type="button"
+            disabled={applyBusy}
+            onClick={() => void applyPreviousMonthToThisMonth()}
+            className="rounded border border-blue-700/60 bg-blue-950/40 px-3 py-1 text-xs text-blue-100 hover:bg-blue-950/70 disabled:opacity-50"
+          >
+            {applyBusy ? "Applying…" : `Apply ${priorMonth(month)} → ${month}`}
+          </button>
+        </div>
       )}
       {householdCats.map((cat) => {
         const env = envByCat.get(cat.id);

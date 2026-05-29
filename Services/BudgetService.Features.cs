@@ -5,14 +5,14 @@ public partial class BudgetService
 {
     // ——— Accounts ———
 
-    public List<BudgetAccountModel> GetAccounts()
+    public List<BudgetAccountModel> GetAccounts(bool activeOnly = true)
     {
         using var conn = _db.GetConnection();
         conn.Open();
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            SELECT Id, Name, AccountType, Currency, CreditLimit, CurrentBalance
-            FROM BudgetAccounts ORDER BY Id";
+            SELECT Id, Name, AccountType, Currency, CreditLimit, CurrentBalance, IsActive
+            FROM BudgetAccounts" + (activeOnly ? " WHERE IsActive=1" : "") + " ORDER BY Id";
         var list = new List<BudgetAccountModel>();
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
@@ -24,11 +24,25 @@ public partial class BudgetService
                 AccountType = reader.GetString(2),
                 Currency = reader.GetString(3),
                 CreditLimit = reader.IsDBNull(4) ? null : reader.GetDouble(4),
-                CurrentBalance = reader.GetDouble(5)
+                CurrentBalance = reader.GetDouble(5),
+                IsActive = reader.FieldCount > 6 ? reader.GetInt64(6) != 0 : true
             });
         }
 
         return list;
+    }
+
+    public bool SetAccountActive(int id, bool isActive, ulong actor)
+    {
+        using var conn = _db.GetConnection();
+        conn.Open();
+        var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE BudgetAccounts SET IsActive=$a WHERE Id=$id";
+        cmd.Parameters.AddWithValue("$a", isActive ? 1 : 0);
+        cmd.Parameters.AddWithValue("$id", id);
+        var ok = cmd.ExecuteNonQuery() > 0;
+        if (ok) Audit(actor, "account", id, isActive ? "activate" : "archive");
+        return ok;
     }
 
     public int CreateAccount(string name, string accountType, string currency, double? creditLimit, ulong actor)
@@ -293,6 +307,19 @@ public partial class BudgetService
         cmd.Parameters.AddWithValue("$id", id);
         var ok = cmd.ExecuteNonQuery() > 0;
         if (ok) Audit(actor, "bill", id, "update");
+        return ok;
+    }
+
+    public bool SetBillCalendarItem(int id, int? calendarItemId, ulong actor)
+    {
+        using var conn = _db.GetConnection();
+        conn.Open();
+        var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE BudgetBills SET CalendarItemId=$cal WHERE Id=$id";
+        cmd.Parameters.AddWithValue("$cal", (object?)calendarItemId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$id", id);
+        var ok = cmd.ExecuteNonQuery() > 0;
+        if (ok) Audit(actor, "bill", id, calendarItemId.HasValue ? "link_calendar" : "unlink_calendar");
         return ok;
     }
 

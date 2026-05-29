@@ -24,4 +24,8 @@
     <Compile Remove="HomeBot.Tests/**" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="HomeBot.Tests" />
+  </ItemGroup>
+
 </Project>

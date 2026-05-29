@@ -49,6 +49,7 @@ public class DatabaseService
     {
         using var conn = new SqliteConnection(_connectionString);
         conn.Open();
+        ApplySqlitePragmas(conn);
 
         var cmd = conn.CreateCommand();
 
@@ -241,5 +242,15 @@ public class DatabaseService
     public SqliteConnection GetConnection()
     {
         return new SqliteConnection(_connectionString);
+    }
+
+    /// <summary>
+    /// WAL + busy timeout: better concurrent reads (API + reminder loop) on a single SQLite file.
+    /// </summary>
+    private static void ApplySqlitePragmas(SqliteConnection conn)
+    {
+        using var pragma = conn.CreateCommand();
+        pragma.CommandText = "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;";
+        pragma.ExecuteNonQuery();
     }
 }

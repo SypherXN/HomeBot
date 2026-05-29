@@ -18,6 +18,7 @@ public sealed class BudgetAccountModel
     public string Currency { get; set; } = "USD";
     public double? CreditLimit { get; set; }
     public double CurrentBalance { get; set; }
+    public bool IsActive { get; set; } = true;
 }
 
 public sealed class BudgetTransactionSplitModel

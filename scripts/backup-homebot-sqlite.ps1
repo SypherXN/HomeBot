@@ -1,5 +1,6 @@
 # Backs up repo-root homebot.db (+ WAL/SHM) with a timestamp. Run while HomeBot is STOPPED
 # so the copy is consistent (close dotnet / stop Task Scheduler job), unless you pass -Force.
+# Off-site: .\scripts\sync-homebot-backups-to-gdrive.ps1 — docs/SETUP.md §20.2
 # Usage: .\scripts\backup-homebot-sqlite.ps1 [-RepoRoot path] [-BackupDir path] [-Force]
 
 param(

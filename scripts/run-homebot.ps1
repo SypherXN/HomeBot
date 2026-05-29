@@ -6,7 +6,7 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $repoRoot
 $envFile = Join-Path $repoRoot ".env"
 if (-not (Test-Path $envFile)) {
-    throw ".env not found at $envFile — copy .env.example to .env and fill it in (see SETUP.md)."
+    throw ".env not found at $envFile — copy .env.example to .env and fill it in (see docs/SETUP.md)."
 }
 
 Get-Content $envFile | ForEach-Object {

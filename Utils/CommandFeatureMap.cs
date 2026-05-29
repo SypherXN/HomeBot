@@ -49,6 +49,12 @@ public static class CommandFeatureMap
             "calendar-instance-reset" => "calendar",
             "calendar-instance-edit" => "calendar",
 
+            // --- BUDGET ---
+            "budget-add" => "budget",
+            "budget-summary" => "budget",
+            "budget-digest" => "budget",
+            "budget-list" => "budget",
+
             // --- SYSTEM (no restriction) ---
             "setup-set" => null,
             "setup-view" => null,

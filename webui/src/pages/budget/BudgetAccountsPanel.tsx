@@ -1,5 +1,11 @@
-import { useState } from "react";
-import { postBudgetAccount, postBudgetTransfer, type BudgetAccount } from "../../api";
+import { useCallback, useEffect, useState } from "react";
+import {
+  getBudgetAccounts,
+  patchBudgetAccount,
+  postBudgetAccount,
+  postBudgetTransfer,
+  type BudgetAccount,
+} from "../../api";
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -12,7 +18,9 @@ type Props = {
   onSaved: () => Promise<void>;
 };
 
-export default function BudgetAccountsPanel({ token, actor, accounts, onSaved }: Props) {
+export default function BudgetAccountsPanel({ token, actor, accounts: accountsProp, onSaved }: Props) {
+  const [showArchived, setShowArchived] = useState(false);
+  const [accounts, setAccounts] = useState(accountsProp);
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState("checking");
   const [xferFrom, setXferFrom] = useState("");
@@ -21,6 +29,21 @@ export default function BudgetAccountsPanel({ token, actor, accounts, onSaved }:
   const [xferNote, setXferNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const reloadAccounts = useCallback(async () => {
+    const list = await getBudgetAccounts(token, showArchived);
+    setAccounts(list);
+  }, [token, showArchived]);
+
+  useEffect(() => {
+    setAccounts(accountsProp);
+  }, [accountsProp]);
+
+  useEffect(() => {
+    void reloadAccounts();
+  }, [reloadAccounts]);
+
+  const activeAccounts = accounts.filter((a) => a.isActive !== false);
 
   async function handleAddAccount(e: React.FormEvent) {
     e.preventDefault();
@@ -31,6 +54,7 @@ export default function BudgetAccountsPanel({ token, actor, accounts, onSaved }:
       await postBudgetAccount(token, actor, { name: newName.trim(), accountType: newType });
       setNewName("");
       await onSaved();
+      await reloadAccounts();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -57,6 +81,36 @@ export default function BudgetAccountsPanel({ token, actor, accounts, onSaved }:
       setXferAmount("");
       setXferNote("");
       await onSaved();
+      await reloadAccounts();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleArchive(id: number) {
+    if (!actor || !window.confirm("Archive this account? It will be hidden from pickers but history remains."))
+      return;
+    setBusy(true);
+    try {
+      await patchBudgetAccount(token, actor, id, { isActive: false });
+      await onSaved();
+      await reloadAccounts();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRestore(id: number) {
+    if (!actor) return;
+    setBusy(true);
+    try {
+      await patchBudgetAccount(token, actor, id, { isActive: true });
+      await onSaved();
+      await reloadAccounts();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -66,7 +120,17 @@ export default function BudgetAccountsPanel({ token, actor, accounts, onSaved }:
 
   return (
     <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-      <h2 className="mb-3 text-lg font-medium text-white">Accounts & transfers</h2>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-medium text-white">Accounts & transfers</h2>
+        <label className="flex items-center gap-2 text-xs text-slate-400">
+          <input
+            type="checkbox"
+            checked={showArchived}
+            onChange={(e) => setShowArchived(e.target.checked)}
+          />
+          Show archived
+        </label>
+      </div>
       <p className="mb-3 text-xs text-slate-500">
         Track balances across checking, savings, or credit accounts. Transfers move money between accounts without
         affecting category totals.
@@ -79,16 +143,43 @@ export default function BudgetAccountsPanel({ token, actor, accounts, onSaved }:
           {accounts.map((a) => (
             <li
               key={a.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-800 px-3 py-2 text-slate-300"
+              className={`flex flex-wrap items-center justify-between gap-2 rounded border px-3 py-2 ${
+                a.isActive === false
+                  ? "border-slate-800/60 text-slate-500"
+                  : "border-slate-800 text-slate-300"
+              }`}
             >
               <span>
                 {a.name}{" "}
                 <span className="text-xs text-slate-500">
                   ({a.accountType}
                   {a.currency !== "USD" ? ` · ${a.currency}` : ""})
+                  {a.isActive === false ? " · archived" : ""}
                 </span>
               </span>
-              <span className="font-medium text-white">${formatMoney(a.currentBalance)}</span>
+              <span className="flex items-center gap-2">
+                <span className="font-medium text-white">${formatMoney(a.currentBalance)}</span>
+                {actor && a.isActive !== false && (
+                  <button
+                    type="button"
+                    className="text-xs text-slate-400 hover:text-slate-200"
+                    disabled={busy}
+                    onClick={() => void handleArchive(a.id)}
+                  >
+                    Archive
+                  </button>
+                )}
+                {actor && a.isActive === false && (
+                  <button
+                    type="button"
+                    className="text-xs text-blue-400"
+                    disabled={busy}
+                    onClick={() => void handleRestore(a.id)}
+                  >
+                    Restore
+                  </button>
+                )}
+              </span>
             </li>
           ))}
         </ul>
@@ -135,7 +226,7 @@ export default function BudgetAccountsPanel({ token, actor, accounts, onSaved }:
               className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
             >
               <option value="">From</option>
-              {accounts.map((a) => (
+              {activeAccounts.map((a) => (
                 <option key={`f-${a.id}`} value={a.id}>
                   {a.name}
                 </option>
@@ -148,7 +239,7 @@ export default function BudgetAccountsPanel({ token, actor, accounts, onSaved }:
               className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
             >
               <option value="">To</option>
-              {accounts.map((a) => (
+              {activeAccounts.map((a) => (
                 <option key={`t-${a.id}`} value={a.id}>
                   {a.name}
                 </option>
@@ -169,7 +260,7 @@ export default function BudgetAccountsPanel({ token, actor, accounts, onSaved }:
             />
             <button
               type="submit"
-              disabled={busy || accounts.length < 2}
+              disabled={busy || activeAccounts.length < 2}
               className="rounded bg-blue-600 px-3 py-1 text-xs text-white disabled:opacity-50"
             >
               Record transfer

@@ -7,6 +7,7 @@ import {
   deleteMoneyTransaction,
   getMoneySummary,
   getMoneyTransactions,
+  patchMoneyTransaction,
   postMoneyExpenseSplit,
   postMoneyPayment,
   postUndo,
@@ -141,6 +142,12 @@ export default function MoneyPage() {
   const [banner, setBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [deleteBusyId, setDeleteBusyId] = useState<number | null>(null);
   const [undoBusy, setUndoBusy] = useState(false);
+  const [editRow, setEditRow] = useState<MoneyTransactionListItem | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editAmount, setEditAmount] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [editBusy, setEditBusy] = useState(false);
 
   const [splitName, setSplitName] = useState("");
   const [splitAmount, setSplitAmount] = useState("");
@@ -314,6 +321,35 @@ export default function MoneyPage() {
       showBanner("err", err instanceof Error ? err.message : String(err));
     } finally {
       setUndoBusy(false);
+    }
+  }
+
+  function openEdit(row: MoneyTransactionListItem) {
+    setEditRow(row);
+    setEditName(row.name);
+    setEditAmount(String(row.amount));
+    setEditDesc(row.description ?? "");
+    setEditNotes(row.notes ?? "");
+  }
+
+  async function handleEditSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editRow || !canAuth) return;
+    setEditBusy(true);
+    try {
+      await patchMoneyTransaction(tok, editRow.id, {
+        name: editName.trim() || undefined,
+        amountInput: editAmount.trim() || undefined,
+        description: editDesc.trim() || undefined,
+        notes: editNotes.trim() || undefined,
+      });
+      showBanner("ok", "Transaction updated.");
+      setEditRow(null);
+      await loadList();
+    } catch (err) {
+      showBanner("err", err instanceof Error ? err.message : String(err));
+    } finally {
+      setEditBusy(false);
     }
   }
 
@@ -751,14 +787,23 @@ export default function MoneyPage() {
                       <div className="font-mono text-xs text-slate-500">{owed.snowflake}</div>
                     </td>
                     <td className="px-3 py-3">
-                      <button
-                        type="button"
-                        disabled={!canActor || deleteBusyId === row.id}
-                        onClick={() => void handleDelete(row)}
-                        className="rounded-lg border border-red-800/70 bg-red-950/40 px-2.5 py-1.5 text-xs font-medium text-red-100 hover:bg-red-950/70 disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        {deleteBusyId === row.id ? "…" : "Delete"}
-                      </button>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openEdit(row)}
+                          className="rounded-lg border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-700"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!canActor || deleteBusyId === row.id}
+                          onClick={() => void handleDelete(row)}
+                          className="rounded-lg border border-red-800/70 bg-red-950/40 px-2.5 py-1.5 text-xs font-medium text-red-100 hover:bg-red-950/70 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {deleteBusyId === row.id ? "…" : "Delete"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                   );
@@ -820,6 +865,67 @@ export default function MoneyPage() {
           </nav>
         )}
       </section>
+
+      {editRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-xl">
+            <h3 className="mb-3 text-lg font-semibold text-white">Edit transaction #{editRow.id}</h3>
+            <form onSubmit={(e) => void handleEditSave(e)} className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">Name</label>
+                <input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  required
+                  className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">Amount</label>
+                <input
+                  value={editAmount}
+                  onChange={(e) => setEditAmount(e.target.value)}
+                  required
+                  className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">Description</label>
+                <input
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">Notes</label>
+                <textarea
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  rows={2}
+                  className="w-full resize-y rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditRow(null)}
+                  className="rounded-lg px-3 py-2 text-sm text-slate-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editBusy}
+                  className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50"
+                >
+                  {editBusy ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

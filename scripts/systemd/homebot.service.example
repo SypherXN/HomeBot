@@ -2,7 +2,10 @@
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now homebot.service
 #
+# Or use: sudo bash scripts/ubuntu/install-homebot.sh <git-url>
+#
 # Adjust paths if you did not use the default /opt/homebot layout.
+# EnvironmentFile: use KEY=value lines only (no "export"). Avoid # on the same line as a value.
 
 [Unit]
 Description=HomeBot Discord + API

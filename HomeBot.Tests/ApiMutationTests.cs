@@ -480,4 +480,182 @@ public sealed class ApiMutationTests : IDisposable
 
         Assert.True(found, "Undo should restore deleted buy row.");
     }
+
+    [Fact]
+    public async Task Buy_list_filters_by_assignedTo_and_store()
+    {
+        const ulong assignee = Actor + 10;
+        const string storeA = "StoreAlpha";
+        const string storeB = "StoreBeta";
+
+        await _client.PostAsJsonAsync(
+            $"/api/buy/items?actorUserId={Actor}",
+            new { name = "FilterA", store = storeA, assignedTo = assignee });
+        await _client.PostAsJsonAsync(
+            $"/api/buy/items?actorUserId={Actor}",
+            new { name = "FilterB", store = storeB, assignedTo = Actor });
+
+        var byAssignee = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/buy/items?assignedTo={assignee}&page=0");
+        var namesA = byAssignee.GetProperty("items").EnumerateArray()
+            .Select(i => i.GetProperty("name").GetString())
+            .ToHashSet();
+        Assert.Contains("FilterA", namesA);
+        Assert.DoesNotContain("FilterB", namesA);
+
+        var byStore = await _client.GetFromJsonAsync<JsonElement>(
+            $"/api/buy/items?store={storeB}&page=0");
+        var namesB = byStore.GetProperty("items").EnumerateArray()
+            .Select(i => i.GetProperty("name").GetString())
+            .ToHashSet();
+        Assert.Contains("FilterB", namesB);
+        Assert.DoesNotContain("FilterA", namesB);
+    }
+
+    [Fact]
+    public async Task Wishlist_put_persists_description_in_list()
+    {
+        const string name = "ApiWishDesc";
+
+        var post = await _client.PostAsJsonAsync(
+            $"/api/wishlist/items?actorUserId={Actor}",
+            new { name, description = "initial blurb", price = "$5" });
+        post.EnsureSuccessStatusCode();
+
+        var list1 = await _client.GetFromJsonAsync<JsonElement>("/api/wishlist/items?page=0");
+        int id = 0;
+        foreach (var el in list1.GetProperty("items").EnumerateArray())
+        {
+            if (el.GetProperty("name").GetString() == name)
+            {
+                id = el.GetProperty("id").GetInt32();
+                Assert.Equal("initial blurb", el.GetProperty("description").GetString());
+                break;
+            }
+        }
+
+        Assert.NotEqual(0, id);
+
+        var put = await _client.PutAsJsonAsync(
+            $"/api/wishlist/items/{id}",
+            new { name, description = "updated blurb", price = "$8" });
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+
+        var list2 = await _client.GetFromJsonAsync<JsonElement>("/api/wishlist/items?page=0");
+        var row = list2.GetProperty("items").EnumerateArray().First(i => i.GetProperty("id").GetInt32() == id);
+        Assert.Equal("updated blurb", row.GetProperty("description").GetString());
+        Assert.Equal("$8", row.GetProperty("price").GetString());
+    }
+
+    [Fact]
+    public async Task Calendar_monthly_recurrence_expands_in_range()
+    {
+        _services.GetRequiredService<ConfigService>().Set("timezone", "UTC");
+
+        var post = await _client.PostAsJsonAsync(
+            "/api/calendar/items",
+            new
+            {
+                title = "ApiMonthly",
+                start = "2026-01-15 09:00",
+                allDay = false,
+                assignToEveryone = false,
+                recurrence = "monthly",
+                timezone = "UTC",
+            });
+        post.EnsureSuccessStatusCode();
+
+        var list = await _client.GetFromJsonAsync<JsonElement>("/api/calendar/items?page=0");
+        int id = 0;
+        foreach (var el in list.GetProperty("items").EnumerateArray())
+        {
+            if (el.GetProperty("title").GetString() == "ApiMonthly")
+            {
+                id = el.GetProperty("id").GetInt32();
+                break;
+            }
+        }
+
+        Assert.NotEqual(0, id);
+
+        var range = await _client.GetAsync(
+            "/api/calendar/range?from=2026-01-01&to=2026-04-01&timeZone=UTC");
+        range.EnsureSuccessStatusCode();
+        using var doc = JsonDocument.Parse(await range.Content.ReadAsStringAsync());
+        var hits = doc.RootElement.EnumerateArray()
+            .Where(r => r.GetProperty("id").GetInt32() == id)
+            .Select(r => r.GetProperty("instanceStartUtc").GetString())
+            .ToList();
+
+        Assert.Equal(3, hits.Count);
+        Assert.Contains("2026-01-15T09:00:00Z", hits);
+        Assert.Contains("2026-02-15T09:00:00Z", hits);
+        Assert.Contains("2026-03-15T09:00:00Z", hits);
+    }
+
+    [Fact]
+    public async Task Calendar_series_patch_updates_metadata()
+    {
+        _services.GetRequiredService<ConfigService>().Set("timezone", "UTC");
+        const ulong assignee = Actor + 20;
+
+        var post = await _client.PostAsJsonAsync(
+            "/api/calendar/items",
+            new
+            {
+                title = "ApiSeriesMeta",
+                start = "2026-05-10 10:00",
+                end = "2026-05-10 11:00",
+                allDay = false,
+                assignToEveryone = false,
+                timezone = "UTC",
+            });
+        post.EnsureSuccessStatusCode();
+
+        var list = await _client.GetFromJsonAsync<JsonElement>("/api/calendar/items?page=0");
+        int id = 0;
+        foreach (var el in list.GetProperty("items").EnumerateArray())
+        {
+            if (el.GetProperty("title").GetString() == "ApiSeriesMeta")
+            {
+                id = el.GetProperty("id").GetInt32();
+                break;
+            }
+        }
+
+        Assert.NotEqual(0, id);
+
+        var patch = await _client.PatchAsJsonAsync(
+            $"/api/calendar/items/{id}",
+            new
+            {
+                allDay = true,
+                reminder = "30m",
+                recurrence = "weekly",
+                assignedTo = assignee.ToString(),
+            });
+        Assert.Equal(HttpStatusCode.OK, patch.StatusCode);
+
+        var detail = await _client.GetFromJsonAsync<JsonElement>($"/api/calendar/items/{id}");
+        Assert.True(detail.GetProperty("allDay").GetBoolean());
+        Assert.Equal("weekly", detail.GetProperty("recurrence").GetString());
+        Assert.Equal("30m", detail.GetProperty("reminder").GetString());
+        Assert.Equal(assignee.ToString(), detail.GetProperty("assignedTo").GetString());
+
+        var clearEnd = await _client.PatchAsJsonAsync(
+            $"/api/calendar/items/{id}",
+            new { clearEnd = true });
+        Assert.Equal(HttpStatusCode.OK, clearEnd.StatusCode);
+
+        detail = await _client.GetFromJsonAsync<JsonElement>($"/api/calendar/items/{id}");
+        Assert.Equal("", detail.GetProperty("end").GetString());
+
+        var clearAssignee = await _client.PatchAsJsonAsync(
+            $"/api/calendar/items/{id}",
+            new { clearAssignedTo = true });
+        Assert.Equal(HttpStatusCode.OK, clearAssignee.StatusCode);
+
+        detail = await _client.GetFromJsonAsync<JsonElement>($"/api/calendar/items/{id}");
+        Assert.Equal(JsonValueKind.Null, detail.GetProperty("assignedTo").ValueKind);
+    }
 }
