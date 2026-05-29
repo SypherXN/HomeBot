@@ -9,6 +9,7 @@ import {
   getMoneyTransactions,
   getBudgetSummaryMonth,
   getBudgetSummaryByCategory,
+  getBudgetGoals,
   getWishlistItems,
   type MoneySummary,
   type PagedBuyList,
@@ -51,7 +52,14 @@ type DashboardBundle = {
   wishlist: PagedWishlistList;
   moneyTx: PagedMoneyTransactions;
   moneySummary: MoneySummary | null;
-  budgetMonth: { expenses: number; topCategory: string } | null;
+  budgetMonth: {
+    income: number;
+    expenses: number;
+    net: number;
+    topCategory: string;
+    goalsCount: number;
+    goalsProgress: string | null;
+  } | null;
   today: PagedCalendarList;
   upcoming: PagedCalendarList;
   tasks: PagedCalendarList;
@@ -81,7 +89,7 @@ export default function DashboardPage() {
       const n2 = canPairSummary ? roster.members[1].displayName : "";
 
       const month = new Date().toISOString().slice(0, 7);
-      const [buy, wishlist, moneyTx, today, upcoming, tasks, moneySummary, budgetSummary, budgetCats] =
+      const [buy, wishlist, moneyTx, today, upcoming, tasks, moneySummary, budgetSummary, budgetCats, budgetGoals] =
         await Promise.all([
         getBuyItems(tok, 0),
         getWishlistItems(tok, 0),
@@ -94,13 +102,21 @@ export default function DashboardPage() {
           : Promise.resolve(null as MoneySummary | null),
         getBudgetSummaryMonth(tok, month).catch(() => null),
         getBudgetSummaryByCategory(tok, month).catch(() => []),
+        getBudgetGoals(tok).catch(() => []),
       ]);
       const topCat = budgetCats[0];
+      const topGoal = budgetGoals[0];
       const budgetMonth =
         budgetSummary != null
           ? {
+              income: budgetSummary.totalIncome,
               expenses: budgetSummary.totalExpenses,
+              net: budgetSummary.net,
               topCategory: topCat ? `${topCat.label} (${topCat.percent}%)` : "—",
+              goalsCount: budgetGoals.length,
+              goalsProgress: topGoal
+                ? `${topGoal.name}: ${topGoal.percentComplete}%`
+                : null,
             }
           : null;
 
@@ -226,14 +242,27 @@ export default function DashboardPage() {
             subtitle="This month"
             stat={
               slice.value.budgetMonth
-                ? `$${formatMoney(slice.value.budgetMonth.expenses)} spent`
+                ? `$${formatMoney(slice.value.budgetMonth.net)} net`
                 : "—"
             }
           >
             {slice.value.budgetMonth ? (
-              <p className="mt-2 text-sm text-slate-400">
-                Top category: {slice.value.budgetMonth.topCategory}
-              </p>
+              <div className="mt-2 space-y-1 text-sm text-slate-400">
+                <p>
+                  Income ${formatMoney(slice.value.budgetMonth.income)} · spent $
+                  {formatMoney(slice.value.budgetMonth.expenses)}
+                </p>
+                <p>Top category: {slice.value.budgetMonth.topCategory}</p>
+                {slice.value.budgetMonth.goalsCount > 0 && (
+                  <p>
+                    {slice.value.budgetMonth.goalsCount} savings goal
+                    {slice.value.budgetMonth.goalsCount === 1 ? "" : "s"}
+                    {slice.value.budgetMonth.goalsProgress
+                      ? ` · ${slice.value.budgetMonth.goalsProgress}`
+                      : ""}
+                  </p>
+                )}
+              </div>
             ) : (
               <p className="mt-2 text-sm text-slate-500">No budget data yet.</p>
             )}

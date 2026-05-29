@@ -12,6 +12,7 @@ import {
   postWishlistItem,
   postWishlistItemComplete,
   postUndo,
+  putWishlistItem,
   putWishlistTagCatalog,
   type PagedWishlistList,
   type WishlistListItem,
@@ -68,6 +69,15 @@ export default function WishlistPage() {
   const [addSubmitting, setAddSubmitting] = useState(false);
 
   const [actionBusyId, setActionBusyId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editOwner, setEditOwner] = useState("");
+  const [editPrice, setEditPrice] = useState("");
+  const [editLink, setEditLink] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [editPriority, setEditPriority] = useState("");
+  const [editTagPick, setEditTagPick] = useState<string[]>([]);
   const [clearBusy, setClearBusy] = useState(false);
   const [undoBusy, setUndoBusy] = useState(false);
   const [banner, setBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -197,6 +207,46 @@ export default function WishlistPage() {
   function showBanner(kind: "ok" | "err", text: string) {
     setBanner({ kind, text });
     window.setTimeout(() => setBanner(null), 5000);
+  }
+
+  function startEdit(item: WishlistListItem) {
+    setEditingId(item.id);
+    setEditName(item.name);
+    setEditOwner(item.owner);
+    setEditPrice(item.price || "");
+    setEditLink(item.link || "");
+    setEditDesc(item.description || "");
+    setEditNotes(item.notes || "");
+    setEditPriority(item.priority || "");
+    setEditTagPick(item.tags ? [...item.tags] : []);
+  }
+
+  async function saveEdit(item: WishlistListItem) {
+    if (!canAuth) return;
+    const tagsPayload =
+      catalogTags.length > 0
+        ? editTagPick.length > 0
+          ? [...editTagPick].sort().join(",")
+          : ""
+        : undefined;
+    await putWishlistItem(tok, item.id, {
+      name: editName.trim() || item.name,
+      ownerUserId: editOwner.trim() || undefined,
+      price: editPrice.trim() || undefined,
+      link: editLink.trim() || undefined,
+      description: editDesc.trim() || undefined,
+      notes: editNotes.trim() || undefined,
+      priority: editPriority.trim() || undefined,
+      tags: tagsPayload,
+    });
+    setEditingId(null);
+    showBanner("ok", "Wish updated.");
+    await refreshDbOwners();
+    await loadList();
+  }
+
+  function toggleEditTagPick(t: string) {
+    setEditTagPick((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
   }
 
   async function handleAdd(e: React.FormEvent) {
@@ -729,6 +779,96 @@ export default function WishlistPage() {
                 key={item.id}
                 className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 shadow-sm sm:p-5"
               >
+                {editingId === item.id ? (
+                  <div className="space-y-3">
+                    <input
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                    />
+                    <select
+                      value={editOwner}
+                      onChange={(e) => setEditOwner(e.target.value)}
+                      className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                    >
+                      {ownerPickerOptions.map((o) => (
+                        <option key={`edit-${o.value || "def"}`} value={o.value || item.owner}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <input
+                        value={editPrice}
+                        onChange={(e) => setEditPrice(e.target.value)}
+                        placeholder="Price"
+                        className="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                      />
+                      <input
+                        value={editPriority}
+                        onChange={(e) => setEditPriority(e.target.value)}
+                        placeholder="Priority"
+                        className="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                      />
+                    </div>
+                    <input
+                      value={editLink}
+                      onChange={(e) => setEditLink(e.target.value)}
+                      placeholder="Link"
+                      className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                    />
+                    <input
+                      value={editDesc}
+                      onChange={(e) => setEditDesc(e.target.value)}
+                      placeholder="Description"
+                      className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                    />
+                    <textarea
+                      value={editNotes}
+                      onChange={(e) => setEditNotes(e.target.value)}
+                      rows={2}
+                      placeholder="Notes"
+                      className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                    />
+                    {catalogTags.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {catalogTags.map((t) => {
+                          const on = editTagPick.includes(t);
+                          return (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => toggleEditTagPick(t)}
+                              className={`rounded-full border px-3 py-1 text-sm ${
+                                on
+                                  ? "border-blue-500 bg-blue-900/50 text-blue-100"
+                                  : "border-slate-600 bg-slate-950 text-slate-300"
+                              }`}
+                            >
+                              {t}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void saveEdit(item)}
+                        className="rounded-lg border border-blue-600 bg-blue-700 px-3 py-2 text-sm text-white"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(null)}
+                        className="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-300"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0 flex-1 space-y-2">
                     <p className="text-lg font-semibold leading-snug text-white">{item.name}</p>
@@ -768,6 +908,12 @@ export default function WishlistPage() {
                         </dd>
                       </div>
                       <div className="sm:col-span-2">
+                        <dt className="text-xs uppercase tracking-wide text-slate-500">Description</dt>
+                        <dd className="whitespace-pre-wrap break-words text-slate-200">
+                          {item.description || "—"}
+                        </dd>
+                      </div>
+                      <div className="sm:col-span-2">
                         <dt className="text-xs uppercase tracking-wide text-slate-500">Tags</dt>
                         <dd className="text-slate-200">
                           {item.tags?.length ? (
@@ -799,6 +945,16 @@ export default function WishlistPage() {
                     </dl>
                   </div>
                   <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:min-w-[140px]">
+                    {canAuth && (
+                      <button
+                        type="button"
+                        disabled={actionBusyId === item.id}
+                        onClick={() => startEdit(item)}
+                        className="min-h-[44px] w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2.5 text-sm font-medium text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Edit
+                      </button>
+                    )}
                     <button
                       type="button"
                       disabled={!canActor || actionBusyId === item.id}
@@ -817,6 +973,7 @@ export default function WishlistPage() {
                     </button>
                   </div>
                 </div>
+                )}
               </li>
             ))}
           </ul>

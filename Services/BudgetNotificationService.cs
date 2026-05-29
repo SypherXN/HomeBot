@@ -18,6 +18,7 @@ public class BudgetNotificationService
         {
             try
             {
+                _budget.ProcessDueRecurring();
                 await SendDueAlertsAsync();
                 await MaybeSendWeeklyDigestAsync();
             }

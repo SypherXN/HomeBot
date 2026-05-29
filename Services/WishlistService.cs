@@ -77,7 +77,7 @@ public class WishlistService
         };
 
         cmd.CommandText = $@"
-            SELECT Id, Name, Owner, Price, Link, Notes, Priority, Tags, PurchasedBy
+            SELECT Id, Name, Owner, Price, Link, Description, Notes, Priority, Tags, PurchasedBy
             FROM WishlistItems
             WHERE {string.Join(" AND ", conditions)}
             ORDER BY {orderBy}";
@@ -88,7 +88,7 @@ public class WishlistService
 
         while (reader.Read())
         {
-            var rawTags = reader.IsDBNull(7) ? "" : reader.GetString(7);
+            var rawTags = reader.IsDBNull(8) ? "" : reader.GetString(8);
             var tagsList = rawTags
                 .Split(',', StringSplitOptions.RemoveEmptyEntries)
                 .Select(t => t.Trim().ToLower())
@@ -96,7 +96,7 @@ public class WishlistService
                 .ToList();
 
             var itemOwner = (ulong)reader.GetInt64(2);
-            var purchasedBy = reader.IsDBNull(8) ? null : (ulong?)reader.GetInt64(8);
+            var purchasedBy = reader.IsDBNull(9) ? null : (ulong?)reader.GetInt64(9);
 
             allItems.Add(new WishlistListItemModel
             {
@@ -106,8 +106,9 @@ public class WishlistService
                 OwnerMemberLabel = HouseholdIdentity.MemberLabel(itemOwner),
                 Price = reader.IsDBNull(3) ? "" : reader.GetString(3),
                 Link = reader.IsDBNull(4) ? "" : reader.GetString(4),
-                Notes = reader.IsDBNull(5) ? "" : reader.GetString(5),
-                Priority = reader.IsDBNull(6) ? "" : reader.GetString(6),
+                Description = reader.IsDBNull(5) ? "" : reader.GetString(5),
+                Notes = reader.IsDBNull(6) ? "" : reader.GetString(6),
+                Priority = reader.IsDBNull(7) ? "" : reader.GetString(7),
                 Tags = tagsList,
                 PurchasedBy = purchasedBy,
                 PurchasedByMemberLabel = HouseholdIdentity.MemberLabel(purchasedBy)

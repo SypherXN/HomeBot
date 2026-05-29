@@ -515,7 +515,46 @@ public partial class BudgetService
             }
         }
 
+        var largeThreshold = ReadLargeExpenseThresholdUsd();
+        if (largeThreshold > 0)
+        {
+            using var conn = _db.GetConnection();
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+                SELECT Id, Amount, COALESCE(Merchant, ''), COALESCE(Note, '')
+                FROM BudgetTransactions
+                WHERE Type = 'expense' AND Amount >= $t
+                  AND TransactionDate >= date('now', '-7 days')
+                ORDER BY TransactionDate DESC, Id DESC
+                LIMIT 5";
+            cmd.Parameters.AddWithValue("$t", largeThreshold);
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                var id = r.GetInt32(0);
+                var amt = r.GetDouble(1);
+                var merchant = r.GetString(2);
+                var note = r.GetString(3);
+                var label = !string.IsNullOrWhiteSpace(merchant) ? merchant : note;
+                if (string.IsNullOrWhiteSpace(label)) label = "expense";
+                items.Add(new BudgetNotificationItemModel
+                {
+                    Kind = "large_expense",
+                    Message = $"Large expense #{id}: ${amt:N2} ({label.Trim()})"
+                });
+            }
+        }
+
         return items;
+    }
+
+    private static double ReadLargeExpenseThresholdUsd()
+    {
+        var raw = Environment.GetEnvironmentVariable("HOMEBOT_BUDGET_LARGE_EXPENSE_USD");
+        if (string.IsNullOrWhiteSpace(raw))
+            return 250;
+        return double.TryParse(raw, out var v) && v > 0 ? v : 0;
     }
 
     public string BuildDigestText(bool monthly = false)
@@ -528,6 +567,13 @@ public partial class BudgetService
         sb.AppendLine("**Top categories:**");
         foreach (var s in GetSummaryByCategory(month, null, null).Take(5))
             sb.AppendLine($"• {s.Label}: ${s.Total:N2} ({s.Percent}%)");
+        var goals = GetGoals();
+        if (goals.Count > 0)
+        {
+            sb.AppendLine("**Savings goals:**");
+            foreach (var g in goals.Take(5))
+                sb.AppendLine($"• {g.Name}: ${g.CurrentAmount:N2} / ${g.TargetAmount:N2} ({g.PercentComplete:0}%)");
+        }
         foreach (var n in CollectPendingNotifications())
             sb.AppendLine($"⚠️ {n.Message}");
         return sb.ToString();

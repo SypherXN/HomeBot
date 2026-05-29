@@ -12,6 +12,7 @@ import {
   postBuyItem,
   postBuyItemComplete,
   postUndo,
+  putBuyItem,
   putBuyTagCatalog,
   type BuyListItem,
   type BuyListSort,
@@ -45,6 +46,8 @@ export default function BuyPage() {
   const [catalogBusy, setCatalogBusy] = useState(false);
 
   const [filterTag, setFilterTag] = useState("");
+  const [filterAssigned, setFilterAssigned] = useState("");
+  const [filterStore, setFilterStore] = useState("");
   const [sortBy, setSortBy] = useState<BuyListSort>("id");
 
   const [listPage, setListPage] = useState(0);
@@ -62,6 +65,13 @@ export default function BuyPage() {
   const [addSubmitting, setAddSubmitting] = useState(false);
 
   const [actionBusyId, setActionBusyId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editQty, setEditQty] = useState("");
+  const [editStore, setEditStore] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [editAssigned, setEditAssigned] = useState("");
+  const [editTagPick, setEditTagPick] = useState<string[]>([]);
   const [clearBusy, setClearBusy] = useState(false);
   const [undoBusy, setUndoBusy] = useState(false);
   const [banner, setBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -100,6 +110,8 @@ export default function BuyPage() {
       const res = await getBuyItems(tok, listPage, {
         tag: filterTag || undefined,
         sort: sortBy,
+        assignedTo: filterAssigned || undefined,
+        store: filterStore || undefined,
       });
       if (res.items.length === 0 && res.hasPrev) {
         setListPage((p) => Math.max(0, p - 1));
@@ -112,11 +124,46 @@ export default function BuyPage() {
     } finally {
       setListLoading(false);
     }
-  }, [canAuth, tok, listPage, filterTag, sortBy]);
+  }, [canAuth, tok, listPage, filterTag, filterAssigned, filterStore, sortBy]);
 
   useEffect(() => {
     void loadList();
   }, [loadList]);
+
+  function startEdit(item: BuyListItem) {
+    setEditingId(item.id);
+    setEditName(item.name);
+    setEditQty(item.quantity || "1");
+    setEditStore(item.store || "");
+    setEditNotes(item.notes || "");
+    setEditAssigned(item.assignedTo != null ? String(item.assignedTo) : "");
+    setEditTagPick(item.tags ? [...item.tags] : []);
+  }
+
+  async function saveEdit(item: BuyListItem) {
+    if (!canAuth) return;
+    const tagsPayload =
+      catalogTags.length > 0
+        ? editTagPick.length > 0
+          ? [...editTagPick].sort().join(",")
+          : ""
+        : undefined;
+    await putBuyItem(tok, item.id, {
+      name: editName.trim() || item.name,
+      quantity: editQty.trim() || undefined,
+      store: editStore.trim() || undefined,
+      notes: editNotes.trim() || undefined,
+      assignedTo: editAssigned.trim() || null,
+      tags: tagsPayload,
+    });
+    setEditingId(null);
+    showBanner("ok", "Item updated.");
+    await loadList();
+  }
+
+  function toggleEditTagPick(t: string) {
+    setEditTagPick((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
+  }
 
   function showBanner(kind: "ok" | "err", text: string) {
     setBanner({ kind, text });
@@ -402,7 +449,7 @@ export default function BuyPage() {
 
       {/* Filter + sort */}
       {canAuth && (
-        <div className="mb-6 grid gap-3 sm:grid-cols-2">
+        <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <label htmlFor="buy-filter-tag" className="mb-1 block text-xs font-medium text-slate-400">
               Filter by tag
@@ -422,6 +469,43 @@ export default function BuyPage() {
                   {t}
                 </option>
               ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="buy-filter-store" className="mb-1 block text-xs font-medium text-slate-400">
+              Filter by store
+            </label>
+            <input
+              id="buy-filter-store"
+              value={filterStore}
+              onChange={(e) => {
+                setFilterStore(e.target.value);
+                setListPage(0);
+              }}
+              placeholder="e.g. Costco"
+              className="h-11 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label htmlFor="buy-filter-assigned" className="mb-1 block text-xs font-medium text-slate-400">
+              Assigned to
+            </label>
+            <select
+              id="buy-filter-assigned"
+              value={filterAssigned}
+              onChange={(e) => {
+                setFilterAssigned(e.target.value);
+                setListPage(0);
+              }}
+              className="h-11 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="">Anyone</option>
+              {guildRoster.data?.available &&
+                guildRoster.data.members.map((m) => (
+                  <option key={m.userId} value={m.userId}>
+                    {m.displayName}
+                  </option>
+                ))}
             </select>
           </div>
           <div>
@@ -621,6 +705,79 @@ export default function BuyPage() {
                 key={item.id}
                 className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 shadow-sm sm:p-5"
               >
+                {editingId === item.id ? (
+                  <div className="space-y-3">
+                    <input
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                    />
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <input
+                        value={editQty}
+                        onChange={(e) => setEditQty(e.target.value)}
+                        placeholder="Quantity"
+                        className="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                      />
+                      <input
+                        value={editStore}
+                        onChange={(e) => setEditStore(e.target.value)}
+                        placeholder="Store"
+                        className="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                      />
+                    </div>
+                    <textarea
+                      value={editNotes}
+                      onChange={(e) => setEditNotes(e.target.value)}
+                      rows={2}
+                      placeholder="Notes"
+                      className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                    />
+                    <input
+                      value={editAssigned}
+                      onChange={(e) => setEditAssigned(e.target.value)}
+                      placeholder="Assigned to (Discord user id)"
+                      className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                    />
+                    {catalogTags.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {catalogTags.map((t) => {
+                          const on = editTagPick.includes(t);
+                          return (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => toggleEditTagPick(t)}
+                              className={`rounded-full border px-3 py-1 text-sm ${
+                                on
+                                  ? "border-blue-500 bg-blue-900/50 text-blue-100"
+                                  : "border-slate-600 bg-slate-950 text-slate-300"
+                              }`}
+                            >
+                              {t}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void saveEdit(item)}
+                        className="rounded-lg border border-blue-600 bg-blue-700 px-3 py-2 text-sm text-white"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(null)}
+                        className="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-300"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0 flex-1 space-y-2">
                     <p className="text-lg font-semibold leading-snug text-white">{item.name}</p>
@@ -687,6 +844,16 @@ export default function BuyPage() {
                     </dl>
                   </div>
                   <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:min-w-[140px]">
+                    {canAuth && (
+                      <button
+                        type="button"
+                        disabled={actionBusyId === item.id}
+                        onClick={() => startEdit(item)}
+                        className="min-h-[44px] w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2.5 text-sm font-medium text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Edit
+                      </button>
+                    )}
                     <button
                       type="button"
                       disabled={!canActor || actionBusyId === item.id}
@@ -705,6 +872,7 @@ export default function BuyPage() {
                     </button>
                   </div>
                 </div>
+                )}
               </li>
             ))}
           </ul>

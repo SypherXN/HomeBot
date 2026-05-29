@@ -222,11 +222,16 @@ export function putBuyTagCatalog(token: string, tags: string[]) {
 export function getBuyItems(
   token: string,
   page = 0,
-  opts?: { tag?: string; sort?: BuyListSort }
+  opts?: { tag?: string; sort?: BuyListSort; assignedTo?: string; store?: string }
 ) {
   const q = new URLSearchParams({ page: String(page) });
   if (opts?.tag) q.set("tag", opts.tag);
   if (opts?.sort && opts.sort !== "id") q.set("sort", opts.sort);
+  if (opts?.assignedTo) {
+    const a = jsonSnowflakeDigits(opts.assignedTo) ?? opts.assignedTo;
+    q.set("assignedTo", a);
+  }
+  if (opts?.store?.trim()) q.set("store", opts.store.trim());
   return apiJson<PagedBuyList>(`/api/buy/items?${q.toString()}`, { token });
 }
 
@@ -242,6 +247,7 @@ export type WishlistListItem = {
   ownerMemberLabel: string;
   price: string;
   link: string;
+  description: string;
   notes: string;
   priority: string;
   tags: string[];
@@ -1138,6 +1144,21 @@ export function postBudgetCategory(
   return apiJson<{ id: number }>(path, { token, method: "POST", body });
 }
 
+export function patchBudgetCategory(
+  token: string,
+  actorUserId: string,
+  id: number,
+  body: { name: string; visibility?: string; isTaxDeductible?: boolean; color?: string }
+) {
+  const path = mergeQuery(`/api/budget/categories/${id}`, { actorUserId });
+  return apiJson<unknown>(path, { token, method: "PATCH", body });
+}
+
+export function deleteBudgetCategory(token: string, actorUserId: string, id: number) {
+  const path = mergeQuery(`/api/budget/categories/${id}`, { actorUserId });
+  return apiJson<unknown>(path, { token, method: "DELETE" });
+}
+
 export function postBudgetTransaction(
   token: string,
   actorUserId: string,
@@ -1174,6 +1195,10 @@ export function patchBudgetTransaction(
   actorUserId: string,
   id: number,
   body: {
+    amountInput?: string;
+    categoryId?: number;
+    note?: string;
+    merchant?: string;
     isPending?: boolean;
     clearedAt?: string | null;
     tags?: string[];

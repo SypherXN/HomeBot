@@ -120,6 +120,15 @@ export default function ItemDetailModal({
             setEndDate("");
             setEndTime("");
           }
+        } else if (!isRecurringInstance && d.end?.trim()) {
+          const endWall = utcStorageToWallParts(d.end, tz);
+          if (endWall) {
+            setEndDate(endWall.date);
+            setEndTime(endWall.time);
+          } else {
+            setEndDate("");
+            setEndTime("");
+          }
         } else {
           setEndDate("");
           setEndTime("");
@@ -206,9 +215,14 @@ export default function ItemDetailModal({
         detail?.start?.trim() && startDate.trim()
           ? `${startDate.trim()}T${normalizeHmDetail(startTime)}`
           : undefined;
+      let endPayload: string | undefined;
+      if (endDate.trim()) {
+        endPayload = `${endDate.trim()}T${normalizeHmDetail(endTime)}`;
+      }
       await patchCalendarItem(token, itemId!, {
         title: title.trim() || undefined,
         start: startPayload,
+        end: endPayload,
         description: description.trim() || undefined,
         notes: notes.trim() || undefined,
         link: link.trim() || undefined,
@@ -426,7 +440,26 @@ export default function ItemDetailModal({
                       />
                     </Field>
                   </div>
-                ) : null}
+                ) : (
+                  <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+                    <Field label="End date (optional)">
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className={inputClass}
+                      />
+                    </Field>
+                    <Field label="End time">
+                      <input
+                        type="time"
+                        value={endTime}
+                        onChange={(e) => setEndTime(e.target.value)}
+                        className={inputClass}
+                      />
+                    </Field>
+                  </div>
+                )}
               </>
             ) : (
               <p className="text-xs text-slate-500">This row has no scheduled start (task-style).</p>

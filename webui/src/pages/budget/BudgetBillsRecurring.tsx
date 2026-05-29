@@ -47,6 +47,8 @@ export default function BudgetBillsRecurring({
   const [recNext, setRecNext] = useState(new Date().toISOString().slice(0, 10));
   const [recSpender, setRecSpender] = useState(defaultSpender);
   const [recCategory, setRecCategory] = useState("");
+  const [payBillId, setPayBillId] = useState<number | null>(null);
+  const [payAmount, setPayAmount] = useState("");
 
   return (
     <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
@@ -68,22 +70,51 @@ export default function BudgetBillsRecurring({
                     {b.name} · day {b.dueDay} · ~${formatMoney(b.amountEstimate)}
                   </span>
                   {actor && (
-                    <span className="flex gap-2">
-                      <button
-                        type="button"
-                        className="text-xs text-emerald-400"
-                        onClick={async () => {
-                          const amt = prompt("Payment amount:", String(b.amountEstimate));
-                          if (amt == null) return;
-                          await postBudgetBillPay(token, actor, b.id, {
-                            amountInput: amt,
-                            spentByUserId: defaultSpender,
-                          });
-                          await onSaved();
-                        }}
-                      >
-                        Pay
-                      </button>
+                    <span className="flex flex-wrap items-center gap-2">
+                      {payBillId === b.id ? (
+                        <>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={payAmount}
+                            onChange={(e) => setPayAmount(e.target.value)}
+                            className="w-24 rounded border border-slate-600 bg-slate-950 px-2 py-1 text-xs text-slate-100"
+                          />
+                          <button
+                            type="button"
+                            className="text-xs text-emerald-400"
+                            onClick={async () => {
+                              await postBudgetBillPay(token, actor, b.id, {
+                                amountInput: payAmount.trim() || String(b.amountEstimate),
+                                spentByUserId: defaultSpender,
+                              });
+                              setPayBillId(null);
+                              await onSaved();
+                            }}
+                          >
+                            Confirm
+                          </button>
+                          <button
+                            type="button"
+                            className="text-xs text-slate-400"
+                            onClick={() => setPayBillId(null)}
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          className="text-xs text-emerald-400"
+                          onClick={() => {
+                            setPayBillId(b.id);
+                            setPayAmount(String(b.amountEstimate));
+                          }}
+                        >
+                          Pay
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="text-xs text-slate-400"

@@ -25,6 +25,8 @@ export default function BudgetGoalsPanel({ token, actor, categories, goals, onSa
   const [current, setCurrent] = useState("0");
   const [targetDate, setTargetDate] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [progressEditId, setProgressEditId] = useState<number | null>(null);
+  const [progressDraft, setProgressDraft] = useState("");
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -75,19 +77,50 @@ export default function BudgetGoalsPanel({ token, actor, categories, goals, onSa
                 />
               </div>
               {actor && (
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="text-xs text-blue-400 hover:underline"
-                    onClick={async () => {
-                      const v = prompt("Update current amount saved:", String(g.currentAmount));
-                      if (v == null) return;
-                      await patchBudgetGoal(token, actor, g.id, { currentAmount: Number(v) || 0 });
-                      await onSaved();
-                    }}
-                  >
-                    Update progress
-                  </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {progressEditId === g.id ? (
+                    <>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={progressDraft}
+                        onChange={(e) => setProgressDraft(e.target.value)}
+                        className="w-28 rounded border border-slate-600 bg-slate-950 px-2 py-1 text-xs text-slate-100"
+                      />
+                      <button
+                        type="button"
+                        className="text-xs text-blue-400 hover:underline"
+                        onClick={async () => {
+                          await patchBudgetGoal(token, actor, g.id, {
+                            currentAmount: Number(progressDraft) || 0,
+                          });
+                          setProgressEditId(null);
+                          await onSaved();
+                        }}
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        className="text-xs text-slate-400 hover:underline"
+                        onClick={() => setProgressEditId(null)}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="text-xs text-blue-400 hover:underline"
+                      onClick={() => {
+                        setProgressEditId(g.id);
+                        setProgressDraft(String(g.currentAmount));
+                      }}
+                    >
+                      Update progress
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="text-xs text-red-400 hover:underline"
