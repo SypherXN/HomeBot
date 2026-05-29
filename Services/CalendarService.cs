@@ -140,6 +140,7 @@ public class CalendarService
             {
                 "daily" => "🔁 daily",
                 "weekly" => "🔁 weekly",
+                "monthly" => "🔁 monthly",
                 "" => "",
                 _ => $"🔁 {recurrence}"
             };
@@ -277,7 +278,15 @@ public class CalendarService
         string description,
         string notes,
         string link,
-        string? timezone)
+        string? timezone,
+        bool? allDay = null,
+        string? reminder = null,
+        bool applyReminder = false,
+        string? recurrence = null,
+        bool applyRecurrence = false,
+        ulong? assignedTo = null,
+        bool applyAssignedTo = false,
+        bool clearEnd = false)
     {
         using var conn = _db.GetConnection();
         conn.Open();
@@ -313,11 +322,43 @@ public class CalendarService
             cmd.Parameters.AddWithValue("$start", norm);
         }
 
-        if (!string.IsNullOrWhiteSpace(end))
+        if (clearEnd)
+        {
+            updates.Add("EndDateTime = $end");
+            cmd.Parameters.AddWithValue("$end", "");
+        }
+        else if (!string.IsNullOrWhiteSpace(end))
         {
             var norm = NormalizeCalendarInstantToUtcStorage(end.Trim(), eventTz);
             updates.Add("EndDateTime = $end");
             cmd.Parameters.AddWithValue("$end", norm);
+        }
+
+        if (allDay.HasValue)
+        {
+            updates.Add("AllDay = $allDay");
+            cmd.Parameters.AddWithValue("$allDay", allDay.Value ? 1 : 0);
+        }
+
+        if (applyReminder)
+        {
+            updates.Add("ReminderOffset = $reminder");
+            cmd.Parameters.AddWithValue("$reminder", reminder ?? "");
+        }
+
+        if (applyRecurrence)
+        {
+            updates.Add("Recurrence = $recurrence");
+            cmd.Parameters.AddWithValue("$recurrence", recurrence ?? "");
+        }
+
+        if (applyAssignedTo)
+        {
+            updates.Add("AssignedTo = $assigned");
+            if (assignedTo.HasValue)
+                cmd.Parameters.AddWithValue("$assigned", (long)assignedTo.Value);
+            else
+                cmd.Parameters.AddWithValue("$assigned", DBNull.Value);
         }
 
         if (!string.IsNullOrWhiteSpace(description))
@@ -393,7 +434,7 @@ public class CalendarService
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
             SELECT Title, Description, Notes, Link, StartDateTime, EndDateTime, AllDay, ReminderOffset,
-                   COALESCE(Timezone, '') AS ItemTz, COALESCE(Recurrence, '') AS Recur
+                   COALESCE(Timezone, '') AS ItemTz, COALESCE(Recurrence, '') AS Recur, AssignedTo
             FROM CalendarItems
             WHERE Id = $id AND Status = 'active'";
 
@@ -421,6 +462,7 @@ public class CalendarService
                 Reminder = reader.IsDBNull(7) ? "" : reader.GetString(7),
                 Timezone = reader.IsDBNull(8) ? "" : reader.GetString(8),
                 Recurrence = reader.IsDBNull(9) ? "" : reader.GetString(9),
+                AssignedTo = reader.IsDBNull(10) ? null : (ulong)reader.GetInt64(10),
             };
         }
 
@@ -688,6 +730,7 @@ public class CalendarService
             {
                 "daily" => "🔁 daily",
                 "weekly" => "🔁 weekly",
+                "monthly" => "🔁 monthly",
                 "" => "",
                 _ => $"🔁 {recurrence}"
             };
@@ -858,6 +901,29 @@ public class CalendarService
 
                         break;
                     }
+                case "monthly":
+                    {
+                        var anchorDay = startLocalRow.Day;
+                        var cursor = startLocalRow.Date;
+                        while (cursor < winStartDate)
+                            cursor = NextMonthlyOccurrenceDate(cursor, anchorDay);
+                        while (cursor <= winEndDateInclusive)
+                        {
+                            EmitInstance(
+                                output,
+                                meta,
+                                cursor.Add(startLocalRow.TimeOfDay),
+                                duration,
+                                rowTz,
+                                true,
+                                fromUtc,
+                                toUtcExclusive,
+                                recurrenceExceptions);
+                            cursor = NextMonthlyOccurrenceDate(cursor, anchorDay);
+                        }
+
+                        break;
+                    }
                 default:
                     EmitInstance(
                         output,
@@ -878,6 +944,13 @@ public class CalendarService
                 a.DisplayInstanceStartUtc ?? a.InstanceStartUtc,
                 b.DisplayInstanceStartUtc ?? b.InstanceStartUtc));
         return output;
+    }
+
+    private static DateTime NextMonthlyOccurrenceDate(DateTime fromDate, int anchorDay)
+    {
+        var next = fromDate.AddMonths(1);
+        var day = Math.Min(anchorDay, DateTime.DaysInMonth(next.Year, next.Month));
+        return new DateTime(next.Year, next.Month, day);
     }
 
     /// <summary>
@@ -1495,6 +1568,7 @@ public class CalendarService
         {
             "daily" => "🔁 daily",
             "weekly" => "🔁 weekly",
+            "monthly" => "🔁 monthly",
             "" => "",
             _ => $"🔁 {meta.Recurrence}",
         };

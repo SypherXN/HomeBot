@@ -423,6 +423,7 @@ export type CalendarItemDetail = {
   reminder: string;
   timezone: string;
   recurrence?: string;
+  assignedTo?: string | null;
   /** Echo when detail was requested for one recurrence slot. */
   instanceStartUtc?: string | null;
 };
@@ -735,13 +736,31 @@ export function patchCalendarItem(
     title?: string;
     start?: string;
     end?: string;
+    clearEnd?: boolean;
     description?: string;
     notes?: string;
     link?: string;
     timezone?: string;
+    allDay?: boolean;
+    reminder?: string;
+    recurrence?: string;
+    assignedToUserId?: string | null;
+    clearAssignedTo?: boolean;
   }
 ) {
-  return apiJson<unknown>(`/api/calendar/items/${id}`, { token, method: "PATCH", body });
+  const payload: Record<string, unknown> = { ...body };
+  if (body.assignedToUserId !== undefined) {
+    delete payload.assignedToUserId;
+    if (body.clearAssignedTo) {
+      payload.clearAssignedTo = true;
+    } else if (body.assignedToUserId != null && body.assignedToUserId !== "") {
+      const a = jsonSnowflakeDigits(body.assignedToUserId) ?? body.assignedToUserId;
+      payload.assignedTo = a;
+    } else if (body.assignedToUserId === null || body.assignedToUserId === "") {
+      payload.clearAssignedTo = true;
+    }
+  }
+  return apiJson<unknown>(`/api/calendar/items/${id}`, { token, method: "PATCH", body: payload });
 }
 
 export function postCalendarItemComplete(token: string, actorUserId: string, id: number) {
@@ -1197,6 +1216,8 @@ export function patchBudgetTransaction(
   body: {
     amountInput?: string;
     categoryId?: number;
+    spentByUserId?: string;
+    transactionDate?: string;
     note?: string;
     merchant?: string;
     isPending?: boolean;
@@ -1206,7 +1227,19 @@ export function patchBudgetTransaction(
   }
 ) {
   const path = mergeQuery(`/api/budget/transactions/${id}`, { actorUserId });
-  return apiJson<unknown>(path, { token, method: "PATCH", body });
+  const payload: Record<string, unknown> = { ...body };
+  if (body.spentByUserId) {
+    payload.spentByUserId = jsonSnowflakeDigits(body.spentByUserId) ?? body.spentByUserId;
+  }
+  if (body.splits) {
+    payload.splits = body.splits.map((s) => ({
+      ...s,
+      spentByUserId: s.spentByUserId
+        ? (jsonSnowflakeDigits(s.spentByUserId) ?? s.spentByUserId)
+        : s.spentByUserId,
+    }));
+  }
+  return apiJson<unknown>(path, { token, method: "PATCH", body: payload });
 }
 
 export function deleteBudgetTransaction(token: string, actorUserId: string, id: number) {
@@ -1292,6 +1325,30 @@ export function deleteBudgetGoal(token: string, actorUserId: string, id: number)
 
 export function getBudgetAccounts(token: string) {
   return apiJson<BudgetAccount[]>("/api/budget/accounts", { token });
+}
+
+export function postBudgetAccount(
+  token: string,
+  actorUserId: string,
+  body: { name: string; accountType?: string; currency?: string; creditLimit?: number }
+) {
+  const path = mergeQuery("/api/budget/accounts", { actorUserId });
+  return apiJson<{ id: number }>(path, { token, method: "POST", body });
+}
+
+export function postBudgetTransfer(
+  token: string,
+  actorUserId: string,
+  body: {
+    amountInput: string;
+    fromAccountId: number;
+    toAccountId: number;
+    transactionDate?: string;
+    note?: string;
+  }
+) {
+  const path = mergeQuery("/api/budget/transfers", { actorUserId });
+  return apiJson<{ id: number }>(path, { token, method: "POST", body });
 }
 
 export type BudgetIncomePlan = {

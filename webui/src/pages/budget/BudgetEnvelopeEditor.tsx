@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { putBudgetEnvelope, type BudgetCategory, type BudgetEnvelope } from "../../api";
+import { getBudgetEnvelopes, putBudgetEnvelope, type BudgetCategory, type BudgetEnvelope } from "../../api";
+
+function priorMonth(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y, m - 2, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -18,6 +24,7 @@ export default function BudgetEnvelopeEditor({ token, actor, month, categories, 
   const envByCat = new Map(envelopes.map((e) => [e.categoryId, e]));
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState(false);
+  const [copyBusy, setCopyBusy] = useState(false);
 
   const householdCats = categories.filter((c) => c.visibility !== "personal");
 
@@ -45,8 +52,34 @@ export default function BudgetEnvelopeEditor({ token, actor, month, categories, 
     return <p className="text-sm text-slate-500">Add household categories first.</p>;
   }
 
+  async function copyFromPreviousMonth() {
+    if (!actor) return;
+    const prev = priorMonth(month);
+    setCopyBusy(true);
+    try {
+      const prevEnvs = await getBudgetEnvelopes(token, prev);
+      const nextDrafts: Record<number, string> = { ...drafts };
+      for (const e of prevEnvs) {
+        if (e.targetAmount > 0) nextDrafts[e.categoryId] = String(e.targetAmount);
+      }
+      setDrafts(nextDrafts);
+    } finally {
+      setCopyBusy(false);
+    }
+  }
+
   return (
     <form onSubmit={(e) => void saveAll(e)} className="space-y-3">
+      {actor && (
+        <button
+          type="button"
+          disabled={copyBusy}
+          onClick={() => void copyFromPreviousMonth()}
+          className="rounded border border-slate-600 bg-slate-800 px-3 py-1 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+        >
+          {copyBusy ? "Loading…" : `Copy targets from ${priorMonth(month)}`}
+        </button>
+      )}
       {householdCats.map((cat) => {
         const env = envByCat.get(cat.id);
         const pct = env?.percentUsed ?? 0;

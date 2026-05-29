@@ -5,7 +5,7 @@ import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
 import { validActorId } from "../lib/validation";
 import {
   deleteBudgetTransaction,
-  downloadBudgetCsv,
+  getBudgetAccounts,
   getBudgetAudit,
   getBudgetCategories,
   getBudgetExchangeRates,
@@ -23,6 +23,7 @@ import {
   getBudgetRecurring,
   getBudgetTransactions,
   getBudgetTrends,
+  type BudgetAccount,
   type BudgetAuditEntry,
   type BudgetCategory,
   type BudgetExchangeRate,
@@ -39,9 +40,12 @@ import {
   type BudgetTransactionListItem,
   type PagedBudgetTransactions,
 } from "../api";
+import BudgetAccountsPanel from "./budget/BudgetAccountsPanel";
+import BudgetAnnualSnapshot from "./budget/BudgetAnnualSnapshot";
 import BudgetCategoryEditor from "./budget/BudgetCategoryEditor";
 import BudgetTransactionEditModal from "./budget/BudgetTransactionEditModal";
 import BudgetAlertsPanel from "./budget/BudgetAlertsPanel";
+import BudgetCsvExport from "./budget/BudgetCsvExport";
 import BudgetAuditLog from "./budget/BudgetAuditLog";
 import BudgetBillsRecurring from "./budget/BudgetBillsRecurring";
 import BudgetCurrencyPanel from "./budget/BudgetCurrencyPanel";
@@ -70,7 +74,7 @@ function formatMoney(n: number): string {
 
 function currentMonth(): string {
   const d = new Date();
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 type ChartMode = "category" | "user";
@@ -106,6 +110,7 @@ export default function BudgetPage() {
   const [exchangeRates, setExchangeRates] = useState<BudgetExchangeRate[]>([]);
   const [bills, setBills] = useState<BudgetBill[]>([]);
   const [recurring, setRecurring] = useState<BudgetRecurring[]>([]);
+  const [accounts, setAccounts] = useState<BudgetAccount[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [listPage, setListPage] = useState(0);
   const [tab, setTab] = useState<BudgetTab>("overview");
@@ -118,7 +123,7 @@ export default function BudgetPage() {
     setError(null);
     try {
       const spenderQ = spenderFilter || undefined;
-      const [cats, tags, sm, catSlices, userSlices, txs, envs, g, tr, ip, fc, notes, au, tax, rates, billRows, recurringRows] =
+      const [cats, tags, sm, catSlices, userSlices, txs, envs, g, tr, ip, fc, notes, au, tax, rates, billRows, recurringRows, accts] =
         await Promise.all([
           getBudgetCategories(tok),
           getBudgetTags(tok).catch(() => [] as string[]),
@@ -145,8 +150,9 @@ export default function BudgetPage() {
           getBudgetTaxSummary(tok, Number(month.slice(0, 4))).catch(() => [] as BudgetTaxSummaryLine[]),
           getBudgetExchangeRates(tok).catch(() => [] as BudgetExchangeRate[]),
           getBudgetBills(tok).catch(() => [] as BudgetBill[]),
-          getBudgetRecurring(tok).catch(() => [] as BudgetRecurring[]),
-        ]);
+        getBudgetRecurring(tok).catch(() => [] as BudgetRecurring[]),
+        getBudgetAccounts(tok).catch(() => [] as BudgetAccount[]),
+      ]);
       setCategories(cats);
       setAllTags(tags);
       setSummary(sm);
@@ -164,6 +170,7 @@ export default function BudgetPage() {
       setExchangeRates(rates);
       setBills(billRows);
       setRecurring(recurringRows);
+      setAccounts(accts);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -384,6 +391,7 @@ export default function BudgetPage() {
 
           <BudgetIncomeBanner token={tok} actor={actor} month={month} plan={incomePlan} onSaved={load} />
           <BudgetAlertsPanel forecast={forecast} notifications={notifications} />
+          <BudgetAnnualSnapshot token={tok} year={Number(month.slice(0, 4))} />
         </>
       )}
 
@@ -507,6 +515,8 @@ export default function BudgetPage() {
             onSaved={load}
           />
 
+          <BudgetAccountsPanel token={tok} actor={actor} accounts={accounts} onSaved={load} />
+
           <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
             <h2 className="mb-3 text-lg font-medium text-white">Envelope budgets — {month}</h2>
             {actor ? (
@@ -559,23 +569,8 @@ export default function BudgetPage() {
                 defaultSpender={actor || spenderFilter}
                 onImported={load}
               />
-              <div className="flex flex-col justify-center gap-2">
-                <button
-                  type="button"
-                  className="rounded-lg bg-slate-700 px-4 py-2 text-sm text-white hover:bg-slate-600"
-                  onClick={async () => {
-                    const csv = await downloadBudgetCsv(tok, `${month}-01`, `${month}-31`);
-                    const blob = new Blob([csv], { type: "text/csv" });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `budget-${month}.csv`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }}
-                >
-                  Export CSV (this month)
-                </button>
+              <div className="space-y-3">
+                <BudgetCsvExport token={tok} defaultMonth={month} />
                 <p className="text-xs text-slate-500">
                   Discord: over-budget and bill-due alerts post to the budget channel (debounced). Weekly digest
                   Sundays ~17:00 UTC.
@@ -592,6 +587,7 @@ export default function BudgetPage() {
         token={tok}
         actor={actor}
         categories={categories}
+        roster={roster}
         onClose={() => setEditTx(null)}
         onSaved={load}
       />

@@ -146,10 +146,17 @@ public sealed class CalendarItemPatchRequest
     public string? Title { get; set; }
     public string? Start { get; set; }
     public string? End { get; set; }
+    public bool? ClearEnd { get; set; }
     public string? Description { get; set; }
     public string? Notes { get; set; }
     public string? Link { get; set; }
     public string? Timezone { get; set; }
+    public bool? AllDay { get; set; }
+    public string? Reminder { get; set; }
+    public string? Recurrence { get; set; }
+    [JsonConverter(typeof(SnowflakeUlongNullableJsonConverter))]
+    public ulong? AssignedTo { get; set; }
+    public bool? ClearAssignedTo { get; set; }
 }
 
 public sealed class BudgetCategoryCreateRequest

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { DateTime } from "luxon";
+import DiscordMemberSelect from "../components/DiscordMemberSelect";
+import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
 import {
   deleteCalendarInstanceOverrides,
   deleteCalendarItem,
@@ -58,7 +60,12 @@ export default function ItemDetailModal({
   const [description, setDescription] = useState("");
   const [notes, setNotes] = useState("");
   const [link, setLink] = useState("");
+  const [allDay, setAllDay] = useState(false);
+  const [reminder, setReminder] = useState("");
+  const [seriesRecurrence, setSeriesRecurrence] = useState<"" | "daily" | "weekly" | "monthly">("");
+  const [assignedTo, setAssignedTo] = useState("");
   const [busy, setBusy] = useState<"save" | "complete" | "completeOne" | "delete" | "omit" | "clear" | null>(null);
+  const guildRoster = useDiscordGuildRoster(token);
 
   useEffect(() => {
     if (!open || itemId == null) return;
@@ -136,6 +143,13 @@ export default function ItemDetailModal({
         setDescription(d.description);
         setNotes(d.notes);
         setLink(d.link);
+        setAllDay(d.allDay);
+        setReminder(d.reminder ?? "");
+        const rec = (d.recurrence ?? "").trim();
+        setSeriesRecurrence(
+          rec === "daily" || rec === "weekly" || rec === "monthly" ? rec : ""
+        );
+        setAssignedTo(d.assignedTo ?? "");
       })
       .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)))
       .finally(() => {
@@ -216,17 +230,27 @@ export default function ItemDetailModal({
           ? `${startDate.trim()}T${normalizeHmDetail(startTime)}`
           : undefined;
       let endPayload: string | undefined;
+      let clearEnd = false;
       if (endDate.trim()) {
         endPayload = `${endDate.trim()}T${normalizeHmDetail(endTime)}`;
+      } else if (detail?.end?.trim()) {
+        clearEnd = true;
       }
       await patchCalendarItem(token, itemId!, {
         title: title.trim() || undefined,
         start: startPayload,
         end: endPayload,
+        clearEnd,
         description: description.trim() || undefined,
         notes: notes.trim() || undefined,
         link: link.trim() || undefined,
         timezone: eventTz.trim() || undefined,
+        allDay,
+        reminder: reminder.trim(),
+        recurrence: seriesRecurrence || "",
+        ...(assignedTo.trim()
+          ? { assignedToUserId: assignedTo.trim() }
+          : { clearAssignedTo: true }),
       });
       onSuccess("Saved.");
       onChanged();
@@ -474,24 +498,62 @@ export default function ItemDetailModal({
               <input value={link} onChange={(e) => setLink(e.target.value)} className={inputClass} />
             </Field>
 
-            <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3 text-xs text-slate-400">
-              <p>
-                <strong>Read-only here (server v1 patch):</strong> all-day, reminder, recurrence, assignee. Delete and
-                re-add the item to change those.
-              </p>
-              <dl className="mt-2 grid min-w-0 grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
-                <dt>All-day</dt>
-                <dd className="text-slate-200">{detail.allDay ? "yes" : "no"}</dd>
-                <dt>Reminder</dt>
-                <dd className="text-slate-200">{detail.reminder || "—"}</dd>
-                {detail.recurrence ? (
-                  <>
-                    <dt>Recurrence</dt>
-                    <dd className="text-slate-200">{detail.recurrence}</dd>
-                  </>
-                ) : null}
-              </dl>
-            </div>
+            {!isRecurringInstance ? (
+              <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/40 p-3">
+                <p className="text-xs text-slate-500">Series settings (applies to the whole event or task row)</p>
+                <label className="flex items-center gap-2 text-sm text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={allDay}
+                    onChange={(e) => setAllDay(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-600 bg-slate-900"
+                  />
+                  All-day
+                </label>
+                <Field label="Reminder">
+                  <input
+                    value={reminder}
+                    onChange={(e) => setReminder(e.target.value)}
+                    placeholder="10m, 2h, 1d"
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="Recurrence">
+                  <select
+                    value={seriesRecurrence}
+                    onChange={(e) =>
+                      setSeriesRecurrence(e.target.value as "" | "daily" | "weekly" | "monthly")
+                    }
+                    className={inputClass}
+                  >
+                    <option value="">none</option>
+                    <option value="daily">daily</option>
+                    <option value="weekly">weekly</option>
+                    <option value="monthly">monthly</option>
+                  </select>
+                </Field>
+                <Field label="Assignee (Discord user id)">
+                  <input
+                    value={assignedTo}
+                    onChange={(e) => setAssignedTo(e.target.value)}
+                    className={inputClass}
+                  />
+                  <div className="mt-2">
+                    <DiscordMemberSelect
+                      token={token}
+                      sharedRoster={guildRoster}
+                      label="Pick from server"
+                      onPickUserId={setAssignedTo}
+                    />
+                  </div>
+                </Field>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3 text-xs text-slate-400">
+                <p>Series recurrence: {detail.recurrence || "none"} · all-day: {detail.allDay ? "yes" : "no"}</p>
+                <p className="mt-1">Change recurrence or assignee on the series via a non-instance open, or edit this day only above.</p>
+              </div>
+            )}
 
             <div className="flex flex-col gap-2 border-t border-slate-800 pt-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap gap-2">

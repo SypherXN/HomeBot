@@ -128,6 +128,22 @@ public sealed class CalendarServiceRangeTests : IDisposable
     }
 
     [Fact]
+    public void Monthly_recurrence_emits_same_day_each_month()
+    {
+        _calendar.AddItem("Monthly rent", "event", "2026-01-15 09:00", "", false, "", null, "", "", "", "monthly", "UTC");
+
+        var instances = _calendar.GetRange(
+            new DateTime(2026, 1, 1),
+            new DateTime(2026, 4, 1),
+            null);
+
+        Assert.Equal(3, instances.Count);
+        Assert.Equal("2026-01-15T09:00:00Z", instances[0].InstanceStartUtc);
+        Assert.Equal("2026-02-15T09:00:00Z", instances[1].InstanceStartUtc);
+        Assert.Equal("2026-03-15T09:00:00Z", instances[2].InstanceStartUtc);
+    }
+
+    [Fact]
     public void Tasks_are_excluded_from_range()
     {
         _calendar.AddItem("A task", "task", "", "", false, "", null, "", "", "", "", "UTC");

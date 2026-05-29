@@ -60,9 +60,9 @@ public static class ValidationHelper
             return true;
         }
 
-        if (input != "daily" && input != "weekly")
+        if (input != "daily" && input != "weekly" && input != "monthly")
         {
-            error = "❌ Recurrence must be 'daily' or 'weekly'";
+            error = "❌ Recurrence must be 'daily', 'weekly', or 'monthly'";
             return false;
         }
 

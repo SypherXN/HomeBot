@@ -41,7 +41,7 @@ export default function AddItemModal({
   const [eventTz, setEventTz] = useState(eventTimeZoneDefault);
   const [allDay, setAllDay] = useState(false);
   const [reminder, setReminder] = useState("");
-  const [recurrence, setRecurrence] = useState<"" | "daily" | "weekly">("");
+  const [recurrence, setRecurrence] = useState<"" | "daily" | "weekly" | "monthly">("");
   const [assignToEveryone, setAssignToEveryone] = useState(false);
   const [assignedTo, setAssignedTo] = useState("");
   const [description, setDescription] = useState("");
@@ -211,12 +211,13 @@ export default function AddItemModal({
               <Field label="Recurrence">
                 <select
                   value={recurrence}
-                  onChange={(e) => setRecurrence(e.target.value as "" | "daily" | "weekly")}
+                  onChange={(e) => setRecurrence(e.target.value as "" | "daily" | "weekly" | "monthly")}
                   className={inputClass}
                 >
                   <option value="">none</option>
                   <option value="daily">daily</option>
                   <option value="weekly">weekly</option>
+                  <option value="monthly">monthly</option>
                 </select>
               </Field>
             </div>

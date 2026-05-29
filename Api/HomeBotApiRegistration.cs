@@ -761,6 +761,9 @@ public static class HomeBotApiRegistration
                     return ApiResults.Validation(e);
             }
 
+            if (body.Recurrence != null && !ValidationHelper.ValidateRecurrence(body.Recurrence, out var recurPatchError))
+                return ApiResults.Validation(recurPatchError);
+
             root.GetRequiredService<CalendarService>().EditItem(
                 id,
                 body.Title ?? "",
@@ -769,7 +772,15 @@ public static class HomeBotApiRegistration
                 body.Description ?? "",
                 body.Notes ?? "",
                 body.Link ?? "",
-                body.Timezone);
+                body.Timezone,
+                body.AllDay,
+                body.Reminder,
+                applyReminder: body.Reminder != null,
+                body.Recurrence,
+                applyRecurrence: body.Recurrence != null,
+                body.ClearAssignedTo == true ? null : body.AssignedTo,
+                applyAssignedTo: body.AssignedTo != null || body.ClearAssignedTo == true,
+                clearEnd: body.ClearEnd == true);
 
             return Results.Ok(new { ok = true });
         });
