@@ -1,0 +1,41 @@
+# Optional: deploy main to a self-hosted VM after tests pass.
+# Required secrets: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_APP_DIR (optional)
+name: Deploy VM
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - run: dotnet test HomeBot.Tests/HomeBot.Tests.csproj --verbosity minimal
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH deploy
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            APP="${{ secrets.DEPLOY_APP_DIR }}"
+            if [ -z "$APP" ]; then APP="/opt/homebot/app"; fi
+            cd "$APP"
+            git fetch origin main
+            git checkout main
+            git pull --ff-only origin main
+            dotnet publish -c Release -o ./publish
+            sudo systemctl restart homebot.service
+            echo "Deployed $(git rev-parse --short HEAD)"

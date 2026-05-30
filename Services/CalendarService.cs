@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.DependencyInjection;
 
 /// <summary>
 /// Domain logic for calendar persistence, list rendering, and undo behavior.
@@ -11,12 +12,19 @@ public class CalendarService
     private readonly DatabaseService _db;
     private readonly UndoService _undo;
     private readonly ConfigService _config;
+    private readonly IServiceProvider _services;
 
-    public CalendarService(DatabaseService db, UndoService undo, ConfigService config)
+    public CalendarService(DatabaseService db, UndoService undo, ConfigService config, IServiceProvider services)
     {
         _db = db;
         _undo = undo;
         _config = config;
+        _services = services;
+    }
+
+    private void MarkGooglePendingPush(int calendarItemId)
+    {
+        _services.GetService<GoogleCalendarSyncService>()?.MarkPendingPush(calendarItemId);
     }
 
     /// <summary>
@@ -34,7 +42,8 @@ public class CalendarService
         string notes,
         string link,
         string recurrence,
-        string timezone
+        string timezone,
+        bool syncToGoogle = true
     )
     {
         using var conn = _db.GetConnection();
@@ -69,7 +78,10 @@ public class CalendarService
 
         var idCmd = conn.CreateCommand();
         idCmd.CommandText = "SELECT last_insert_rowid()";
-        return Convert.ToInt32(idCmd.ExecuteScalar()!);
+        var id = Convert.ToInt32(idCmd.ExecuteScalar()!);
+        if (syncToGoogle)
+            MarkGooglePendingPush(id);
+        return id;
     }
 
     /// <summary>
@@ -215,12 +227,13 @@ public class CalendarService
         cmd.Parameters.AddWithValue("$id", id);
 
         cmd.ExecuteNonQuery();
+        MarkGooglePendingPush(id);
     }
 
     /// <summary>
     /// Deletes a calendar item and stores restore data for undo.
     /// </summary>
-    public void DeleteItem(int id, ulong userId)
+    public void DeleteItem(int id, ulong userId, bool propagateGoogleDelete = true)
     {
         using var conn = _db.GetConnection();
         conn.Open();
@@ -263,6 +276,9 @@ public class CalendarService
 
         _undo.LogAction(userId, "delete", "calendar", id, json);
 
+        if (propagateGoogleDelete)
+            _services.GetService<GoogleCalendarSyncService>()?.OnLocalItemDeleted(id);
+
         var deleteCmd = conn.CreateCommand();
         deleteCmd.CommandText = "DELETE FROM CalendarItems WHERE Id = $id";
         deleteCmd.Parameters.AddWithValue("$id", id);
@@ -290,7 +306,8 @@ public class CalendarService
         bool applyRecurrence = false,
         ulong? assignedTo = null,
         bool applyAssignedTo = false,
-        bool clearEnd = false)
+        bool clearEnd = false,
+        bool syncToGoogle = true)
     {
         using var conn = _db.GetConnection();
         conn.Open();
@@ -400,6 +417,8 @@ public class CalendarService
         cmd.Parameters.AddWithValue("$id", id);
 
         cmd.ExecuteNonQuery();
+        if (syncToGoogle)
+            MarkGooglePendingPush(id);
     }
 
     /// <summary>
@@ -1045,6 +1064,7 @@ public class CalendarService
         var exceptionId = Convert.ToInt32(exIdObj);
         tx.Commit();
         LogRecurrenceExceptionMutation(actorUserId, before, exceptionId);
+        MarkGooglePendingPush(calendarItemId);
         return exceptionId;
     }
 
@@ -1087,6 +1107,7 @@ public class CalendarService
             upd.ExecuteNonQuery();
             tx.Commit();
             _undo.LogAction(actorUserId, "update", "calendar_rec_ex", before.Id, JsonSerializer.Serialize(before));
+            MarkGooglePendingPush(calendarItemId);
             return before.Id;
         }
 
@@ -1104,6 +1125,7 @@ public class CalendarService
         var newId = ReadLastInsertRowId(conn, tx);
         tx.Commit();
         _undo.LogAction(actorUserId, "create", "calendar_rec_ex", newId, "{}");
+        MarkGooglePendingPush(calendarItemId);
         return newId;
     }
 
@@ -1204,6 +1226,7 @@ public class CalendarService
             var newId = ReadLastInsertRowId(conn, tx);
             tx.Commit();
             _undo.LogAction(actorUserId, "create", "calendar_rec_ex", newId, "{}");
+            MarkGooglePendingPush(calendarItemId);
             return newId;
         }
 
@@ -1233,6 +1256,7 @@ public class CalendarService
 
         tx.Commit();
         _undo.LogAction(actorUserId, "update", "calendar_rec_ex", before.Id, JsonSerializer.Serialize(before));
+        MarkGooglePendingPush(calendarItemId);
         return before.Id;
     }
 

@@ -15,6 +15,14 @@ public sealed class CommandFeatureMapTests
     }
 
     [Fact]
+    public void Meal_commands_are_unrestricted()
+    {
+        Assert.Null(CommandFeatureMap.GetFeature("meal-plan"));
+        Assert.Null(CommandFeatureMap.GetFeature("meal-dinner"));
+        Assert.Null(CommandFeatureMap.GetFeature("meal-add-recipe"));
+    }
+
+    [Fact]
     public void Setup_commands_remain_unrestricted()
     {
         Assert.Null(CommandFeatureMap.GetFeature("setup-set"));

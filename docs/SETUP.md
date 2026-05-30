@@ -26,7 +26,7 @@ Follow the sections **in order** unless a heading says “optional.” Each majo
 ## Table of contents
 
 1. [Overview — what to do in what order](#1-overview--what-to-do-in-what-order)
-2. [Prerequisites](#2-prerequisites)
+2. [Prerequisites](#2-prerequisites) — [§2.5 Free VM walkthrough](#25-free-vm-hosting-optional) (Oracle, DuckDNS, Caddy, Pages, Drive)
 3. [GitHub and source code](#3-github-and-source-code)
 4. [Discord — application, bot token, invite, server ID](#4-discord--application-bot-token-invite-server-id)
 5. [Environment files: `.env` and `webui/.env`](#5-environment-files-env-and-webuienv)
@@ -69,8 +69,9 @@ Follow the sections **in order** unless a heading says “optional.” Each majo
 | You are… | Follow |
 |----------|--------|
 | **Windows — bot and Web UI on the same PC** | Sections **2 → 7** (skip **8**), then **9 → 11**. Confirm API and bot at [Section 6.2](#62-confirm-bot-and-api-are-running). |
-| **Ubuntu — bot on a server, Web UI on your PC** | Sections **2 → 5**, then **8** on the server and **9 → 11** on your PC (skip **6–7**). Point **`webui/.env`** at the server API when it is not on localhost ([Section 9](#93-open-the-app-in-your-browser)). |
+| **Ubuntu — bot on a server, Web UI on your PC** | Sections **2 → 5**, then **8** on the server and **9 → 11** on your PC (skip **6–7**). Point **`webui/.env`** at the server API when it is not on localhost ([Section 9](#93-open-the-app-in-your-browser)). No server yet? [Section 2.5](#25-free-vm-hosting-optional). |
 | **Ubuntu — everything on one machine** | Sections **2 → 5**, **8**, **9 → 11** (skip **6–7**). |
+| **Always-on cloud VM (free tier) + GitHub Pages** | [§2.5 Steps A–J](#25-free-vm-hosting-optional) (Oracle → HTTPS → Pages → CORS → Drive), then **10–11** |
 
 When you finish **11**, work through the **[Final checklist](#final-checklist)**.
 
@@ -146,6 +147,407 @@ git --version
 - [ ] **`dotnet --version`** shows **10.x**.
 - [ ] **`node --version`** shows **20+** (on the PC where you will run the Web UI).
 - [ ] You can open the [Discord Developer Portal](https://discord.com/developers/applications) in a browser.
+
+### 2.5 Free VM hosting (optional)
+
+Use this section if you want HomeBot **always online** (Discord + API) but **do not** want to leave your home PC running 24/7. You create a small **Ubuntu Linux VM** in the cloud, install HomeBot there, put **HTTPS** in front of the API, host the Web UI on **GitHub Pages**, and optionally back up to **Google Drive**.
+
+**Before you start:** Finish [Section 4](#4-discord--application-bot-token-invite-server-id) (Discord bot token + guild ID) on your PC. You will paste those into the VM’s **`.env`** in Step E below. After the VM stack works, continue with [Sections 10–11](#10-discord--finish-in-server-setup-setup-set) (channel bindings + first web user).
+
+#### What HomeBot needs from a host
+
+| Requirement | Why |
+|-------------|-----|
+| **Always on** | Discord disconnects if the bot process stops. “Free” platforms that **sleep after idle** are a poor fit. |
+| **Ubuntu 22.04 or 24.04** | Matches this guide and **`scripts/ubuntu/install-homebot.sh`**. |
+| **~1 GB RAM minimum** (2 GB comfortable) | One .NET process + SQLite + optional **Caddy** reverse proxy. See [UBUNTU_DEPLOY.md — Resource expectations](UBUNTU_DEPLOY.md#resource-expectations-single-household). |
+| **Public HTTPS hostname** (for GitHub Pages) | Browsers on **`https://…github.io`** cannot reliably call **`http://IP:5050`**. Use **Caddy** + a name like **`myhomebot.duckdns.org`**. |
+| **Outbound internet** | Discord, Let’s Encrypt, optional **Google Drive** via **rclone**. |
+
+**GitHub Pages** hosts the static Web UI for **free**; it does **not** run HomeBot. The **VM** runs the bot and API only.
+
+#### Recommended $0 layout
+
+| Piece | Where | Cost |
+|-------|--------|------|
+| **HomeBot + SQLite** | Oracle Always Free VM | $0 within free limits |
+| **HTTPS API** | **Caddy** on the same VM | $0 |
+| **API hostname** | [DuckDNS](https://www.duckdns.org) (or your own domain) | $0 |
+| **Web UI** | **GitHub Pages** | $0 (public repos) |
+| **Backups** | **Google Drive** + **rclone** | $0 within quota — [Section 20.2](#202-off-site-backup-to-google-drive-optional) |
+
+#### Worksheet — fill in as you go
+
+| Symbol | Meaning | Your value |
+|--------|---------|------------|
+| `YOUR_GITHUB_USER` | GitHub username | |
+| `YOUR_REPO` | Repo name (e.g. `HomeBot`) | |
+| `YOUR_VM_PUBLIC_IP` | VM public IPv4 from Oracle | |
+| `YOUR_SSH_KEY_FILE` | Path to `.key` / `.pem` on Windows | |
+| `YOUR_API_HOST` | Hostname only (e.g. `myhomebot.duckdns.org`) | |
+| `YOUR_API_PUBLIC` | `https://YOUR_API_HOST` — **no** trailing slash | |
+| `YOUR_PAGES_URL` | e.g. `https://YOUR_GITHUB_USER.github.io/YOUR_REPO/` | |
+| `YOUR_PAGES_ORIGIN` | Scheme + host only (e.g. `https://YOUR_GITHUB_USER.github.io`) | |
+| `YOUR_GUILD_ID` | Discord server ID | |
+| `YOUR_DISCORD_TOKEN` | Bot token | *(password manager only)* |
+
+#### Order of operations (do not skip HTTPS before Pages)
+
+| Step | What | Section below |
+|------|------|----------------|
+| A | Create Oracle Always Free Ubuntu VM | [Step A](#step-a--create-an-oracle-always-free-vm) |
+| B | Open cloud firewall (22, 80, 443) | [Step B](#step-b--open-oracles-cloud-firewall-security-list) |
+| C | SSH in from Windows; update Ubuntu | [Step C](#step-c--first-ssh-login-from-windows) |
+| D | Point DuckDNS (or your domain) at the VM | [Step D](#step-d--free-hostname-with-duckdns) |
+| E | Install HomeBot on the VM | [Step E](#step-e--install-homebot-on-the-vm) |
+| F | Reserve public IP (recommended) | [Step F](#step-f--reserve-a-stable-public-ip-oracle) |
+| G | HTTPS with Caddy | [Step G](#step-g--https-with-caddy-required-for-github-pages) |
+| H | GitHub Pages + API URL variable | [Step H](#step-h--github-pages-web-ui) |
+| I | CORS in server `.env` | [Step I](#step-i--cors-on-the-server) |
+| J | Google Drive backups (optional) | [Step J](#step-j--google-drive-backups-optional) |
+
+Then: [Section 10](#10-discord--finish-in-server-setup-setup-set) → [Section 11](#11-web-accounts--sign-in-discord-verify-bootstrap) on your PC / Pages.
+
+---
+
+#### Step A — Create an Oracle Always Free VM
+
+Do this in a browser at [Oracle Cloud Console](https://cloud.oracle.com/).
+
+1. Sign up at [Oracle Cloud Free Tier](https://www.oracle.com/cloud/free/). A credit card may be required for **verification** — stay within **Always Free** shapes to avoid charges.
+2. Top bar → pick a **home region** close to you that offers **Always Free eligible** compute.
+3. Menu ☰ → **Compute** → **Instances** → **Create instance**.
+4. Fill in:
+
+   | Field | Choose |
+   |-------|--------|
+   | **Name** | e.g. `homebot` |
+   | **Image** | **Ubuntu 22.04** or **24.04** (Canonical) |
+   | **Shape** | **Change shape** → filter **Always Free eligible** → e.g. **VM.Standard.A1.Flex** with **1 OCPU**, **6 GB RAM** (ARM), or an eligible AMD shape |
+   | **Networking** | Default VCN; **Assign a public IPv4 address** = **Yes** |
+
+5. **SSH keys:** choose **Generate a key pair for me** → **Save private key** to a safe folder (`YOUR_SSH_KEY_FILE`). **You cannot download it again.**
+6. Click **Create**. Wait until **State** = **Running**.
+7. Copy **Public IP address** → `YOUR_VM_PUBLIC_IP`.
+
+---
+
+#### Step B — Open Oracle’s cloud firewall (Security List)
+
+Oracle blocks inbound traffic until you allow it. This is **separate** from Ubuntu **`ufw`** (Step G).
+
+1. On the instance page, click the **Subnet** link (under Primary VNIC).
+2. Click the **Security list** for that subnet.
+3. **Add Ingress Rules** (three rules):
+
+   | Source CIDR | Protocol | Destination port |
+   |-------------|----------|------------------|
+   | `0.0.0.0/0` | TCP | **22** |
+   | `0.0.0.0/0` | TCP | **80** |
+   | `0.0.0.0/0` | TCP | **443** |
+
+4. Save each rule.
+
+**Do not** open port **5050** to the internet. HomeBot stays on **`127.0.0.1:5050`**; only **Caddy** on **443** is public.
+
+---
+
+#### Step C — First SSH login from Windows
+
+Ubuntu images use login **`ubuntu`** (not `opc`).
+
+Fix key permissions once (Windows):
+
+```powershell
+icacls "C:\path\to\your-key.key" /inheritance:r
+icacls "C:\path\to\your-key.key" /grant:r "$($env:USERNAME):(R)"
+```
+
+Connect:
+
+```powershell
+ssh -i "C:\path\to\your-key.key" ubuntu@YOUR_VM_PUBLIC_IP
+```
+
+Type **yes** to trust the host the first time.
+
+On the VM, update packages:
+
+```bash
+sudo apt update
+sudo apt upgrade -y
+```
+
+Reboot if prompted (`sudo reboot`), wait ~1 minute, SSH in again.
+
+Enable **`ufw`** for SSH only for now (ports **80/443** come in Step G):
+
+```bash
+sudo apt install -y ufw
+sudo ufw allow OpenSSH
+sudo ufw enable
+sudo ufw status
+```
+
+---
+
+#### Step D — Free hostname with DuckDNS
+
+**Why:** Let’s Encrypt and GitHub Pages need a **hostname**, not only an IP.
+
+**If you own a domain:** create an **A record** `api.yourdomain.com` → `YOUR_VM_PUBLIC_IP`, set `YOUR_API_HOST` to that name, skip DuckDNS.
+
+**DuckDNS (free):**
+
+1. Open [https://www.duckdns.org](https://www.duckdns.org) → sign in.
+2. Add a subdomain (e.g. `myhomebot`) → set **current ip** to `YOUR_VM_PUBLIC_IP` → **update ip**.
+3. Worksheet: `YOUR_API_HOST` = `myhomebot.duckdns.org`.
+
+Verify from Windows:
+
+```powershell
+nslookup YOUR_API_HOST
+```
+
+If the VM IP changes later, update DuckDNS (Step F helps prevent surprise IP changes).
+
+---
+
+#### Step E — Install HomeBot on the VM
+
+**Important:** Run the installer from a **git clone**. It needs **`scripts/ubuntu/_common.sh`** — curling only `install-homebot.sh` **fails**.
+
+On the VM (replace GitHub user and repo):
+
+```bash
+sudo apt install -y git
+git clone https://github.com/YOUR_GITHUB_USER/YOUR_REPO.git /tmp/HomeBot
+cd /tmp/HomeBot
+sudo bash scripts/ubuntu/install-homebot.sh https://github.com/YOUR_GITHUB_USER/YOUR_REPO.git
+```
+
+The script installs .NET, creates user **`homebot`**, clones to **`/opt/homebot/app`**, publishes, and installs **`homebot.service`**. On first run it often **exits** and asks you to edit **`.env`** — normal.
+
+Edit secrets:
+
+```bash
+sudo -u homebot nano /opt/homebot/app/.env
+```
+
+Minimum (from [Section 4](#4-discord--application-bot-token-invite-server-id)):
+
+```env
+DISCORD_TOKEN=paste-from-password-manager
+DISCORD_GUILD_ID=YOUR_GUILD_ID
+HOMEBOT_API_ENABLED=true
+HOMEBOT_API_TOKEN=long-random-secret-1
+HOMEBOT_WEB_JWT_SECRET=long-random-secret-at-least-32-characters
+```
+
+Generate on the VM: `openssl rand -base64 32` (run twice for the two secrets).
+
+Start and verify:
+
+```bash
+sudo systemctl restart homebot.service
+sudo systemctl status homebot.service
+curl -sS http://127.0.0.1:5050/api/health
+```
+
+Discord should show the bot **online**. More detail: **[UBUNTU_DEPLOY.md](UBUNTU_DEPLOY.md)** or [Section 8](#8-ubuntu-server--install-systemd-auto-start-on-reboot).
+
+---
+
+#### Step F — Reserve a stable public IP (Oracle)
+
+Without a **reserved** IP, stopping the VM can assign a **new** public IP → DuckDNS and HTTPS break.
+
+1. Oracle Console → **Networking** → **IP management** → **Reserved public IPs** (wording may vary).
+2. **Reserve** an address in your compartment/region.
+3. **Attach** it to your instance’s primary VNIC.
+4. If the IP changed, update **DuckDNS** (Step D) and worksheet `YOUR_VM_PUBLIC_IP`.
+
+---
+
+#### Step G — HTTPS with Caddy (required for GitHub Pages)
+
+Browsers on **`https://…github.io`** block calling a plain **`http://`** API. **Caddy** terminates HTTPS and forwards to HomeBot.
+
+**G.1 — Bind HomeBot to localhost**
+
+```bash
+sudo -u homebot nano /opt/homebot/app/.env
+```
+
+Set:
+
+```env
+HOMEBOT_API_URL=http://127.0.0.1:5050
+```
+
+```bash
+sudo systemctl restart homebot.service
+curl -sS http://127.0.0.1:5050/api/health
+```
+
+**G.2 — Install and configure Caddy**
+
+```bash
+sudo apt update
+sudo apt install -y caddy
+sudo nano /etc/caddy/Caddyfile
+```
+
+Replace with your hostname (example):
+
+```caddy
+myhomebot.duckdns.org {
+    encode gzip
+    reverse_proxy 127.0.0.1:5050
+}
+```
+
+Use your real `YOUR_API_HOST` instead of `myhomebot.duckdns.org`.
+
+```bash
+sudo systemctl enable --now caddy
+sudo systemctl status caddy
+```
+
+**G.3 — Open 80 and 443 on Ubuntu**
+
+```bash
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw status
+```
+
+**G.4 — Test from Windows**
+
+```powershell
+curl https://YOUR_API_HOST/api/health
+```
+
+Set `YOUR_API_PUBLIC` = `https://YOUR_API_HOST` (no trailing slash).
+
+If Caddy fails: `journalctl -u caddy -n 50 --no-pager` — usually DNS not pointing here yet or Oracle Security List missing **80/443**.
+
+More proxy options: [Section 14](#14-optional--public-https-api-reverse-proxy).
+
+---
+
+#### Step H — GitHub Pages (Web UI)
+
+Do this in the browser on **github.com** (your PC).
+
+1. **Settings** → **Pages** → **Build and deployment** → **Source** → **GitHub Actions**.
+2. **Settings** → **Secrets and variables** → **Actions** → **Variables** → **New repository variable**
+   - Name: **`HOMEBOT_API_PUBLIC_URL`**
+   - Value: **`YOUR_API_PUBLIC`** (e.g. `https://myhomebot.duckdns.org`) — **no trailing slash**
+3. Trigger a build — push to **`main`** (or **Actions** → **Deploy Web UI to GitHub Pages** → **Run workflow**).
+4. First run may require approving the **`github-pages`** environment under **Settings** → **Environments**.
+5. After a green run, open **`https://YOUR_GITHUB_USER.github.io/YOUR_REPO/`**.
+6. Worksheet:
+   - `YOUR_PAGES_ORIGIN` = `https://YOUR_GITHUB_USER.github.io` (no path)
+   - `YOUR_PAGES_URL` = full URL with repo path
+
+Press **F12** → **Network** — API calls should target **`YOUR_API_PUBLIC`**, not `localhost`.
+
+Full detail: [Section 13](#13-optional--github-pages-static-web-ui).
+
+---
+
+#### Step I — CORS on the server
+
+Do this **after** you know `YOUR_PAGES_ORIGIN` from Step H.
+
+```bash
+sudo -u homebot nano /opt/homebot/app/.env
+```
+
+Add or update:
+
+```env
+HOMEBOT_ALLOWED_ORIGINS=https://YOUR_GITHUB_USER.github.io,http://localhost:5173
+ASPNETCORE_ENVIRONMENT=Production
+```
+
+Use **`YOUR_PAGES_ORIGIN`** exactly (scheme + host, **no** `/HomeBot` path). Keep `localhost:5173` if you still use `npm run dev` on your PC.
+
+```bash
+sudo systemctl restart homebot.service
+```
+
+Reload Pages in the browser — the console should show **no CORS errors**.
+
+Optional **Discord OAuth** for “Continue with Discord”: [Section 12](#12-optional--discord-oauth-continue-with-discord) + [Section 13.3](#133-api-environment-for-pages--oauth).
+
+---
+
+#### Step J — Google Drive backups (optional)
+
+On the VM:
+
+```bash
+sudo apt install -y rclone
+sudo -u homebot rclone config
+```
+
+Create remote **`gdrive`** → **Google Drive** → complete OAuth. Test: `sudo -u homebot rclone lsd gdrive:`
+
+Add to **`/opt/homebot/app/.env`**:
+
+```env
+HOMEBOT_GDRIVE_BACKUP_ENABLED=true
+HOMEBOT_GDRIVE_RCLONE_REMOTE=gdrive
+HOMEBOT_GDRIVE_BACKUP_PATH=HomeBot/backups
+HOMEBOT_GDRIVE_RETENTION_DAYS=90
+HOMEBOT_LOCAL_BACKUP_RETENTION_DAYS=30
+HOMEBOT_BACKUP_DIR=/opt/homebot/backups
+```
+
+```bash
+sudo mkdir -p /opt/homebot/backups
+sudo chown homebot:homebot /opt/homebot/backups
+sudo chmod +x /opt/homebot/app/scripts/backup-homebot-with-gdrive.sh
+sudo bash /opt/homebot/app/scripts/backup-homebot-with-gdrive.sh
+```
+
+Weekly timer:
+
+```bash
+sudo cp /opt/homebot/app/scripts/systemd/homebot-backup-with-gdrive.service.example /etc/systemd/system/homebot-backup-with-gdrive.service
+sudo cp /opt/homebot/app/scripts/systemd/homebot-backup-with-gdrive.timer.example /etc/systemd/system/homebot-backup-with-gdrive.timer
+sudo systemctl daemon-reload
+sudo systemctl enable --now homebot-backup-with-gdrive.timer
+```
+
+Full detail: [Section 20.2](#202-off-site-backup-to-google-drive-optional).
+
+---
+
+#### Other hosting options (honest notes)
+
+| Option | Notes |
+|--------|--------|
+| **Home PC** | No cloud bill; keep PC on; use [Sections 6–7](#6-run-homebot-on-windows-first-time); HTTPS harder for Pages from outside LAN. |
+| **Google Cloud `e2-micro`** | Small always-free VM in select regions — read Google’s current free tier before relying on it. |
+| **AWS / Azure free trial** | Often **12 months** then paid. |
+| **Hetzner / DigitalOcean** | ~€4–6/month — good if Oracle capacity is blocked in your region. |
+| **Render / Railway / Fly free** | Often **sleep on idle** — **not** suitable for Discord. |
+| **HTTP tunnel only** | **HTTPS Pages** + **HTTP** tunnel = **mixed content** blocked. Use Caddy on a VM. |
+
+---
+
+#### Confirm (free VM + Pages stack)
+
+- [ ] `ssh -i ... ubuntu@YOUR_VM_PUBLIC_IP` works from Windows.
+- [ ] Oracle Security List + **`ufw`** allow **22**, **80**, **443** (not **5050** to the world).
+- [ ] `curl https://YOUR_API_PUBLIC/api/health` works from Windows.
+- [ ] GitHub Pages loads; Network tab calls **`YOUR_API_PUBLIC`**.
+- [ ] No CORS errors after Step I.
+- [ ] Bot **online** in Discord; `/setup-set` + first web user done ([Sections 10–11](#10-discord--finish-in-server-setup-setup-set)).
+- [ ] (Optional) Backup file visible on Google Drive.
 
 ---
 
@@ -466,6 +868,8 @@ Use the same script as daily runs so **`.env`** is loaded. Plain **`dotnet run`*
 ---
 
 ## 8. Ubuntu server — install, `systemd`, auto-start on reboot
+
+**No server yet?** Read [Section 2.5 — Free VM hosting](#25-free-vm-hosting-optional) (Oracle Always Free, DuckDNS, GitHub Pages layout).
 
 **Want the shortest path?** Use **[UBUNTU_DEPLOY.md](UBUNTU_DEPLOY.md)** — one install script, one update script, and a small troubleshooting table.
 
@@ -1011,7 +1415,9 @@ Set **`webui`** build variable **`VITE_API_BASE_URL=https://api.example.com`** w
 7. On the phone, open **Settings** (after sign-in) or set **`VITE_API_BASE_URL=http://192.168.1.42:5050`** in **`webui/.env`** and restart **`npm run dev`** so the UI calls the PC’s API, not **`localhost`** (which on the phone means the phone itself).
 8. Sanity check from the phone’s browser: **`http://192.168.1.42:5050/api/health`**.
 
----
+**Install as an app (iPhone):** After the site loads over HTTPS (or localhost during dev), use **Add to Home Screen** for a full-screen PWA. Optional **Web Push** needs **`HOMEBOT_VAPID_*`** on the server — see **[MOBILE.md](./MOBILE.md)**.
+
+**Keyboard shortcuts** in the Web UI: **`/`** search, **`?`** help — see **[FEATURES.md](./FEATURES.md)**.
 
 ## 16. Tests and lint
 
@@ -1023,7 +1429,16 @@ Optional sanity checks after setup or before you change code.
 dotnet test HomeBot.Tests/HomeBot.Tests.csproj
 ```
 
-Includes a full **systems integration** test (buy, wishlist, money, budget, calendar, undo over HTTP).
+Includes integration tests for buy, wishlist, money, budget, calendar, meals, search, webhooks, push, polish (bulk/stale/receipt), and undo over HTTP.
+
+**OpenAPI types** (optional, API must be running):
+
+```bash
+cd webui
+npm run openapi:types
+```
+
+Writes **`webui/src/generated/openapi.d.ts`** from **`GET /openapi/v1.json`**.
 
 **Web UI:**
 
@@ -1052,6 +1467,9 @@ Stop any running **`dotnet run`** if the build cannot overwrite **`HomeBot.dll`*
 | **`/webui-verify` invalid or expired** | Generate a fresh code on **`/setup`**; complete within the timeout; same server as **`DISCORD_GUILD_ID`**. |
 | Web UI tests fail locally | From **`webui`**: **`npm install`** then **`npm run test`**; API tests need **`dotnet test`** with HomeBot **not** locking **`HomeBot.dll`**. |
 | **`actorUserId` required** errors | Open **Settings**; set your Discord user id or pick from roster when the bot is online. |
+| Google Calendar connect fails | **`HOMEBOT_GOOGLE_OAUTH_*`** redirect must match Google Cloud Console; API must be HTTPS in production. |
+| Web Push not offered | Set **`HOMEBOT_VAPID_PUBLIC_KEY`**, **`HOMEBOT_VAPID_PRIVATE_KEY`**, **`HOMEBOT_VAPID_SUBJECT`**; use HTTPS or localhost. |
+| Webhooks return **401** | **`HOMEBOT_WEBHOOK_SECRET`** must match header **`X-HomeBot-Webhook-Secret`**. |
 
 ---
 
@@ -1141,6 +1559,48 @@ A **named value** the process reads at startup (e.g. **`DISCORD_TOKEN`**). You d
 
 Requires **`/setup-set`** for feature **`budget`** ([Section 10](#10-discord--finish-in-server-setup-setup-set)).
 
+### Calendar reminders (optional)
+
+| Variable | Default / notes |
+|----------|-----------------|
+| **`HOMEBOT_REMINDER_POLL_SECONDS`** | **30** (min 10, max 300) — background poll for due reminders. |
+| **`HOMEBOT_CALENDAR_REMINDER_DM`** | **`true`** — also DM assigned users (when Discord is on). |
+
+### Medium features (optional)
+
+| Variable | Notes |
+|----------|--------|
+| **`HOMEBOT_BUY_RECURRING_POLL_MINUTES`** | Recurring buy worker interval (default **60**). |
+| **`HOMEBOT_WEBHOOK_SECRET`** | Shared secret for **`POST /api/hooks/*`** — see **[WEBHOOKS.md](./WEBHOOKS.md)**. |
+| **`HOMEBOT_WEB_ADMIN_DISCORD_IDS`** | Comma-separated Discord ids with web admin rights. |
+
+### Google Calendar sync (optional)
+
+| Variable | Notes |
+|----------|--------|
+| **`HOMEBOT_GOOGLE_OAUTH_CLIENT_ID`** | Google Cloud OAuth client. |
+| **`HOMEBOT_GOOGLE_OAUTH_CLIENT_SECRET`** | Client secret. |
+| **`HOMEBOT_GOOGLE_OAUTH_REDIRECT_URI`** | Must match Google redirect URIs exactly. |
+| **`HOMEBOT_GOOGLE_CALENDAR_SYNC_MINUTES`** | Background sync interval (default **15**). |
+| **`HOMEBOT_GOOGLE_SYNC_CONFLICT`** | **`newest`**, **`google`**, or **`local`** when both sides changed. |
+
+### Budget notification channels (optional)
+
+| Variable | Notes |
+|----------|--------|
+| **`HOMEBOT_BUDGET_DIGEST_TO_CHANNEL`** | Post weekly digest to bound **budget** channel (default on when channel exists). |
+| **`HOMEBOT_BUDGET_ALERTS_TO_CHANNEL`** | Post envelope/large-expense alerts to **budget** channel. |
+
+### Web Push (optional PWA)
+
+| Variable | Notes |
+|----------|--------|
+| **`HOMEBOT_VAPID_PUBLIC_KEY`** | From **`npx web-push generate-vapid-keys`**. |
+| **`HOMEBOT_VAPID_PRIVATE_KEY`** | Server-only. |
+| **`HOMEBOT_VAPID_SUBJECT`** | e.g. **`mailto:you@example.com`**. |
+
+See **[MOBILE.md](./MOBILE.md)** for install and enable steps.
+
 ### Off-site backup (Google Drive via rclone)
 
 | Variable | Notes |
@@ -1152,6 +1612,8 @@ Requires **`/setup-set`** for feature **`budget`** ([Section 10](#10-discord--fi
 | **`HOMEBOT_LOCAL_BACKUP_RETENTION_DAYS`** | Delete local **`/opt/homebot/backups`** files older than N days (default **30**). |
 | **`HOMEBOT_BACKUP_DIR`** | Local backup directory. |
 | **`HOMEBOT_GDRIVE_BACKUP_DRY_RUN`** | **`true`** = log only, no changes. |
+| **`HOMEBOT_GDRIVE_BACKUP_ENCRYPT`** | **`true`** — GPG-encrypt before upload (see **[OPS.md](./OPS.md)**). |
+| **`HOMEBOT_GDRIVE_BACKUP_ENCRYPT_PASSPHRASE_FILE`** | Path to passphrase file on the server. |
 
 ### Other
 
@@ -1476,12 +1938,13 @@ Work through this table after Sections 1–11.
 | 2 | Discord bot | Server member list | **Online** (green) |
 | 3 | Slash commands | Type **`/`** in a channel | HomeBot commands listed |
 | 4 | Channel bindings | **`/setup-view`** | **buy**, **wishlist**, **money**, **budget**, **calendar** mapped |
-| 5 | Web UI loads | **`http://localhost:5173`** | Sidebar pages load; API connected |
+| 5 | Web UI loads | **`http://localhost:5173`** | Sidebar: Home, Buy, Wishlist, Money, Budget, Calendar, **Meals**, Settings |
 | 6 | Web sign-in | **Sign in** on **`/login`** after [Section 11](#11-web-accounts--sign-in-discord-verify-bootstrap) | **Home** loads; header shows **Connected**; writes work on **Buy** |
 | 7 | One write path | Add a buy item in Web UI or **`/buy-add`** in Discord | Item appears in list / channel notify (if bound) |
-| 8 | GitHub Pages (if used) | Open your Pages URL | No 404 under **`/REPO/assets/`**; API URL in build matches production |
-| 9 | Backups (if enabled) | After [20.2](#202-off-site-backup-to-google-drive-optional): files under **`HomeBot/backups`** on Drive; old copies pruned per retention |
+| 8 | Dashboard | Open **Home** | Stale buy, budget alerts, backup warning (if applicable) |
+| 9 | GitHub Pages (if used) | Open your Pages URL | No 404 under **`/REPO/assets/`**; API URL in build matches production |
+| 10 | Backups (if enabled) | After [20.2](#202-off-site-backup-to-google-drive-optional): files under **`HomeBot/backups`** on Drive; old copies pruned per retention |
 
-**Next steps (optional):** Discord OAuth [Section 12](#12-optional--discord-oauth-continue-with-discord), GitHub Pages [Section 13](#13-optional--github-pages-static-web-ui), HTTPS API [Section 14](#14-optional--public-https-api-reverse-proxy), backups [Section 20](#20-backing-up-sqlite-homebotdb) · [Google Drive backups](#202-off-site-backup-to-google-drive-optional).
+**Next steps (optional):** Discord OAuth [Section 12](#12-optional--discord-oauth-continue-with-discord), GitHub Pages [Section 13](#13-optional--github-pages-static-web-ui), HTTPS API [Section 14](#14-optional--public-https-api-reverse-proxy), **PWA / push** [MOBILE.md](./MOBILE.md), **Google Calendar** / **webhooks** (Section 19 env + **[FEATURES.md](./FEATURES.md)**), backups [Section 20](#20-backing-up-sqlite-homebotdb).
 
 Product reference: **[FEATURES.md](FEATURES.md)**. Configuration reference: **[README.md](../README.md)** and [Section 19](#19-reference--every-environment-variable).

@@ -202,6 +202,31 @@ public class MoneyService
     }
 
     /// <summary>
+    /// Returns non-zero balances for API/UI settle-up matrix.
+    /// </summary>
+    public MoneyBalancesModel GetBalancesForUser(ulong user)
+    {
+        var raw = GetAllBalances(user);
+        var entries = raw
+            .Select(kv => new MoneyBalanceEntryModel
+            {
+                OtherUserId = kv.Key,
+                OtherMemberLabel = HouseholdIdentity.MemberLabel(kv.Key),
+                Balance = kv.Value,
+            })
+            .OrderByDescending(e => Math.Abs(e.Balance))
+            .ThenBy(e => e.OtherMemberLabel, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return new MoneyBalancesModel
+        {
+            UserId = user,
+            MemberLabel = HouseholdIdentity.MemberLabel(user),
+            Balances = entries,
+        };
+    }
+
+    /// <summary>
     /// Returns paginated transaction data for API and UI adapters.
     /// </summary>
     public PagedResult<MoneyTransactionListItemModel> GetTransactions(int page = 0)

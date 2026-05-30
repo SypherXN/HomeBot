@@ -12,12 +12,14 @@ public class WishlistService
     private readonly DatabaseService _db;
     private readonly UndoService _undo;
     private readonly ConfigService _config;
+    private readonly BuyService _buy;
 
-    public WishlistService(DatabaseService db, UndoService undo, ConfigService config)
+    public WishlistService(DatabaseService db, UndoService undo, ConfigService config, BuyService buy)
     {
         _db = db;
         _undo = undo;
         _config = config;
+        _buy = buy;
     }
 
     /// <summary>
@@ -133,6 +135,57 @@ public class WishlistService
             HasNext = hasNext,
             HasPrev = hasPrev
         };
+    }
+
+    /// <summary>Zero-based page for default Web UI list sort (Id ascending).</summary>
+    public int FindDefaultListPageForItem(int itemId)
+    {
+        if (itemId <= 0) return 0;
+        using var conn = _db.GetConnection();
+        conn.Open();
+        var pageSize = ReadPageSize(conn);
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM WishlistItems WHERE Status = 'active' AND Id < $id";
+        cmd.Parameters.AddWithValue("$id", itemId);
+        var before = Convert.ToInt32(cmd.ExecuteScalar());
+        return before / pageSize;
+    }
+
+    /// <summary>Copies an active wishlist item to the buy list (does not complete the wish).</summary>
+    public bool AddItemToBuyList(int wishlistId, ulong actor)
+    {
+        using var conn = _db.GetConnection();
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT Name, Notes, Tags, Link FROM WishlistItems
+            WHERE Id = $id AND Status = 'active'";
+        cmd.Parameters.AddWithValue("$id", wishlistId);
+        using var r = cmd.ExecuteReader();
+        if (!r.Read())
+            return false;
+
+        var name = r.GetString(0);
+        var notes = r.IsDBNull(1) ? "" : r.GetString(1);
+        var tags = r.IsDBNull(2) ? "" : r.GetString(2);
+        var link = r.IsDBNull(3) ? "" : r.GetString(3);
+        var noteParts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(notes)) noteParts.Add(notes);
+        if (!string.IsNullOrWhiteSpace(link)) noteParts.Add($"Link: {link}");
+        noteParts.Add($"From wishlist #{wishlistId}");
+
+        _buy.AddItem(name, "1", "", null, tags, string.Join(" · ", noteParts), actor);
+        return true;
+    }
+
+    private static int ReadPageSize(SqliteConnection conn)
+    {
+        using var configCmd = conn.CreateCommand();
+        configCmd.CommandText = "SELECT Value FROM Settings WHERE Key = 'page_size'";
+        var result = configCmd.ExecuteScalar();
+        if (result != null && int.TryParse(result.ToString(), out var parsed) && parsed > 0)
+            return parsed;
+        return 5;
     }
 
     /// <summary>
@@ -506,6 +559,30 @@ public class WishlistService
 
         var allowed = new HashSet<string>(catalog, StringComparer.Ordinal);
         return string.Join(",", parts.Where(p => allowed.Contains(p)));
+    }
+
+    /// <summary>Completes multiple active wishlist items.</summary>
+    public int BulkCompleteItems(IReadOnlyList<int> ids, ulong userId)
+    {
+        var count = 0;
+        foreach (var id in ids.Distinct().Where(i => i > 0))
+        {
+            MarkComplete(id, userId);
+            count++;
+        }
+        return count;
+    }
+
+    /// <summary>Deletes multiple active wishlist items.</summary>
+    public int BulkDeleteItems(IReadOnlyList<int> ids, ulong userId)
+    {
+        var count = 0;
+        foreach (var id in ids.Distinct().Where(i => i > 0))
+        {
+            DeleteItem(id, userId);
+            count++;
+        }
+        return count;
     }
 
 }

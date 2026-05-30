@@ -69,7 +69,15 @@ flowchart TB
 | `ChannelBindingService` | `ChannelBindings` — feature → Discord channel id |
 | `UndoService` | `ActionLog` append + restore |
 | `BuyService`, `WishlistService`, `MoneyService`, `CalendarService`, `BudgetService` | Feature domains |
-| `BudgetNotificationService` | Background digest/alerts |
+| `MealPlanningService` | Recipes and weekly meal plan |
+| `SearchService` | Global search across buy, wishlist, budget, calendar |
+| `GoogleCalendarOAuthService`, `GoogleCalendarSyncService` | Google Calendar OAuth + two-way sync worker |
+| `WebPushService` | VAPID Web Push subscriptions and notify |
+| `BuyRecurringService` | Recurring buy item worker |
+| `NotificationPreferencesService` | Per-user notification toggles |
+| `HouseholdAuditService`, `BackupStatsService`, `OpsMetricsService` | Audit log reads, backup meta, Prometheus metrics |
+| `HouseholdReportService` | Markdown household report |
+| `BudgetNotificationService` | Background digest/alerts (+ optional Web Push) |
 | `WebAuthService`, `WebRefreshTokenService`, `WebAuthDiscordVerificationService`, `DiscordOAuthService` | Web login |
 | `DiscordSocketHolder`, `DiscordGuildDirectoryService`, `IDiscordChannelNotifier` | Live guild + outbound posts |
 | `DiscordAuthAuditNotifier` | Sign-in lines to `audit` channel |
@@ -115,6 +123,12 @@ After base tables, **`SchemaMigrationRunner`** applies ordered migrations from *
 | `001_calendar_recurrence_exception_columns` | Extra columns on recurrence exceptions (kinds, overrides, instance completed) |
 | `002_budget_core` | Full budget schema (categories, accounts, transactions, splits, tags, envelopes, goals, bills, recurring, audit, exchange rates, notification log) + default “Household” account |
 | `003_budget_accounts_is_active` | `BudgetAccounts.IsActive` for archive |
+| `004_budget_notification_dismissals` | Per-user dismissals for budget notifications |
+| `005_medium_features` | Search indexes, web admin, categorize rules, buy recurring, notification prefs, audit extensions |
+| `006_polish_meals_gcal_ops` | Meal planning tables, Google Calendar OAuth/sync links, ops-related columns |
+| `007_gcal_followups_meals_calendar` | Google delete queue, meal plan → calendar link, `GoogleUpdatedAt` |
+| `008_push_subscriptions` | `PushSubscriptions` for Web Push |
+| `009_polish_receipt_bulk` | `BudgetTransactions.ReceiptUrl`; buy list exposes `CreatedAt` in API (no schema change) |
 
 **Rules:** migrations are **additive only**; never rename applied ids; never delete `homebot.db` in application code.
 
@@ -142,6 +156,13 @@ Order matters:
 |--------|------|--------|
 | Buy, wishlist, money, calendar, undo, guild members | `Api/HomeBotApiRegistration.cs` | `/api/…` reads; `/api` mutation group with rate limit |
 | Budget | `Api/BudgetApiRegistration.cs` | `/api/budget/…` |
+| Meals | `Api/MealPlanningApiRegistration.cs` | `/api/meals/…` |
+| Google Calendar | `Api/GoogleCalendarApiRegistration.cs` | `/api/calendar/google/…` |
+| Search, webhooks, audit, household report, categorize | `Api/MediumFeaturesApiRegistration.cs` | `/api/search`, `/api/hooks/…`, `/api/audit/…`, etc. |
+| Polish (household settings, notification prefs) | `Api/PolishApiRegistration.cs` | `/api/household/…`, `/api/notifications/…`, webhook budget hook |
+| Ops | `Api/OpsApiRegistration.cs` | `/api/ops/health`, `/api/ops/metrics` |
+| Push | `Api/PushApiRegistration.cs` | `/api/push/…` |
+| Web admin | `Api/WebAdminApi.cs` | `/api/admin/users/…` |
 | Web auth | `Api/HomeBotAuthApi.cs` | `/api/auth/…` |
 | Discord OAuth | `Api/HomeBotDiscordOAuthApi.cs` | `/api/auth/discord/oauth/…` |
 
@@ -198,12 +219,17 @@ Some flows (e.g. `wishlist-view`, `calendar-view`) still build one-off embeds in
 
 - CRUD on `BuyItems`; status `active` / completed
 - Tags stored as CSV on row; optional catalog in `Settings` (`buy_tags`) enforced on write when non-empty
+- **`GetStaleItems(days, limit)`** — active rows by `CreatedAt`
+- **`BulkCompleteItems` / `BulkDeleteItems`** — loop per id with undo logging
+- List rows include **`CreatedAt`** for Web UI age hints
 - **Undo:** `complete` and `delete` log to `ActionLog` with serialized row on delete
 - List pagination uses `ConfigService` `page_size`
 
 ### Wishlist — `WishlistService`
 
 - Same patterns as buy: owners (Discord id), tags catalog, pagination, undo on delete/complete
+- **`BulkCompleteItems` / `BulkDeleteItems`**
+- **`AddItemToBuyList`** — copy wish row to buy list (Web UI “Add to buy”)
 
 ### Money — `MoneyService`
 
@@ -253,18 +279,28 @@ Started from `Program.OnReady` (fire-and-forget `Task`s).
 
 ### `ReminderService`
 
-- Loop every **10 seconds**
+- Loop every **`HOMEBOT_REMINDER_POLL_SECONDS`** (default **30**, min 10, max 300)
 - Reads `CalendarItems` with non-empty `ReminderOffset`
-- Parses offset via `Utils/ReminderParser.cs`
-- Posts to bound **`calendar`** channel; respects recurrence exception state for instances
-- Advances recurring series `StartDateTime` after firing (daily/weekly path in service)
+- Posts to bound **`calendar`** channel; optional **DM** when `HOMEBOT_CALENDAR_REMINDER_DM=true`
+- **`WebPushService.TryNotifyUserAsync`** when push is configured and user prefs allow
+- Respects recurrence exception state for instances
 
 ### `BudgetNotificationService`
 
 - Loop every **6 hours**
 - Calls `BudgetService.ProcessDueRecurring()`
-- Sends debounced alerts from `CollectPendingNotifications()` to **`budget`** channel
-- **Weekly digest** when `IsDigestDueNow()` matches `HOMEBOT_BUDGET_DIGEST_DAY` / `HOMEBOT_BUDGET_DIGEST_UTC_HOUR` (default Sunday 17 UTC)
+- Sends debounced alerts from `CollectPendingNotifications()` — Discord channel and/or **Web Push** per **`NotificationPreferencesService`**
+- **Weekly digest** when `IsDigestDueNow()` matches `HOMEBOT_BUDGET_DIGEST_DAY` / `HOMEBOT_BUDGET_DIGEST_UTC_HOUR`
+
+### `BuyRecurringService`
+
+- Poll interval **`HOMEBOT_BUY_RECURRING_POLL_MINUTES`** (default 60)
+- Creates buy items from recurring rules when due
+
+### `GoogleCalendarSyncService`
+
+- Poll interval **`HOMEBOT_GOOGLE_CALENDAR_SYNC_MINUTES`** (default 15) when Google OAuth env is set
+- Two-way sync for events/tasks; pending delete queue; conflict policy **`HOMEBOT_GOOGLE_SYNC_CONFLICT`**
 
 ---
 
@@ -355,7 +391,7 @@ HomeBot/
 | Area | Location |
 |------|----------|
 | **Full-stack systems (API)** | `HomeBot.Tests/HomeBotSystemsIntegrationTests.cs` — one workflow across buy, wishlist, money, budget, calendar, undo |
-| HTTP integration | `HomeBot.Tests/ApiMutationTests.cs`, `ApiPhase3Tests.cs`, `ApiWebAuthTests.cs`, `BudgetPolishApiTests.cs`, `Tier1FeatureApiTests.cs`, `TierAFeatureApiTests.cs` |
+| HTTP integration | `HomeBot.Tests/ApiMutationTests.cs`, `ApiPhase3Tests.cs`, `ApiWebAuthTests.cs`, `BudgetPolishApiTests.cs`, `Tier1FeatureApiTests.cs`, `TierAFeatureApiTests.cs`, `MediumFeatureApiTests.cs`, `PolishFeatureApiTests.cs` |
 | Domain / calendar | `CalendarServiceRangeTests.cs`, `CalendarServiceEditTests.cs`, `BudgetServicePolishTests.cs` |
 | Auth / limits | `ApiAuthRateLimitTests.cs` |
 | Serialization | `SnowflakeJsonSerializationTests.cs` |
@@ -376,4 +412,6 @@ Tests use **TestServer** + real SQLite temp files + shared `HomeBotApiHost.Confi
 | [FEATURES.md](./FEATURES.md) | What users can do (Discord + Web + API) |
 | [SETUP.md](SETUP.md) | Install, env, deployment, backups (§20–20.2) |
 | [UBUNTU_DEPLOY.md](./UBUNTU_DEPLOY.md) | Ubuntu scripts |
-| [OPS.md](./OPS.md) | TLS, reverse proxy, Pages, backup ops |
+| [OPS.md](./OPS.md) | TLS, reverse proxy, Pages, backup ops, diagnostics |
+| [MOBILE.md](./MOBILE.md) | PWA / push on iPhone |
+| [WEBHOOKS.md](./WEBHOOKS.md) | Automation hooks |

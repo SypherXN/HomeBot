@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import DiscordMemberSelect from "../components/DiscordMemberSelect";
+import MemberIdField from "../components/MemberIdField";
+import BulkActionBar from "../components/BulkActionBar";
+import { useBulkSelection } from "../hooks/useBulkSelection";
 import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
 import { validActorId } from "../lib/validation";
 import {
@@ -9,15 +11,22 @@ import {
   deleteBuyItem,
   getBuyItems,
   getBuyTagCatalog,
+  getBuyRecurring,
+  postBuyRecurring,
+  deleteBuyRecurring,
   postBuyItem,
   postBuyItemComplete,
+  postBuyBulkComplete,
+  postBuyBulkDelete,
   postUndo,
   putBuyItem,
   putBuyTagCatalog,
   type BuyListItem,
   type BuyListSort,
+  type BuyRecurringItem,
   type PagedBuyList,
 } from "../api";
+import { highlightRowClass, useSearchHighlightId } from "../lib/searchHighlight";
 
 function formatSnowflake(n: string | number | null | undefined): string {
   if (n == null) return "—";
@@ -32,6 +41,16 @@ function normalizeTagToken(raw: string): string | null {
   return s;
 }
 
+function formatItemAge(createdAt: string | null | undefined): string | null {
+  if (!createdAt) return null;
+  const ms = Date.parse(createdAt.includes("T") ? createdAt : `${createdAt.replace(" ", "T")}Z`);
+  if (!Number.isFinite(ms)) return null;
+  const days = Math.floor((Date.now() - ms) / 86400000);
+  if (days < 1) return "added today";
+  if (days === 1) return "1 day on list";
+  return `${days} days on list`;
+}
+
 export default function BuyPage() {
   const { token, actorUserId } = useAuth();
   const tok = token.trim();
@@ -39,6 +58,10 @@ export default function BuyPage() {
   const canAuth = tok.length > 0;
   const canActor = canAuth && validActorId(actor);
   const guildRoster = useDiscordGuildRoster(token);
+  const [params] = useSearchParams();
+  const highlightId = useSearchHighlightId();
+  const highlightRef = useRef<HTMLLIElement>(null);
+  const initialPage = Number.parseInt(params.get("page") ?? "0", 10);
 
   const [catalogTags, setCatalogTags] = useState<string[]>([]);
   const [draftCatalogTags, setDraftCatalogTags] = useState<string[]>([]);
@@ -50,10 +73,17 @@ export default function BuyPage() {
   const [filterStore, setFilterStore] = useState("");
   const [sortBy, setSortBy] = useState<BuyListSort>("id");
 
-  const [listPage, setListPage] = useState(0);
+  const [listPage, setListPage] = useState(
+    Number.isFinite(initialPage) && initialPage >= 0 ? initialPage : 0
+  );
   const [data, setData] = useState<PagedBuyList | null>(null);
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!highlightId || !data?.items.some((i) => i.id === highlightId)) return;
+    highlightRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [highlightId, data]);
 
   const [addName, setAddName] = useState("");
   const [addQty, setAddQty] = useState("1");
@@ -73,8 +103,21 @@ export default function BuyPage() {
   const [editAssigned, setEditAssigned] = useState("");
   const [editTagPick, setEditTagPick] = useState<string[]>([]);
   const [clearBusy, setClearBusy] = useState(false);
+
+  const [recurring, setRecurring] = useState<BuyRecurringItem[]>([]);
+  const [recurName, setRecurName] = useState("");
+  const [recurCadence, setRecurCadence] = useState<"weekly" | "daily">("weekly");
+  const [recurBusy, setRecurBusy] = useState(false);
   const [undoBusy, setUndoBusy] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [banner, setBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  const pageIds = useMemo(() => data?.items.map((i) => i.id) ?? [], [data?.items]);
+  const bulk = useBulkSelection(pageIds);
+
+  useEffect(() => {
+    bulk.clear();
+  }, [listPage, bulk.clear]);
 
   const refreshCatalog = useCallback(async () => {
     if (!canAuth) {
@@ -130,6 +173,16 @@ export default function BuyPage() {
     void loadList();
   }, [loadList]);
 
+  useEffect(() => {
+    if (!canAuth) {
+      setRecurring([]);
+      return;
+    }
+    void getBuyRecurring(tok)
+      .then((r) => setRecurring(r.items))
+      .catch(() => setRecurring([]));
+  }, [canAuth, tok]);
+
   function startEdit(item: BuyListItem) {
     setEditingId(item.id);
     setEditName(item.name);
@@ -168,6 +221,37 @@ export default function BuyPage() {
   function showBanner(kind: "ok" | "err", text: string) {
     setBanner({ kind, text });
     window.setTimeout(() => setBanner(null), 5000);
+  }
+
+  async function handleBulkComplete() {
+    if (!canActor || bulk.selectedIds.length === 0) return;
+    setBulkBusy(true);
+    try {
+      const res = await postBuyBulkComplete(tok, actor, bulk.selectedIds);
+      showBanner("ok", `Completed ${res.count} item(s).`);
+      bulk.clear();
+      await loadList();
+    } catch (e) {
+      showBanner("err", e instanceof Error ? e.message : String(e));
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (!canActor || bulk.selectedIds.length === 0) return;
+    if (!window.confirm(`Remove ${bulk.selectedIds.length} item(s) from the buy list?`)) return;
+    setBulkBusy(true);
+    try {
+      const res = await postBuyBulkDelete(tok, actor, bulk.selectedIds);
+      showBanner("ok", `Removed ${res.count} item(s).`);
+      bulk.clear();
+      await loadList();
+    } catch (e) {
+      showBanner("err", e instanceof Error ? e.message : String(e));
+    } finally {
+      setBulkBusy(false);
+    }
   }
 
   async function handleAdd(e: React.FormEvent) {
@@ -630,25 +714,15 @@ export default function BuyPage() {
               />
             </div>
             <div className="sm:col-span-2">
-              <label htmlFor="buy-add-assigned" className="mb-1 block text-xs font-medium text-slate-400">
-                Assign to (Discord user id)
-              </label>
-              <input
+              <MemberIdField
                 id="buy-add-assigned"
+                token={tok}
                 value={addAssigned}
-                onChange={(e) => setAddAssigned(e.target.value)}
-                inputMode="numeric"
-                className="box-border min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                onChange={setAddAssigned}
+                label="Assign to"
+                sharedRoster={guildRoster}
+                actorId={actor}
               />
-              <div className="mt-2 min-w-0">
-                <DiscordMemberSelect
-                  token={tok}
-                  sharedRoster={guildRoster}
-                  label="Pick from server"
-                  onPickUserId={setAddAssigned}
-                  className="min-w-0"
-                />
-              </div>
             </div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -667,9 +741,22 @@ export default function BuyPage() {
       {/* List */}
       <section aria-labelledby="list-heading">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <h2 id="list-heading" className="text-lg font-semibold text-white">
-            To buy
-          </h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 id="list-heading" className="text-lg font-semibold text-white">
+              To buy
+            </h2>
+            {data && data.items.length > 0 && canActor && (
+              <label className="flex items-center gap-2 text-sm text-slate-400">
+                <input
+                  type="checkbox"
+                  checked={bulk.allOnPageSelected}
+                  onChange={bulk.toggleAllOnPage}
+                  className="h-4 w-4 rounded border-slate-600"
+                />
+                Select page
+              </label>
+            )}
+          </div>
           {canAuth && (
             <button
               type="button"
@@ -699,12 +786,34 @@ export default function BuyPage() {
         )}
 
         {data && data.items.length > 0 && (
+          <>
+            <BulkActionBar
+              count={bulk.count}
+              busy={bulkBusy}
+              onComplete={() => void handleBulkComplete()}
+              onDelete={() => void handleBulkDelete()}
+              onClear={bulk.clear}
+            />
           <ul className="space-y-3">
             {data.items.map((item) => (
               <li
                 key={item.id}
-                className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 shadow-sm sm:p-5"
+                ref={item.id === highlightId ? highlightRef : undefined}
+                className={`rounded-xl border border-slate-800 bg-slate-900/50 p-4 shadow-sm sm:p-5 ${highlightRowClass(item.id, highlightId)}`}
               >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  {canActor && editingId !== item.id && (
+                    <label className="flex shrink-0 items-start pt-1">
+                      <input
+                        type="checkbox"
+                        checked={bulk.selected.has(item.id)}
+                        onChange={() => bulk.toggle(item.id)}
+                        className="mt-1 h-4 w-4 rounded border-slate-600"
+                        aria-label={`Select ${item.name}`}
+                      />
+                    </label>
+                  )}
+                  <div className="min-w-0 flex-1">
                 {editingId === item.id ? (
                   <div className="space-y-3">
                     <input
@@ -781,6 +890,9 @@ export default function BuyPage() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0 flex-1 space-y-2">
                     <p className="text-lg font-semibold leading-snug text-white">{item.name}</p>
+                    {formatItemAge(item.createdAt) ? (
+                      <p className="text-xs text-amber-400/90">{formatItemAge(item.createdAt)}</p>
+                    ) : null}
                     <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
                       <div>
                         <dt className="text-xs uppercase tracking-wide text-slate-500">Quantity</dt>
@@ -873,9 +985,12 @@ export default function BuyPage() {
                   </div>
                 </div>
                 )}
+                  </div>
+                </div>
               </li>
             ))}
           </ul>
+          </>
         )}
 
         {/* Pagination — Web UI only */}
@@ -931,6 +1046,83 @@ export default function BuyPage() {
           </nav>
         )}
       </section>
+
+      {canAuth && canActor && (
+        <section className="mt-10 border-t border-slate-800 pt-8">
+          <h3 className="text-base font-medium text-slate-300">Recurring items</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Automatically re-add to the buy list on a schedule (checked hourly on the server).
+          </p>
+          <ul className="mt-3 space-y-1 text-sm text-slate-400">
+            {recurring.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-center gap-2">
+                <span className="text-slate-200">{r.name}</span>
+                <span className="text-xs text-slate-500">
+                  {r.cadence} · next {r.nextDueDate}
+                </span>
+                <button
+                  type="button"
+                  className="text-xs text-red-400 hover:underline"
+                  disabled={recurBusy}
+                  onClick={() => {
+                    void (async () => {
+                      setRecurBusy(true);
+                      try {
+                        await deleteBuyRecurring(tok, r.id);
+                        const next = await getBuyRecurring(tok);
+                        setRecurring(next.items);
+                      } finally {
+                        setRecurBusy(false);
+                      }
+                    })();
+                  }}
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <input
+              value={recurName}
+              onChange={(e) => setRecurName(e.target.value)}
+              placeholder="Item name"
+              className="min-w-[10rem] flex-1 rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+            />
+            <select
+              value={recurCadence}
+              onChange={(e) => setRecurCadence(e.target.value as "weekly" | "daily")}
+              className="rounded border border-slate-600 bg-slate-950 px-2 py-2 text-slate-100"
+            >
+              <option value="weekly">weekly</option>
+              <option value="daily">daily</option>
+            </select>
+            <button
+              type="button"
+              disabled={recurBusy || !recurName.trim()}
+              className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:opacity-50"
+              onClick={() => {
+                void (async () => {
+                  setRecurBusy(true);
+                  try {
+                    await postBuyRecurring(tok, actor, {
+                      name: recurName.trim(),
+                      cadence: recurCadence,
+                    });
+                    setRecurName("");
+                    const next = await getBuyRecurring(tok);
+                    setRecurring(next.items);
+                  } finally {
+                    setRecurBusy(false);
+                  }
+                })();
+              }}
+            >
+              Add recurring
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* Clear completed — does not affect active list display */}
       {canAuth && (

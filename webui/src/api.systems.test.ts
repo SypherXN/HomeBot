@@ -4,6 +4,7 @@ import {
   getBudgetAccounts,
   getBudgetCategories,
   getBudgetNotifications,
+  getBudgetNotificationCount,
   getBuy,
   getCalendarRange,
   getHealth,
@@ -115,6 +116,10 @@ describe("API client — all subsystems", () => {
 
     await getBudgetNotifications(TOKEN);
     expect(lastCall().url).toContain("/api/budget/notifications");
+    expect(lastCall().url).not.toContain("/count");
+
+    await getBudgetNotificationCount(TOKEN);
+    expect(lastCall().url).toContain("/api/budget/notifications/count");
 
     await postBudgetTransaction(TOKEN, ACTOR, {
       type: "expense",

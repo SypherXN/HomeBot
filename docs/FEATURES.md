@@ -56,6 +56,7 @@ Bind each feature to a text channel. Feature commands only work in the bound cha
 |---------|---------|
 | `/help` | Topic-based help (`general`, `web`, `setup`, `config`, `calendar`, `budget`, `money`, `wishlist`, `buy`) |
 | `/dashboard` | Snapshot: calendar today/upcoming, buy/wishlist highlights, budget summary |
+| `/meal-plan`, `/meal-dinner`, `/meal-add-recipe` | Meal planning (see [Meals](#meal-planning) below) |
 | `/webui-verify` | Complete browser signup with a code from the Web UI setup page |
 
 ---
@@ -71,13 +72,14 @@ Shared shopping-style checklist with assignees and optional tags.
 ### Web UI (`/buy`)
 
 - Add items with assignee (Discord roster when available)
-- Tag catalog editor; filter and sort lists
-- Complete, remove, clear completed
+- Tag catalog editor; filter and sort lists (including **created** sort)
+- Complete, remove, clear completed; **bulk complete/delete** (checkboxes on each page)
+- **Stale age** hint on rows (`createdAt` from API)
 - Pagination and **undo**
 
 ### API (high level)
 
-`GET/POST` items, tag catalog `GET/PUT`, pagination, mutations with `actorUserId`.
+`GET/POST` items, tag catalog `GET/PUT`, pagination, **`GET /api/buy/stale?days=&limit=`** for aging items, **`POST …/bulk-complete`** and **`POST …/bulk-delete`** (body: `actorUserId`, `ids[]`), mutations with `actorUserId`.
 
 ---
 
@@ -94,10 +96,12 @@ Gift / want list with owners, links, priority, notes, and tags.
 - Owner filter (everyone vs member)
 - Tag catalog (same pattern as buy)
 - Add, complete, remove, clear completed, pagination, **undo**
+- **Add to buy** — one-click copy to the shopping list (`POST /api/wishlist/items/{id}/add-to-buy`)
+- **Bulk complete/delete** on the current page (same pattern as Buy)
 
 ### API
 
-`GET/POST` items, `GET` owners for filters, tag catalog, standard CRUD with `actorUserId`.
+`GET/POST` items, `GET` owners for filters, tag catalog, standard CRUD with `actorUserId`, **`POST …/add-to-buy`**, **`POST …/bulk-complete`**, **`POST …/bulk-delete`**.
 
 ---
 
@@ -150,7 +154,7 @@ Full planning and tracking: categories, transactions, envelopes, accounts, bills
 
 | Area | Capabilities |
 |------|----------------|
-| **Transactions** | Add/edit/delete; filters (merchant, note, amount, tags); category, spender, account, splits, tags, pending/cleared |
+| **Transactions** | Add/edit/delete; filters (merchant, note, amount, tags); category, spender, account, splits, tags, pending/cleared; optional **receipt URL** |
 | **Categories** | Create, edit, delete; visibility (household / personal) |
 | **Envelopes** | Monthly targets per category; copy previous month → current month |
 | **Accounts** | Checking, savings, credit, etc.; balances; **archive/restore** inactive accounts |
@@ -201,7 +205,8 @@ Natural-language dates on add (e.g. “tomorrow 6pm”, “next monday”). Opti
 - **Tasks** side panel
 - Add **event** or **task**; per-event time zone on create/edit
 - Occurrence detail: complete series, complete this day, omit, edit this day, optional end override, **reset this day**
-- **Export .ics** for the current view range
+- **Export .ics** / **Import .ics** for the current view range
+- **Connect Google Calendar** — OAuth two-way sync when env is configured; calendar picker per connection
 - **Undo**
 
 ### API (representative)
@@ -209,23 +214,60 @@ Natural-language dates on add (e.g. “tomorrow 6pm”, “next monday”). Opti
 - `GET` list, range, today, upcoming, item by id (`?instanceStartUtc=` for merged occurrence detail)
 - `POST` create; `PATCH` item or instance; `POST` complete / omit-instance / complete-instance; `DELETE` item or instance
 - `GET /api/calendar/export.ics?from=&to=&timeZone=` — download iCalendar for range
+- `POST /api/calendar/import.ics` — multipart upload
+- Google Calendar: `GET/POST /api/calendar/google/…` (status, OAuth, sync, calendar picker)
 
 ### Reminders
 
-Background service posts reminder text to the bound **calendar** channel when due, respecting omit/complete overrides on recurring instances.
+Background service posts reminder text to the bound **calendar** channel when due, respecting omit/complete overrides on recurring instances. Optional **DM** (`HOMEBOT_CALENDAR_REMINDER_DM`) and **Web Push** (installed PWA, when VAPID keys are set) respect notification preferences.
 
 ---
+
+## Meal planning
+
+Recipes and a weekly meal plan, integrated with the buy list and optionally calendar.
+
+### Discord
+
+| Command | Purpose |
+|---------|---------|
+| `/meal-plan` | Show the current week’s plan |
+| `/meal-dinner` | What’s planned for dinner today |
+| `/meal-add-recipe` | Add a recipe (name + optional ingredients) |
+
+### Web UI (`/meals`)
+
+- Recipe catalog with ingredients
+- Weekly plan grid (breakfast / lunch / dinner slots)
+- **Add recipe ingredients to buy list**
+- Optional **calendar block** per plan entry (`addToCalendar` on create)
+
+### API
+
+`GET/POST /api/meals/recipes`, `GET/POST /api/meals/plan`, plan entries can link to `CalendarItemId` after sync.
+
+---
+
+## Web UI polish
+
+| Feature | Behavior |
+|---------|----------|
+| **Appearance** | Dark / light theme — Settings → Appearance or sidebar toggle; saved in browser |
+| **Keyboard shortcuts** | **`/`** focus search; **`?`** help; **`g` then `h/b/w/m/c/s`** navigate; **`n`** focus add form on Buy/Wishlist; **`Esc`** close help |
+| **Global search** | Header box; results deep-link with `?highlight=` and correct list page |
+| **429 UX** | Login/setup show friendly rate-limit messages with retry hint |
+| **OpenAPI types** | `cd webui && npm run openapi:types` (API must be running) → `webui/src/generated/openapi.d.ts` |
 
 ## Web UI routes
 
 | Path | Page |
 |------|------|
-| `/` | Dashboard — snapshots of buy, wishlist, money, calendar, budget when signed in |
-| `/buy`, `/wishlist`, `/money`, `/budget`, `/calendar` | Feature pages above |
-| `/settings` | API URL, token/JWT session, `actorUserId`, calendar viewer zone |
+| `/` | Dashboard — snapshots; **meals tonight**; **stale buy** card; backup warning; budget alert banner; Google sync status; press **`/`** to focus search |
+| `/buy`, `/wishlist`, `/money`, `/budget`, `/calendar`, `/meals` | Feature pages above |
+| `/settings` | API URL, token/JWT session, `actorUserId`, calendar viewer zone, **appearance**, **push notifications**, notification prefs, household config, audit log, web admin |
 | `/login`, `/setup` | Sign in and household onboarding |
 | `/oauth/callback` | Discord OAuth return (no shell chrome) |
-| `/health` | API health + meta JSON (diagnostics) |
+| `/health` | Admin diagnostics — **`GET /api/ops/health`** and Prometheus metrics |
 
 Shell nav also shows **API connection status** and a **budget alert badge** when notifications are pending.
 
@@ -246,6 +288,35 @@ Shell nav also shows **API connection status** and a **budget alert badge** when
 
 ---
 
+## Medium-tier features (API + Web UI)
+
+| Feature | API / behavior |
+|---------|----------------|
+| **Global search** | `GET /api/search?q=` across buy, wishlist, budget transactions, calendar. Search box in the Web UI header; pagination-aware deep links. |
+| **Money settle-up matrix** | `GET /api/money/balances?userId=` — all non-zero pairwise balances for one person. Shown on **Money** when `actorUserId` is set. |
+| **Web user admin** | `GET /api/admin/users`, invite rotate, password reset, deactivate. First web user is admin; optional `HOMEBOT_WEB_ADMIN_DISCORD_IDS`. Settings → **Web users (admin)**. |
+| **Calendar DM reminders** | When `HOMEBOT_CALENDAR_REMINDER_DM=true`, assigned users also get a DM (channel reminder unchanged). |
+| **Recurring buy items** | `GET/POST/PUT/DELETE /api/buy/recurring` + hourly worker (`HOMEBOT_BUY_RECURRING_POLL_MINUTES`). **Buy** page → Recurring items. |
+| **Budget auto-categorize** | `GET/POST/DELETE /api/budget/categorize-rules`; rules apply when creating transactions without a category. Settings panel. |
+| **Household report** | `GET /api/household/report?month=YYYY-MM`; Discord `/household-report`; optional `POST /api/household/report/discord` (admin). |
+| **Webhooks** | `POST /api/hooks/buy/add`, `/calendar/add`, `/budget/expense` with `X-HomeBot-Webhook-Secret` (`HOMEBOT_WEBHOOK_SECRET`). |
+| **Backup ops in meta** | `GET /api/meta` includes `backups` stats from `HOMEBOT_BACKUP_DIR` (local file counts only). Web UI shows a banner when backups are missing or stale. |
+| **Household audit log** | `GET /api/audit/household` — sign-in and sensitive actions. Settings → **Audit log**. |
+| **Notification preferences** | Per-user toggles for budget alerts, calendar DMs, weekly digest. Settings panel. |
+| **PWA / mobile** | `manifest.webmanifest` + service worker; **Add to Home Screen** on iPhone (no App Store). **Web Push** for reminders and budget alerts when VAPID keys are set. See **[MOBILE.md](./MOBILE.md)** and **[SHORTCUTS.md](./SHORTCUTS.md)**. |
+| **Web Push** | `GET /api/push/vapid-public-key`, subscribe/unsubscribe; Settings → **Push notifications**. Env: `HOMEBOT_VAPID_*`. Respects notification prefs (calendar DM, budget alerts, digest). |
+| **Keyboard shortcuts** | **`/`** search; **`?`** help overlay; **`g`+letter** navigation; **`n`** new item on Buy/Wishlist |
+| **Stale buy list** | `GET /api/buy/stale?days=14` — dashboard card for items aging on the list |
+| **Bulk list actions** | `POST /api/buy|wishlist/items/bulk-complete` and `bulk-delete` (up to 50 ids) |
+| **Budget receipt URL** | Optional `receiptUrl` on budget transactions (create/PATCH) |
+| **Meal planning** | Recipes + weekly plan; add recipe ingredients to buy list; Discord `/meal-*`. **Meals** page; `GET/POST /api/meals/…`. |
+| **Google Calendar sync** | OAuth two-way sync (events + tasks); delete queue, conflict rule (`HOMEBOT_GOOGLE_SYNC_CONFLICT`), per-user calendar picker. Calendar page → Connect Google. |
+| **Ops dashboard** | **Diagnostics** page: health, meta, backup age; `GET /api/ops/health` and Prometheus `GET /api/ops/metrics` (admin). Restore helper: `scripts/restore-homebot-backup.sh`. |
+
+OpenAPI: **`GET /openapi/v1.json`** (no auth).
+
+---
+
 ## Data backup (operational, not in-app)
 
 HomeBot does **not** expose a “backup” button in the Web UI. Operators use shell scripts:
@@ -255,7 +326,7 @@ HomeBot does **not** expose a “backup” button in the Web UI. Operators use s
 | **Local snapshot** | Stop service → copy **`homebot.db`** (+ **`-wal`** / **`-shm`** if present) → start service ([SETUP.md §20.1](SETUP.md#201-automated-backups-optional)). |
 | **Scheduled local backup** | Linux **`systemd`** timer + **`scripts/backup-homebot-sqlite.sh`**. |
 | **Google Drive off-site** | **`rclone`** upload of **`homebot.db.*`** files; prune by age on Drive and locally ([SETUP.md §20.2](SETUP.md#202-off-site-backup-to-google-drive-optional)). |
-| **Restore** | Stop HomeBot → replace live DB from a dated copy → start ([SETUP.md §20.1.5](SETUP.md#2015-restore-from-a-backup-short-procedure)). |
+| **Restore** | Stop HomeBot → replace live DB from a dated copy → start, or dry-run **`scripts/restore-homebot-backup.sh`** then **`--apply`**. |
 
 Env vars: **`HOMEBOT_GDRIVE_*`**, **`HOMEBOT_BACKUP_DIR`**, **`HOMEBOT_LOCAL_BACKUP_RETENTION_DAYS`** — see **`.env.example`** and [SETUP.md §19](SETUP.md#off-site-backup-google-drive-via-rclone).
 
@@ -269,6 +340,9 @@ Env vars: **`HOMEBOT_GDRIVE_*`**, **`HOMEBOT_BACKUP_DIR`**, **`HOMEBOT_LOCAL_BAC
 | **[BACKEND.md](./BACKEND.md)** | How the server implements these features (services, API, database, workers) |
 | **[UBUNTU_DEPLOY.md](./UBUNTU_DEPLOY.md)** | Short Ubuntu install/update path |
 | **[OPS.md](./OPS.md)** | Reverse proxy, TLS, Pages deploy, SQLite upgrades, backup pointers |
+| **[MOBILE.md](./MOBILE.md)** | iPhone install without App Store (PWA, optional Capacitor) |
+| **[SHORTCUTS.md](./SHORTCUTS.md)** | iOS Shortcuts + webhook recipes |
+| **[WEBHOOKS.md](./WEBHOOKS.md)** | `POST /api/hooks/*` for automation |
 
 ---
 
@@ -276,4 +350,4 @@ Env vars: **`HOMEBOT_GDRIVE_*`**, **`HOMEBOT_BACKUP_DIR`**, **`HOMEBOT_LOCAL_BAC
 
 - **Multi-tenant / SSO** — one household, one database.
 - **OAuth-only account creation** — Discord OAuth only links to an existing `WebUsers` row.
-- **Non-split money in Web UI** — use a 100% split expense instead of a separate “simple expense” form.
+- **Non-split money in Web UI** — use the simple expense form on **Money** or a 100% split expense on **Budget**.

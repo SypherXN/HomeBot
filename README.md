@@ -1,8 +1,8 @@
 # HomeBot
 
-HomeBot is a **single-household** assistant: a **Discord bot**, an optional **HTTP API**, and a **React Web UI** on one **SQLite** database (`homebot.db` by default). Use it for shopping lists, a wishlist, shared money (splits and payments), **household budgeting** (envelopes, accounts, bills), calendar events and tasks, and an **undo** stack for recent changes.
+HomeBot is a **single-household** assistant: a **Discord bot**, an optional **HTTP API**, and a **React Web UI** on one **SQLite** database (`homebot.db` by default). Use it for shopping lists, a wishlist, shared money (splits and payments), **household budgeting** (envelopes, accounts, bills), calendar events and tasks, **meal planning**, **global search**, and an **undo** stack for recent changes.
 
-Discord, the API, and the browser always see the same data.
+Discord, the API, and the browser always see the same data. Optional **Google Calendar** two-way sync, **webhooks**, **PWA + Web Push** on iPhone, and an **ops/diagnostics** page are documented in **[docs/FEATURES.md](docs/FEATURES.md)** and the linked guides below.
 
 ---
 
@@ -11,8 +11,11 @@ Discord, the API, and the browser always see the same data.
 | Goal | Where to go |
 |------|-------------|
 | **First-time setup** (Discord app, `.env`, Windows or Ubuntu, Web UI, OAuth, GitHub Pages) | **[docs/SETUP.md](docs/SETUP.md)** |
+| **Free VM hosting** (Oracle Always Free — Steps A–J: VM, HTTPS, Pages, Drive) | **[docs/SETUP.md §2.5](docs/SETUP.md#25-free-vm-hosting-optional)** |
 | **Ubuntu server** (install script, systemd, updates) | **[docs/UBUNTU_DEPLOY.md](docs/UBUNTU_DEPLOY.md)** |
 | **What the product can do** | **[docs/FEATURES.md](docs/FEATURES.md)** |
+| **iPhone / PWA / push** | **[docs/MOBILE.md](docs/MOBILE.md)** · **[docs/SHORTCUTS.md](docs/SHORTCUTS.md)** |
+| **Webhooks (Shortcuts, Home Assistant)** | **[docs/WEBHOOKS.md](docs/WEBHOOKS.md)** |
 | **How the server is built** | **[docs/BACKEND.md](docs/BACKEND.md)** |
 | **TLS / reverse proxy / ops notes** | **[docs/OPS.md](docs/OPS.md)** |
 | **Backups (local + Google Drive)** | **[docs/SETUP.md §20–20.2](docs/SETUP.md#20-backing-up-sqlite-homebotdb)** |
@@ -33,14 +36,16 @@ The .NET process **does not load `.env` by itself** — use your editor’s **`e
 
 | Area | Discord | Web UI |
 |------|---------|--------|
-| **Buy** | Add, list, complete, delete, edit; tag filters; button lists | Forms, pagination, tag catalog, undo |
-| **Wishlist** | Add, list, view, edit, complete, delete | Owner filter, tags, undo |
-| **Money** | Split expenses, payments, summary, list, edit, delete | Ledger, split expense, record payment, pairwise balance, edit, undo |
-| **Budget** | `/budget-add`, `/budget-summary`, `/budget-list`, `/budget-digest` | Categories, transactions, envelopes, accounts (archive), bills, goals, trends, CSV, tax summary, alerts badge, undo |
-| **Calendar** | Add, list, view, today/upcoming, edit, complete, delete; per-instance omit/complete/reset/edit | Month / week / day / agenda, tasks, time zones, occurrence detail, **.ics export**, undo |
-| **Dashboard** | `/dashboard` — snapshots across features | **Home** — buy, wishlist, money, calendar, budget at a glance |
+| **Buy** | Add, list, complete, delete, edit; tag filters; button lists | Forms, pagination, tag catalog, **bulk complete/delete**, stale-age hints, **undo** |
+| **Wishlist** | Add, list, view, edit, complete, delete | Owner filter, tags, **Add to buy**, **bulk** actions, **undo** |
+| **Money** | Split expenses, payments, summary, list, edit, delete | Ledger, split expense, record payment, pairwise balance, edit, **undo** |
+| **Budget** | `/budget-add`, `/budget-summary`, `/budget-list`, `/budget-digest` | Categories, transactions (**receipt URL**), envelopes, accounts, bills, goals, trends, CSV, alerts badge, **undo** |
+| **Calendar** | Add, list, view, today/upcoming, per-instance omit/complete/edit | Month/week/day/agenda, tasks, **Google sync**, import/export **.ics**, **undo** |
+| **Meals** | `/meal-plan`, `/meal-dinner`, `/meal-add-recipe` | Recipes, weekly plan, add ingredients to buy, optional calendar blocks |
+| **Dashboard** | `/dashboard` — snapshots across features | **Home** — meals tonight, stale buy, backup warning, budget alerts, Google sync |
+| **Search** | — | Header search with deep links; press **`/`** to focus |
 | **Undo** | `/undo` — your last logged action | **Undo last action** on Buy, Wishlist, Money, Calendar, Budget |
-| **Config** | `/config-set`, `/config-view`, `/timezone-set`, `/setup-set` | Settings: API URL, token, calendar viewer zone, `actorUserId` |
+| **Config** | `/config-set`, `/config-view`, `/timezone-set`, `/setup-set` | Settings: API, **dark/light theme**, push, notification prefs, household config, audit |
 
 After many API writes, the bot can post a short line to the Discord channel bound for that feature (`/setup-set`), when Discord is enabled.
 
@@ -64,14 +69,14 @@ Most feature commands only work in the channel you bound for that feature.
 
 ### Web UI
 
-Routes: **Home**, **Buy**, **Wishlist**, **Money**, **Budget**, **Calendar**, **Settings**, **Sign in**, **New account**, **API diagnostics** (`/health`).
+Routes: **Home**, **Buy**, **Wishlist**, **Money**, **Budget**, **Calendar**, **Meals**, **Settings**, **Sign in**, **Diagnostics** (`/health`).
 
 1. Start the API (`HOMEBOT_API_ENABLED=true`) and set **`HOMEBOT_WEB_JWT_SECRET`** for password login.
 2. **`cd webui && npm install && npm run dev`** (see **[`webui/.env.example`](webui/.env.example)**).
 3. Sign in with password and/or **Continue with Discord** (when OAuth env is configured), or paste **`HOMEBOT_API_TOKEN`** in Settings.
 4. Set **`actorUserId`** (your Discord user id) for complete, delete, undo, and roster-aware flows.
 
-Sessions use a short-lived **access JWT** plus a server-stored **refresh token**; **Sign out** revokes the refresh row. The header shows API reachability; **Budget** shows a notification badge when alerts are pending.
+Sessions use a short-lived **access JWT** plus a server-stored **refresh token**; **Sign out** revokes the refresh row. The header shows API reachability and a **budget alert badge**. Keyboard shortcuts: **`/`** search, **`?`** help — **[docs/FEATURES.md](docs/FEATURES.md)**. **iPhone PWA:** **[docs/MOBILE.md](docs/MOBILE.md)**.
 
 ### HTTP API (scripts or other clients)
 
@@ -178,6 +183,19 @@ Requires **[rclone](https://rclone.org/)** on the host that runs backups. Script
 | **`HOMEBOT_LOCAL_BACKUP_RETENTION_DAYS`** | **30** | Delete local backup files older than this (**0** = keep all). |
 | **`HOMEBOT_BACKUP_DIR`** | `/opt/homebot/backups` | Local backup directory (Linux layout). |
 | **`HOMEBOT_GDRIVE_BACKUP_DRY_RUN`** | off | **`true`** = log only, no upload/delete. |
+| **`HOMEBOT_GDRIVE_BACKUP_ENCRYPT`** | off | **`true`** = **`gpg`**-encrypt uploads (`.gpg` on Drive). |
+| **`HOMEBOT_GDRIVE_BACKUP_ENCRYPT_PASSPHRASE_FILE`** | — | Passphrase file for encryption (see **`.env.example`**). |
+
+### Webhooks, Google Calendar, push (optional)
+
+| Variable | Purpose |
+|----------|---------|
+| **`HOMEBOT_WEBHOOK_SECRET`** | Secret for `POST /api/hooks/*` — see **[docs/WEBHOOKS.md](docs/WEBHOOKS.md)**. |
+| **`HOMEBOT_GOOGLE_OAUTH_*`**, **`HOMEBOT_GOOGLE_CALENDAR_SYNC_MINUTES`**, **`HOMEBOT_GOOGLE_SYNC_CONFLICT`** | Google Calendar two-way sync (Calendar page → Connect Google). |
+| **`HOMEBOT_VAPID_PUBLIC_KEY`**, **`HOMEBOT_VAPID_PRIVATE_KEY`**, **`HOMEBOT_VAPID_SUBJECT`** | Web Push for installed PWA — generate with `npx web-push generate-vapid-keys`. |
+| **`HOMEBOT_BUDGET_DIGEST_TO_CHANNEL`**, **`HOMEBOT_BUDGET_ALERTS_TO_CHANNEL`** | Also post digest/alerts to Discord channel when prefs allow. |
+| **`HOMEBOT_CALENDAR_REMINDER_DM`**, **`HOMEBOT_BUY_RECURRING_POLL_MINUTES`**, **`HOMEBOT_REMINDER_POLL_SECONDS`** | Calendar DMs, recurring buy worker, reminder poll interval. |
+| **`HOMEBOT_WEB_ADMIN_DISCORD_IDS`** | Extra Discord ids with web admin APIs. |
 
 ### Minimal `.env` example
 
@@ -215,8 +233,10 @@ cd webui && npm run test
 | Suite | What it covers |
 |-------|----------------|
 | **`HomeBotSystemsIntegrationTests`** | Full household workflow over real HTTP + SQLite (buy → wishlist → money → budget → calendar → undo) |
-| Other `HomeBot.Tests/*` | Per-feature API, auth, calendar range, budget polish, rate limits, etc. |
+| Other `HomeBot.Tests/*` | Per-feature API, auth, calendar, budget, meals, Google sync, push, polish (bulk/stale/receipt), rate limits, etc. |
 | **`webui` Vitest** | API client contracts, route smoke tests, validation helpers |
+
+**OpenAPI types (optional):** with the API running, `cd webui && npm run openapi:types` → `webui/src/generated/openapi.d.ts`.
 
 xUnit parallelization is **disabled** ([`HomeBot.Tests/AssemblyInfo.cs`](HomeBot.Tests/AssemblyInfo.cs)) because some fixtures set process-global **`HOMEBOT_WEB_JWT_SECRET`**.
 
@@ -225,6 +245,8 @@ Stop a running `HomeBot` process if the build cannot overwrite `HomeBot.dll`.
 ### CI
 
 **[`.github/workflows/ci.yml`](.github/workflows/ci.yml)** on push/PR to **`main`**: .NET restore, Release build, **`dotnet test`**; **`npm ci`**, **`npm run lint`**, **`npm run test`**, **`npm run build`** for the Web UI (Node **22**).
+
+Optional **[`.github/workflows/deploy-vm.yml`](.github/workflows/deploy-vm.yml)** deploys **`main`** to a self-hosted VM after tests (see **[docs/OPS.md](docs/OPS.md)**).
 
 ### Production Web UI build
 

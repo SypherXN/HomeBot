@@ -1,73 +1,74 @@
-# React + TypeScript + Vite
+# HomeBot Web UI
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + TypeScript + Vite SPA for the HomeBot household API. Talks to the .NET backend over HTTP (`/api/*`).
 
-Currently, two official plugins are available:
+**Household setup:** [docs/SETUP.md](../docs/SETUP.md) · **Features:** [docs/FEATURES.md](../docs/FEATURES.md) · **iPhone PWA:** [docs/MOBILE.md](../docs/MOBILE.md)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## Development
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1. Copy **[`.env.example`](.env.example)** → **`.env`**.
+2. Set **`VITE_API_BASE_URL`** (default `http://localhost:5050`) — must match where the API listens.
+3. Start the API from the repo root (`dotnet run` with `.env` loaded).
+4. Install and run:
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Open **http://localhost:5173**. Sign in at **`/login`** (password and/or Discord OAuth when configured).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+**LAN / phone testing:** `npm run dev -- --host 0.0.0.0` and add your PC IP to **`HOMEBOT_ALLOWED_ORIGINS`** on the server.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+---
+
+## Scripts
+
+| Command | Purpose |
+|---------|---------|
+| **`npm run dev`** | Vite dev server with HMR |
+| **`npm run build`** | Production bundle → **`dist/`** (PWA service worker included) |
+| **`npm run preview`** | Serve **`dist/`** locally |
+| **`npm run lint`** | ESLint |
+| **`npm run test`** | Vitest |
+| **`npm run openapi:types`** | Generate **`src/generated/openapi.d.ts`** from running API (`GET /openapi/v1.json`) |
+
+---
+
+## Routes
+
+| Path | Page |
+|------|------|
+| **`/`** | Dashboard (stale buy, meals tonight, budget alerts, backup warning) |
+| **`/buy`**, **`/wishlist`**, **`/money`**, **`/budget`**, **`/calendar`**, **`/meals`** | Feature pages |
+| **`/settings`** | API URL, auth, theme, push, notification prefs, household config |
+| **`/login`**, **`/setup`** | Sign in and first-user setup |
+| **`/health`** | Admin diagnostics (ops health + metrics) |
+
+---
+
+## Auth and settings
+
+- **JWT session:** access token in memory + refresh cookie; **Sign out** revokes refresh on the server.
+- **API token:** paste **`HOMEBOT_API_TOKEN`** in Settings for script-style bearer auth.
+- **`actorUserId`:** your Discord user id — required for complete/delete/undo and roster-aware UI.
+
+Build-time only: **`VITE_API_BASE_URL`**, **`VITE_BASE_PATH`** (GitHub Pages subpath).
+
+---
+
+## UX notes
+
+- **Theme:** dark/light via **Settings → Appearance** or sidebar toggle (`ThemeProvider`, persisted in `localStorage`).
+- **Keyboard:** **`/`** search, **`?`** help, **`g`+nav keys**, **`n`** new item on Buy/Wishlist — see [FEATURES.md](../docs/FEATURES.md).
+- **Bulk actions:** checkbox selection on Buy and Wishlist pages.
+- **PWA:** production build registers **`public/sw.js`**; install from Safari on iPhone per [MOBILE.md](../docs/MOBILE.md).
+
+---
+
+## Production deploy
+
+- **GitHub Pages:** workflow **[`.github/workflows/pages-webui.yml`](../.github/workflows/pages-webui.yml)** — set repo variable **`HOMEBOT_API_PUBLIC_URL`**.
+- **Static host:** `npm run build` and serve **`dist/`**; API must allow your origin in **`HOMEBOT_ALLOWED_ORIGINS`**.

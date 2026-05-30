@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import DiscordMemberSelect from "../../components/DiscordMemberSelect";
+import MemberIdField from "../../components/MemberIdField";
 import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster";
 import {
   patchBudgetTransaction,
@@ -39,6 +39,7 @@ export default function BudgetTransactionEditModal({
   const [spender, setSpender] = useState("");
   const [txDate, setTxDate] = useState("");
   const [merchant, setMerchant] = useState("");
+  const [receiptUrl, setReceiptUrl] = useState("");
   const [note, setNote] = useState("");
   const [tags, setTags] = useState("");
   const [isPending, setIsPending] = useState(false);
@@ -55,6 +56,7 @@ export default function BudgetTransactionEditModal({
     setSpender(row.spentByUserId);
     setTxDate(row.transactionDate?.slice(0, 10) ?? "");
     setMerchant(row.merchant ?? "");
+    setReceiptUrl(row.receiptUrl ?? "");
     setNote(row.note ?? "");
     setTags(row.tags.join(", "));
     setIsPending(row.isPending);
@@ -99,6 +101,7 @@ export default function BudgetTransactionEditModal({
         spentByUserId: spender || undefined,
         transactionDate: txDate || undefined,
         merchant: merchant || undefined,
+        receiptUrl: receiptUrl.trim() || null,
         note: note || undefined,
         isPending,
         clearedAt: isPending ? null : new Date().toISOString(),
@@ -137,13 +140,14 @@ export default function BudgetTransactionEditModal({
             onChange={(e) => setTxDate(e.target.value)}
             className="w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
           />
-          <input
+          <MemberIdField
+            token={token}
             value={spender}
-            onChange={(e) => setSpender(e.target.value)}
-            placeholder="Spender Discord user id"
-            className="w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+            onChange={setSpender}
+            label="Spender"
+            sharedRoster={roster}
+            actorId={actor}
           />
-          <DiscordMemberSelect token={token} sharedRoster={roster} label="Pick spender" onPickUserId={setSpender} />
           <select
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
@@ -174,6 +178,13 @@ export default function BudgetTransactionEditModal({
             value={merchant}
             onChange={(e) => setMerchant(e.target.value)}
             placeholder="Merchant"
+            className="w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+          />
+          <input
+            type="url"
+            value={receiptUrl}
+            onChange={(e) => setReceiptUrl(e.target.value)}
+            placeholder="Receipt URL"
             className="w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
           />
           <input
@@ -227,9 +238,19 @@ export default function BudgetTransactionEditModal({
                         prev.map((x, j) => (j === i ? { ...x, spentByUserId: e.target.value } : x))
                       )
                     }
-                    placeholder="Spender id"
+                    placeholder="Spender"
+                    list={roster.data?.available ? `split-spenders-${i}` : undefined}
                     className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-xs text-slate-100"
                   />
+                  {roster.data?.available && (
+                    <datalist id={`split-spenders-${i}`}>
+                      {roster.data.members.map((m) => (
+                        <option key={m.userId} value={m.userId}>
+                          {m.displayName || m.username}
+                        </option>
+                      ))}
+                    </datalist>
+                  )}
                 </div>
               ))}
               <button

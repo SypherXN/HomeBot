@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { useAuth } from "../auth/AuthContext";
 import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
@@ -15,6 +16,7 @@ import {
   getBudgetGoals,
   getBudgetIncomePlan,
   getBudgetNotifications,
+  postBudgetNotificationDismiss,
   getBudgetSummaryByCategory,
   getBudgetSummaryByUser,
   getBudgetSummaryMonth,
@@ -41,6 +43,7 @@ import {
   type BudgetTransactionListItem,
   type PagedBudgetTransactions,
 } from "../api";
+import { highlightRowClass, useSearchHighlightId } from "../lib/searchHighlight";
 import BudgetAccountsPanel from "./budget/BudgetAccountsPanel";
 import BudgetAnnualSnapshot from "./budget/BudgetAnnualSnapshot";
 import BudgetCategoryEditor from "./budget/BudgetCategoryEditor";
@@ -86,6 +89,13 @@ export default function BudgetPage() {
   const tok = token.trim();
   const actor = validActorId(actorUserId) ? actorUserId.trim() : "";
   const roster = useDiscordGuildRoster(token);
+  const [params] = useSearchParams();
+  const highlightId = useSearchHighlightId();
+  const highlightRef = useRef<HTMLLIElement>(null);
+  const initialPage = Number.parseInt(params.get("page") ?? "0", 10);
+  const initialTabParam = params.get("tab");
+  const initialTab: BudgetTab =
+    initialTabParam === "ledger" || initialTabParam === "plan" ? initialTabParam : "overview";
 
   const [month, setMonth] = useState(currentMonth);
   const [spenderFilter, setSpenderFilter] = useState("");
@@ -100,6 +110,12 @@ export default function BudgetPage() {
   const [byCategory, setByCategory] = useState<BudgetSummarySlice[]>([]);
   const [byUser, setByUser] = useState<BudgetSummarySlice[]>([]);
   const [txData, setTxData] = useState<PagedBudgetTransactions | null>(null);
+
+  useEffect(() => {
+    if (!highlightId || !txData?.items.some((r) => r.id === highlightId)) return;
+    highlightRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [highlightId, txData]);
+
   const [envelopes, setEnvelopes] = useState<BudgetEnvelope[]>([]);
   const [goals, setGoals] = useState<BudgetGoal[]>([]);
   const [trends, setTrends] = useState<Awaited<ReturnType<typeof getBudgetTrends>>>([]);
@@ -113,13 +129,37 @@ export default function BudgetPage() {
   const [recurring, setRecurring] = useState<BudgetRecurring[]>([]);
   const [accounts, setAccounts] = useState<BudgetAccount[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [listPage, setListPage] = useState(0);
-  const [tab, setTab] = useState<BudgetTab>("overview");
+  const [listPage, setListPage] = useState(
+    Number.isFinite(initialPage) && initialPage >= 0 ? initialPage : 0
+  );
+  const [tab, setTab] = useState<BudgetTab>(initialTab);
+
+  useEffect(() => {
+    if (highlightId) setTab("ledger");
+  }, [highlightId]);
   const [trendMonths, setTrendMonths] = useState(6);
   const [trendGroupBy, setTrendGroupBy] = useState<"category" | "user">("category");
   const [editTx, setEditTx] = useState<BudgetTransactionListItem | null>(null);
   const [undoBusy, setUndoBusy] = useState(false);
   const [undoMsg, setUndoMsg] = useState<string | null>(null);
+  const [dismissBusyKey, setDismissBusyKey] = useState<string | null>(null);
+
+  const dismissNotification = useCallback(
+    async (key: string) => {
+      if (!tok || !actor || !key) return;
+      setDismissBusyKey(key);
+      try {
+        await postBudgetNotificationDismiss(tok, actor, key);
+        setNotifications((prev) => prev.filter((n) => n.key !== key));
+        window.dispatchEvent(new Event("homebot-budget-alerts-changed"));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setDismissBusyKey(null);
+      }
+    },
+    [tok, actor]
+  );
 
   const load = useCallback(async () => {
     if (!tok) return;
@@ -430,7 +470,12 @@ export default function BudgetPage() {
           </section>
 
           <BudgetIncomeBanner token={tok} actor={actor} month={month} plan={incomePlan} onSaved={load} />
-          <BudgetAlertsPanel forecast={forecast} notifications={notifications} />
+          <BudgetAlertsPanel
+            forecast={forecast}
+            notifications={notifications}
+            onDismiss={actor ? dismissNotification : undefined}
+            dismissBusyKey={dismissBusyKey}
+          />
           <BudgetAnnualSnapshot token={tok} year={Number(month.slice(0, 4))} />
         </>
       )}
@@ -465,7 +510,11 @@ export default function BudgetPage() {
             ) : (
               <ul className="divide-y divide-slate-800">
                 {txData.items.map((row) => (
-                  <li key={row.id} className="py-3 text-sm">
+                  <li
+                    key={row.id}
+                    ref={row.id === highlightId ? highlightRef : undefined}
+                    className={`py-3 text-sm ${highlightRowClass(row.id, highlightId)}`}
+                  >
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
                         <span className={row.type === "income" ? "text-emerald-400" : "text-amber-300"}>
@@ -498,6 +547,18 @@ export default function BudgetPage() {
                       </span>
                     </div>
                     {row.note && <p className="mt-1 text-slate-500">{row.note}</p>}
+                    {row.receiptUrl && (
+                      <p className="mt-1">
+                        <a
+                          href={row.receiptUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-400 hover:underline"
+                        >
+                          Receipt
+                        </a>
+                      </p>
+                    )}
                     {row.tags.length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1">
                         {row.tags.map((t) => (

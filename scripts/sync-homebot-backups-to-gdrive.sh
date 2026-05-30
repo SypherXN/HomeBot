@@ -59,6 +59,45 @@ if [[ ! -d "${LOCAL_DIR}" ]]; then
   exit 1
 fi
 
+encrypt_local_backups() {
+  if ! is_truthy "${HOMEBOT_GDRIVE_BACKUP_ENCRYPT:-}"; then
+    return 0
+  fi
+  if ! command -v gpg >/dev/null 2>&1; then
+    echo "gpg not found. Install gnupg or unset HOMEBOT_GDRIVE_BACKUP_ENCRYPT." >&2
+    exit 1
+  fi
+  local pass_file="${HOMEBOT_GDRIVE_BACKUP_ENCRYPT_PASSPHRASE_FILE:-}"
+  if [[ -z "${pass_file}" || ! -f "${pass_file}" ]]; then
+    echo "Set HOMEBOT_GDRIVE_BACKUP_ENCRYPT_PASSPHRASE_FILE to a readable passphrase file." >&2
+    exit 1
+  fi
+  shopt -s nullglob
+  for f in "${LOCAL_DIR}"/homebot.db.*; do
+    [[ -f "${f}" ]] || continue
+    [[ "${f}" == *.gpg ]] && continue
+    local out="${f}.gpg"
+    if [[ -f "${out}" && "${out}" -nt "${f}" ]]; then
+      continue
+    fi
+    if is_truthy "${HOMEBOT_GDRIVE_BACKUP_DRY_RUN:-}"; then
+      echo "DRY RUN — would encrypt ${f} → ${out}"
+      continue
+    fi
+    echo "==> Encrypting ${f}"
+    gpg --batch --yes --symmetric --cipher-algo AES256 \
+      --passphrase-file "${pass_file}" -o "${out}" "${f}"
+  done
+  shopt -u nullglob
+}
+
+encrypt_local_backups
+
+RCLONE_INCLUDE=(--include "homebot.db.*")
+if is_truthy "${HOMEBOT_GDRIVE_BACKUP_ENCRYPT:-}"; then
+  RCLONE_INCLUDE=(--include "homebot.db.*.gpg")
+fi
+
 RCLONE_EXTRA=()
 if is_truthy "${HOMEBOT_GDRIVE_BACKUP_DRY_RUN:-}"; then
   echo "DRY RUN — no files will be changed."
@@ -67,14 +106,18 @@ fi
 
 echo "==> Uploading ${LOCAL_DIR}/homebot.db.* → ${REMOTE_FULL}"
 rclone copy "${LOCAL_DIR}" "${REMOTE_FULL}" \
-  --include "homebot.db.*" \
+  "${RCLONE_INCLUDE[@]}" \
   --update \
   "${RCLONE_EXTRA[@]}"
 
 if [[ "${RETENTION_DAYS}" -gt 0 ]]; then
   echo "==> Pruning remote files older than ${RETENTION_DAYS} day(s) under ${REMOTE_FULL}"
+  REMOTE_PRUNE_PATTERN="homebot.db.*"
+  if is_truthy "${HOMEBOT_GDRIVE_BACKUP_ENCRYPT:-}"; then
+    REMOTE_PRUNE_PATTERN="homebot.db.*.gpg"
+  fi
   rclone delete "${REMOTE_FULL}" \
-    --include "homebot.db.*" \
+    --include "${REMOTE_PRUNE_PATTERN}" \
     --min-age "${RETENTION_DAYS}d" \
     "${RCLONE_EXTRA[@]}"
   rclone rmdirs "${REMOTE_FULL}" --leave-root "${RCLONE_EXTRA[@]}" 2>/dev/null || true

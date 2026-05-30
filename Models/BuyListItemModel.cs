@@ -15,6 +15,8 @@ public class BuyListItemModel
     public string? AssignedToMemberLabel { get; set; }
     public List<string> Tags { get; set; } = new();
     public string Notes { get; set; } = "";
+    /// <summary>UTC timestamp when the row was created (ISO 8601 or SQLite datetime).</summary>
+    public string? CreatedAt { get; set; }
     [JsonConverter(typeof(SnowflakeUlongNullableJsonConverter))]
     public ulong? PurchasedBy { get; set; }
     public string? PurchasedByMemberLabel { get; set; }

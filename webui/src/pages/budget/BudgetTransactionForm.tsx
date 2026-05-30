@@ -25,6 +25,7 @@ export default function BudgetTransactionForm({ token, actor, categories, accoun
   const [formCategoryId, setFormCategoryId] = useState("");
   const [formSpender, setFormSpender] = useState(actor);
   const [formNote, setFormNote] = useState("");
+  const [formReceiptUrl, setFormReceiptUrl] = useState("");
   const [formMerchant, setFormMerchant] = useState("");
   const [formTags, setFormTags] = useState("");
   const [formCurrency, setFormCurrency] = useState("USD");
@@ -60,6 +61,7 @@ export default function BudgetTransactionForm({ token, actor, categories, accoun
       categoryId: !useSplits && formCategoryId ? Number(formCategoryId) : undefined,
       spentByUserId: formSpender,
       note: formNote || undefined,
+      receiptUrl: formReceiptUrl.trim() || undefined,
       merchant: formMerchant || undefined,
       tags: formTags
         .split(",")
@@ -72,6 +74,7 @@ export default function BudgetTransactionForm({ token, actor, categories, accoun
 
     setFormAmount("");
     setFormNote("");
+    setFormReceiptUrl("");
     setFormMerchant("");
     setFormTags("");
     setUseSplits(false);
@@ -204,6 +207,13 @@ export default function BudgetTransactionForm({ token, actor, categories, accoun
         placeholder="Merchant"
         value={formMerchant}
         onChange={(e) => setFormMerchant(e.target.value)}
+        className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+      />
+      <input
+        type="url"
+        placeholder="Receipt URL (optional)"
+        value={formReceiptUrl}
+        onChange={(e) => setFormReceiptUrl(e.target.value)}
         className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
       />
       <input

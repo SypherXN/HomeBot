@@ -9,10 +9,12 @@ public sealed class DiscordAuthAuditNotifier
     public const string AuditFeatureKey = "audit";
 
     private readonly IDiscordChannelNotifier _channels;
+    private readonly HouseholdAuditService _audit;
 
-    public DiscordAuthAuditNotifier(IDiscordChannelNotifier channels)
+    public DiscordAuthAuditNotifier(IDiscordChannelNotifier channels, HouseholdAuditService audit)
     {
         _channels = channels;
+        _audit = audit;
     }
 
     /// <summary>
@@ -23,6 +25,10 @@ public sealed class DiscordAuthAuditNotifier
         var ts = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture);
         var safeUser = EscapeForMarkdownCode(username);
         var msg = $"**Web sign-in** ({methodLabel}) · `{safeUser}` · Discord id `{discordUserId}` · {ts}";
+
+        ulong? uid = ulong.TryParse(discordUserId, out var u) ? u : null;
+        _audit.Log("auth", "web_sign_in", uid, username, methodLabel);
+
         return _channels.NotifyFeatureChannelAsync(AuditFeatureKey, msg);
     }
 

@@ -22,6 +22,17 @@ public static class HomeBotDataServices
         services.AddSingleton<BudgetService>();
         services.AddSingleton<BudgetNotificationService>();
         services.AddSingleton<CalendarService>();
+        services.AddSingleton<BackupStatsService>();
+        services.AddSingleton<SearchService>();
+        services.AddSingleton<BuyRecurringService>();
+        services.AddSingleton<HouseholdReportService>();
+        services.AddSingleton<HouseholdAuditService>();
+        services.AddSingleton<NotificationPreferencesService>();
+        services.AddSingleton<OpsMetricsService>();
+        services.AddSingleton<MealPlanningService>();
+        services.AddSingleton<GoogleCalendarOAuthService>();
+        services.AddSingleton<GoogleCalendarSyncService>();
+        services.AddSingleton<WebPushService>();
         services.AddSingleton<DiscordSocketHolder>();
         services.AddSingleton<DiscordGuildDirectoryService>();
         services.AddSingleton<IDiscordChannelNotifier, DiscordChannelNotifier>();

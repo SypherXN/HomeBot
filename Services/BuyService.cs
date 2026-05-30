@@ -127,7 +127,7 @@ public class BuyService
         };
 
         cmd.CommandText = $@"
-            SELECT Id, Name, Quantity, Store, AssignedTo, Tags, Notes, PurchasedBy
+            SELECT Id, Name, Quantity, Store, AssignedTo, Tags, Notes, PurchasedBy, CreatedAt
             FROM BuyItems
             WHERE {string.Join(" AND ", conditions)}
             ORDER BY {orderBy}";
@@ -138,29 +138,7 @@ public class BuyService
 
         while (reader.Read())
         {
-            var rawTags = reader.IsDBNull(5) ? "" : reader.GetString(5);
-            var tagsList = rawTags
-                .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(t => t.Trim().ToLower())
-                .Where(t => !string.IsNullOrWhiteSpace(t))
-                .ToList();
-
-            var rowAssignedTo = reader.IsDBNull(4) ? null : (ulong?)reader.GetInt64(4);
-            var rowPurchasedBy = reader.IsDBNull(7) ? null : (ulong?)reader.GetInt64(7);
-
-            allItems.Add(new BuyListItemModel
-            {
-                Id = reader.GetInt32(0),
-                Name = reader.IsDBNull(1) ? "(no name)" : reader.GetString(1),
-                Quantity = reader.IsDBNull(2) ? "1" : reader.GetString(2),
-                Store = reader.IsDBNull(3) ? "" : reader.GetString(3),
-                AssignedTo = rowAssignedTo,
-                AssignedToMemberLabel = HouseholdIdentity.MemberLabel(rowAssignedTo),
-                Tags = tagsList,
-                Notes = reader.IsDBNull(6) ? "" : reader.GetString(6),
-                PurchasedBy = rowPurchasedBy,
-                PurchasedByMemberLabel = HouseholdIdentity.MemberLabel(rowPurchasedBy)
-            });
+            allItems.Add(ReadBuyListItem(reader));
         }
 
         var paged = allItems
@@ -180,6 +158,30 @@ public class BuyService
             HasNext = hasNext,
             HasPrev = hasPrev
         };
+    }
+
+    /// <summary>Zero-based page for default Web UI list sort (Id ascending).</summary>
+    public int FindDefaultListPageForItem(int itemId)
+    {
+        if (itemId <= 0) return 0;
+        using var conn = _db.GetConnection();
+        conn.Open();
+        var pageSize = ReadPageSize(conn);
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM BuyItems WHERE Status = 'active' AND Id < $id";
+        cmd.Parameters.AddWithValue("$id", itemId);
+        var before = Convert.ToInt32(cmd.ExecuteScalar());
+        return before / pageSize;
+    }
+
+    private static int ReadPageSize(SqliteConnection conn)
+    {
+        using var configCmd = conn.CreateCommand();
+        configCmd.CommandText = "SELECT Value FROM Settings WHERE Key = 'page_size'";
+        var result = configCmd.ExecuteScalar();
+        if (result != null && int.TryParse(result.ToString(), out var parsed) && parsed > 0)
+            return parsed;
+        return 5;
     }
 
     /// <summary>
@@ -395,6 +397,85 @@ public class BuyService
 
         var allowed = new HashSet<string>(catalog, StringComparer.Ordinal);
         return string.Join(",", parts.Where(p => allowed.Contains(p)));
+    }
+
+    /// <summary>Active items older than <paramref name="olderThanDays"/> by CreatedAt.</summary>
+    public List<BuyListItemModel> GetStaleItems(int olderThanDays = 14, int limit = 10)
+    {
+        if (olderThanDays < 1) olderThanDays = 14;
+        if (limit < 1) limit = 10;
+        if (limit > 50) limit = 50;
+
+        using var conn = _db.GetConnection();
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT Id, Name, Quantity, Store, AssignedTo, Tags, Notes, PurchasedBy, CreatedAt
+            FROM BuyItems
+            WHERE Status = 'active'
+              AND datetime(CreatedAt) <= datetime('now', $offset)
+            ORDER BY CreatedAt ASC
+            LIMIT $limit";
+        cmd.Parameters.AddWithValue("$offset", $"-{olderThanDays} days");
+        cmd.Parameters.AddWithValue("$limit", limit);
+
+        var items = new List<BuyListItemModel>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+            items.Add(ReadBuyListItem(reader));
+        return items;
+    }
+
+    /// <summary>Completes multiple active buy items (each logged for undo).</summary>
+    public int BulkCompleteItems(IReadOnlyList<int> ids, ulong userId)
+    {
+        var count = 0;
+        foreach (var id in ids.Distinct().Where(i => i > 0))
+        {
+            CompleteItem(id, userId);
+            count++;
+        }
+        return count;
+    }
+
+    /// <summary>Deletes multiple active buy items (each logged for undo).</summary>
+    public int BulkDeleteItems(IReadOnlyList<int> ids, ulong userId)
+    {
+        var count = 0;
+        foreach (var id in ids.Distinct().Where(i => i > 0))
+        {
+            DeleteItem(id, userId);
+            count++;
+        }
+        return count;
+    }
+
+    private static BuyListItemModel ReadBuyListItem(SqliteDataReader reader)
+    {
+        var rawTags = reader.IsDBNull(5) ? "" : reader.GetString(5);
+        var tagsList = rawTags
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(t => t.Trim().ToLower())
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .ToList();
+
+        var rowAssignedTo = reader.IsDBNull(4) ? null : (ulong?)reader.GetInt64(4);
+        var rowPurchasedBy = reader.IsDBNull(7) ? null : (ulong?)reader.GetInt64(7);
+
+        return new BuyListItemModel
+        {
+            Id = reader.GetInt32(0),
+            Name = reader.IsDBNull(1) ? "(no name)" : reader.GetString(1),
+            Quantity = reader.IsDBNull(2) ? "1" : reader.GetString(2),
+            Store = reader.IsDBNull(3) ? "" : reader.GetString(3),
+            AssignedTo = rowAssignedTo,
+            AssignedToMemberLabel = HouseholdIdentity.MemberLabel(rowAssignedTo),
+            Tags = tagsList,
+            Notes = reader.IsDBNull(6) ? "" : reader.GetString(6),
+            PurchasedBy = rowPurchasedBy,
+            PurchasedByMemberLabel = HouseholdIdentity.MemberLabel(rowPurchasedBy),
+            CreatedAt = reader.FieldCount > 8 && !reader.IsDBNull(8) ? reader.GetString(8) : null
+        };
     }
 
 }

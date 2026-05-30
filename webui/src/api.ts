@@ -184,6 +184,7 @@ export type BuyListItem = {
   assignedToMemberLabel?: string | null;
   tags: string[];
   notes: string;
+  createdAt?: string | null;
   purchasedBy?: string | null;
   purchasedByMemberLabel?: string | null;
 };
@@ -353,6 +354,349 @@ export function getMoneySummary(token: string, user1: string, user2: string, nam
   if (name1) q.set("name1", name1);
   if (name2) q.set("name2", name2);
   return apiJson<MoneySummary>(`/api/money/summary?${q.toString()}`, { token });
+}
+
+export type MoneyBalanceEntry = {
+  otherUserId: string;
+  otherMemberLabel: string;
+  balance: number;
+};
+
+export type MoneyBalances = {
+  userId: string;
+  memberLabel: string;
+  balances: MoneyBalanceEntry[];
+};
+
+export function getMoneyBalances(token: string, userId: string) {
+  return apiJson<MoneyBalances>(`/api/money/balances?userId=${encodeURIComponent(userId)}`, { token });
+}
+
+export type SearchHit = {
+  domain: string;
+  id: number;
+  title: string;
+  subtitle?: string | null;
+  path: string;
+};
+
+export type SearchResult = {
+  query: string;
+  buy: SearchHit[];
+  wishlist: SearchHit[];
+  budget: SearchHit[];
+  calendar: SearchHit[];
+};
+
+export function getSearch(token: string, q: string, limit = 5) {
+  const sp = new URLSearchParams({ q, limit: String(limit) });
+  return apiJson<SearchResult>(`/api/search?${sp.toString()}`, { token });
+}
+
+export type BuyRecurringItem = {
+  id: number;
+  name: string;
+  quantity?: string | null;
+  store?: string | null;
+  assignedTo?: string | null;
+  tags?: string | null;
+  notes?: string | null;
+  cadence: string;
+  nextDueDate: string;
+  isActive: boolean;
+};
+
+export function getBuyRecurring(token: string) {
+  return apiJson<{ items: BuyRecurringItem[] }>("/api/buy/recurring", { token });
+}
+
+export function postBuyRecurring(
+  token: string,
+  actorUserId: string,
+  body: {
+    name: string;
+    quantity?: string;
+    store?: string;
+    assignedTo?: string;
+    cadence?: string;
+    nextDueDate?: string;
+  }
+) {
+  return apiJson<{ ok: boolean; id: number }>(
+    mergeQuery("/api/buy/recurring", { actorUserId }),
+    { token, method: "POST", body }
+  );
+}
+
+export function deleteBuyRecurring(token: string, id: number) {
+  return apiJson<{ ok: boolean }>(`/api/buy/recurring/${id}`, { token, method: "DELETE" });
+}
+
+export type BudgetCategorizeRule = {
+  id: number;
+  matchField: string;
+  matchContains: string;
+  categoryId: number;
+  categoryName: string;
+  priority: number;
+  isActive: boolean;
+};
+
+export function getBudgetCategorizeRules(token: string) {
+  return apiJson<{ rules: BudgetCategorizeRule[] }>("/api/budget/categorize-rules", { token });
+}
+
+export function postBudgetCategorizeRule(
+  token: string,
+  body: { matchField?: string; matchContains: string; categoryId: number; priority?: number }
+) {
+  return apiJson<{ ok: boolean; id: number }>("/api/budget/categorize-rules", {
+    token,
+    method: "POST",
+    body,
+  });
+}
+
+export function deleteBudgetCategorizeRule(token: string, id: number) {
+  return apiJson<{ ok: boolean }>(`/api/budget/categorize-rules/${id}`, { token, method: "DELETE" });
+}
+
+export type WebUserAdminRow = {
+  username: string;
+  discordUserId: string;
+  isActive: boolean;
+  isAdmin: boolean;
+  createdAt?: string | null;
+};
+
+export type WebInviteStatus = {
+  envTokenConfigured: boolean;
+  dbTokenActive: boolean;
+  createdAt?: string | null;
+  label?: string | null;
+};
+
+export function getAdminUsers(token: string) {
+  return apiJson<{ users: WebUserAdminRow[] }>("/api/admin/users", { token });
+}
+
+export function getAdminInviteStatus(token: string) {
+  return apiJson<WebInviteStatus>("/api/admin/invite-status", { token });
+}
+
+export function postAdminInviteRotate(token: string, label?: string) {
+  const path = label ? `/api/admin/invite/rotate?label=${encodeURIComponent(label)}` : "/api/admin/invite/rotate";
+  return apiJson<{ ok: boolean; inviteToken: string; message: string; status: WebInviteStatus }>(path, {
+    token,
+    method: "POST",
+  });
+}
+
+export function postAdminDeactivateUser(token: string, username: string) {
+  return apiJson<{ ok: boolean }>(`/api/admin/users/${encodeURIComponent(username)}/deactivate`, {
+    token,
+    method: "POST",
+  });
+}
+
+export function patchAdminResetPassword(token: string, username: string, newPassword: string) {
+  return apiJson<{ ok: boolean }>(`/api/admin/users/${encodeURIComponent(username)}/password`, {
+    token,
+    method: "PATCH",
+    body: { newPassword },
+  });
+}
+
+export type HouseholdReport = {
+  month: string;
+  monthLabel: string;
+  markdown: string;
+  activeBuyItems: number;
+  upcomingCalendarEvents: number;
+};
+
+export function getHouseholdReport(token: string, month?: string) {
+  const q = month ? `?month=${encodeURIComponent(month)}` : "";
+  return apiJson<HouseholdReport>(`/api/household/report${q}`, { token });
+}
+
+export type HouseholdAuditEntry = {
+  id: number;
+  category: string;
+  action: string;
+  actorUserId?: string | null;
+  actorUsername?: string | null;
+  detail?: string | null;
+  createdAt: string;
+};
+
+export function getHouseholdAudit(token: string, limit = 100) {
+  return apiJson<{ entries: HouseholdAuditEntry[] }>(`/api/audit/household?limit=${limit}`, { token });
+}
+
+export type NotificationPreferences = {
+  discordUserId: string;
+  budgetAlerts: boolean;
+  calendarDm: boolean;
+  weeklyDigest: boolean;
+};
+
+export function getNotificationPreferences(token: string) {
+  return apiJson<NotificationPreferences>("/api/notifications/preferences", { token });
+}
+
+export function putNotificationPreferences(token: string, body: NotificationPreferences) {
+  return apiJson<{ ok: boolean }>("/api/notifications/preferences", { token, method: "PUT", body });
+}
+
+export type OpsHealth = {
+  service: string;
+  uptimeSeconds: number;
+  databaseBytes: number;
+  databasePath: string;
+  tableCounts: Record<string, number>;
+  backups: Record<string, unknown>;
+  googleCalendar?: unknown;
+  workers: Record<string, unknown>;
+};
+
+export function getOpsHealth(token: string) {
+  return apiJson<OpsHealth>("/api/ops/health", { token });
+}
+
+export type MealIngredient = { name: string; quantity?: string | null };
+export type MealRecipe = {
+  id: number;
+  name: string;
+  description?: string | null;
+  ingredients: MealIngredient[];
+  instructions?: string | null;
+  servings: number;
+  tags?: string | null;
+};
+
+export type MealPlanEntry = {
+  id: number;
+  planDate: string;
+  mealSlot: string;
+  recipeId?: number | null;
+  recipeName?: string | null;
+  customLabel?: string | null;
+  notes?: string | null;
+};
+
+export function getMealRecipes(token: string) {
+  return apiJson<{ recipes: MealRecipe[] }>("/api/meals/recipes", { token });
+}
+
+export function postMealRecipe(
+  token: string,
+  body: { name: string; description?: string; ingredients?: MealIngredient[]; instructions?: string; servings?: number }
+) {
+  return apiJson<{ ok: boolean; id: number }>("/api/meals/recipes", { token, method: "POST", body });
+}
+
+export function deleteMealRecipe(token: string, id: number) {
+  return apiJson<{ ok: boolean }>(`/api/meals/recipes/${id}`, { token, method: "DELETE" });
+}
+
+export function getMealPlan(token: string, from: string, to: string) {
+  return apiJson<{ entries: MealPlanEntry[] }>(
+    `/api/meals/plan?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    { token }
+  );
+}
+
+export function postMealPlanEntry(
+  token: string,
+  body: {
+    planDate: string;
+    mealSlot: string;
+    recipeId?: number;
+    customLabel?: string;
+    notes?: string;
+    addToCalendar?: boolean;
+  },
+  actorUserId?: string
+) {
+  const q = body.addToCalendar && actorUserId ? { actorUserId } : undefined;
+  return apiJson<{ ok: boolean; id: number }>(mergeQuery("/api/meals/plan", q), {
+    token,
+    method: "POST",
+    body,
+  });
+}
+
+export function deleteMealPlanEntry(token: string, id: number) {
+  return apiJson<{ ok: boolean }>(`/api/meals/plan/${id}`, { token, method: "DELETE" });
+}
+
+export function postMealPlanAddToBuy(token: string, planEntryId: number, actorUserId: string) {
+  return apiJson<{ ok: boolean; added: number }>(
+    mergeQuery(`/api/meals/plan/${planEntryId}/add-to-buy`, { actorUserId }),
+    { token, method: "POST" }
+  );
+}
+
+export type GoogleCalendarStatus = {
+  configured: boolean;
+  connected: boolean;
+  connection?: {
+    calendarId?: string;
+    lastSyncAt?: string | null;
+    lastSyncError?: string | null;
+  } | null;
+};
+
+export type GoogleCalendarListItem = { id: string; summary: string; primary: boolean };
+
+export function getGoogleCalendars(token: string) {
+  return apiJson<{ calendars: GoogleCalendarListItem[] }>("/api/calendar/google/calendars", { token });
+}
+
+export function putGoogleCalendarPick(token: string, calendarId: string) {
+  return apiJson<{ ok: boolean; calendarId: string }>("/api/calendar/google/calendar", {
+    token,
+    method: "PUT",
+    body: { calendarId },
+  });
+}
+
+export function getGoogleCalendarStatus(token: string) {
+  return apiJson<GoogleCalendarStatus>("/api/calendar/google/status", { token });
+}
+
+export function getGoogleCalendarOAuthUrl(token: string) {
+  return apiJson<{ url: string }>("/api/calendar/google/oauth/url", { token });
+}
+
+export function postGoogleCalendarDisconnect(token: string) {
+  return apiJson<{ ok: boolean }>("/api/calendar/google/disconnect", { token, method: "POST" });
+}
+
+export function postGoogleCalendarSync(token: string) {
+  return apiJson<{ ok: boolean }>("/api/calendar/google/sync", { token, method: "POST" });
+}
+
+export type PushPublicConfig = { configured: boolean; publicKey?: string | null };
+
+export function getPushPublicConfig() {
+  return apiJson<PushPublicConfig>("/api/push/vapid-public-key");
+}
+
+export function postPushSubscribe(
+  token: string,
+  subscription: { endpoint: string; keys: { p256dh: string; auth: string } }
+) {
+  return apiJson<{ ok: boolean }>("/api/push/subscribe", { token, method: "POST", body: subscription });
+}
+
+export function postPushUnsubscribe(token: string, endpoint: string) {
+  return apiJson<{ ok: boolean }>("/api/push/unsubscribe", {
+    token,
+    method: "POST",
+    body: { endpoint },
+  });
 }
 
 /**
@@ -547,6 +891,27 @@ export function deleteBuyCompleted(token: string) {
   return apiJson<unknown>("/api/buy/items/completed", { token, method: "DELETE" });
 }
 
+export function getStaleBuyItems(token: string, days = 14, limit = 10) {
+  const path = mergeQuery("/api/buy/stale", { days: String(days), limit: String(limit) });
+  return apiJson<{ days: number; items: BuyListItem[] }>(path, { token });
+}
+
+export function postBuyBulkComplete(token: string, actorUserId: string, ids: number[]) {
+  return apiJson<{ ok: boolean; count: number }>("/api/buy/items/bulk-complete", {
+    token,
+    method: "POST",
+    body: { actorUserId, ids },
+  });
+}
+
+export function postBuyBulkDelete(token: string, actorUserId: string, ids: number[]) {
+  return apiJson<{ ok: boolean; count: number }>("/api/buy/items/bulk-delete", {
+    token,
+    method: "POST",
+    body: { actorUserId, ids },
+  });
+}
+
 export function postWishlistItem(
   token: string,
   actorUserId: string,
@@ -609,6 +974,11 @@ export function postWishlistItemComplete(token: string, actorUserId: string, id:
   return apiJson<unknown>(path, { token, method: "POST" });
 }
 
+export function postWishlistAddToBuy(token: string, actorUserId: string, id: number) {
+  const path = mergeQuery(`/api/wishlist/items/${id}/add-to-buy`, { actorUserId });
+  return apiJson<{ ok: boolean }>(path, { token, method: "POST" });
+}
+
 export function deleteWishlistItem(token: string, actorUserId: string, id: number) {
   const path = mergeQuery(`/api/wishlist/items/${id}`, { actorUserId });
   return apiJson<unknown>(path, { token, method: "DELETE" });
@@ -616,6 +986,22 @@ export function deleteWishlistItem(token: string, actorUserId: string, id: numbe
 
 export function deleteWishlistCompleted(token: string) {
   return apiJson<unknown>("/api/wishlist/items/completed", { token, method: "DELETE" });
+}
+
+export function postWishlistBulkComplete(token: string, actorUserId: string, ids: number[]) {
+  return apiJson<{ ok: boolean; count: number }>("/api/wishlist/items/bulk-complete", {
+    token,
+    method: "POST",
+    body: { actorUserId, ids },
+  });
+}
+
+export function postWishlistBulkDelete(token: string, actorUserId: string, ids: number[]) {
+  return apiJson<{ ok: boolean; count: number }>("/api/wishlist/items/bulk-delete", {
+    token,
+    method: "POST",
+    body: { actorUserId, ids },
+  });
 }
 
 /** Digit-only Discord snowflakes as JSON strings (full 64-bit; avoids JS number rounding). */
@@ -1018,6 +1404,7 @@ export type BudgetTransactionListItem = {
   accountId: number | null;
   transferToAccountId: number | null;
   note: string | null;
+  receiptUrl: string | null;
   merchant: string | null;
   transactionDate: string;
   clearedAt: string | null;
@@ -1191,6 +1578,7 @@ export function postBudgetTransaction(
     spentByUserId: string;
     transactionDate?: string;
     note?: string;
+    receiptUrl?: string;
     merchant?: string;
     accountId?: number;
     tags?: string[];
@@ -1223,6 +1611,7 @@ export function patchBudgetTransaction(
     spentByUserId?: string;
     transactionDate?: string;
     note?: string;
+    receiptUrl?: string | null;
     merchant?: string;
     isPending?: boolean;
     clearedAt?: string | null;
@@ -1572,6 +1961,7 @@ export type BudgetAuditEntry = {
 };
 
 export type BudgetNotificationItem = {
+  key: string;
   kind: string;
   message: string;
 };
@@ -1596,6 +1986,61 @@ export function getBudgetAudit(token: string, limit = 50) {
 
 export function getBudgetNotifications(token: string) {
   return apiJson<BudgetNotificationItem[]>("/api/budget/notifications", { token });
+}
+
+export function getBudgetNotificationCount(token: string) {
+  return apiJson<{ count: number }>("/api/budget/notifications/count", { token });
+}
+
+export function postBudgetNotificationDismiss(token: string, actorUserId: string, key: string) {
+  const path = mergeQuery("/api/budget/notifications/dismiss", { actorUserId });
+  return apiJson<{ ok: boolean }>(path, { token, method: "POST", body: { key } });
+}
+
+export type HouseholdSettingsResponse = { settings: Record<string, string> };
+export type HouseholdChannelBindingsResponse = { bindings: Record<string, string> };
+
+export function getHouseholdSettings(token: string) {
+  return apiJson<HouseholdSettingsResponse>("/api/household/settings", { token });
+}
+
+export function getHouseholdChannelBindings(token: string) {
+  return apiJson<HouseholdChannelBindingsResponse>("/api/household/channel-bindings", { token });
+}
+
+export function putHouseholdSetting(token: string, body: { key: string; value: string }) {
+  return apiJson<{ ok: boolean; key: string; value: string }>("/api/household/settings", {
+    token,
+    method: "PUT",
+    body,
+  });
+}
+
+export function putHouseholdChannelBinding(token: string, body: { feature: string; channelId: string }) {
+  return apiJson<{ ok: boolean; feature: string; channelId: string }>("/api/household/channel-bindings", {
+    token,
+    method: "PUT",
+    body: { feature: body.feature, channelId: body.channelId },
+  });
+}
+
+export async function postCalendarImportIcs(token: string, actorUserId: string, file: File) {
+  const base = getApiBaseUrl().replace(/\/$/, "");
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(
+    `${base}/api/calendar/import.ics?actorUserId=${encodeURIComponent(actorUserId)}`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    }
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Import failed (${res.status})`);
+  }
+  return res.json() as Promise<{ imported: number; parsed: number }>;
 }
 
 export function getBudgetTaxSummary(token: string, year: number) {

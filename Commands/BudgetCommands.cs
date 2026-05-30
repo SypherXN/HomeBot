@@ -5,11 +5,16 @@ using Discord.Interactions;
 public class BudgetCommands : InteractionModuleBase<SocketInteractionContext>
 {
     private readonly BudgetService _budget;
+    private readonly HouseholdReportService _reports;
     private readonly IDiscordChannelNotifier _notifier;
 
-    public BudgetCommands(BudgetService budget, IDiscordChannelNotifier notifier)
+    public BudgetCommands(
+        BudgetService budget,
+        HouseholdReportService reports,
+        IDiscordChannelNotifier notifier)
     {
         _budget = budget;
+        _reports = reports;
         _notifier = notifier;
     }
 
@@ -42,6 +47,7 @@ public class BudgetCommands : InteractionModuleBase<SocketInteractionContext>
             spender.Id,
             DateTime.UtcNow.ToString("yyyy-MM-dd"),
             note,
+            null,
             null,
             null,
             false,
@@ -83,6 +89,15 @@ public class BudgetCommands : InteractionModuleBase<SocketInteractionContext>
         var text = _budget.BuildDigestText(monthly);
         await _notifier.NotifyFeatureChannelAsync("budget", text);
         await RespondAsync("Digest sent to the budget channel.", ephemeral: true);
+    }
+
+    [SlashCommand("household-report", "Post monthly household report to the budget channel")]
+    public async Task HouseholdReport(string? month = null)
+    {
+        var report = _reports.Build(month);
+        var text = report.Markdown.Length > 1800 ? report.Markdown[..1800] + "…" : report.Markdown;
+        await _notifier.NotifyFeatureChannelAsync("budget", text);
+        await RespondAsync($"Report for **{report.MonthLabel}** sent to the budget channel.", ephemeral: true);
     }
 
     [SlashCommand("budget-list", "Month summary, envelope warnings, and upcoming bills")]

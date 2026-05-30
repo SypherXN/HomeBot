@@ -29,24 +29,7 @@ public sealed class ApiMutationTests : IDisposable
             File.Delete(_dbPath);
 
         var sc = new ServiceCollection();
-        sc.AddSingleton(_ => new DatabaseService(_dbPath));
-        sc.AddSingleton<WebAuthService>();
-        sc.AddSingleton<WebRefreshTokenService>();
-        sc.AddSingleton<WebAuthDiscordVerificationService>();
-        sc.AddSingleton<DiscordOAuthService>();
-        sc.AddSingleton<ConfigService>();
-        sc.AddSingleton<ChannelBindingService>();
-        sc.AddSingleton<UndoService>();
-        sc.AddSingleton<LoggingService>();
-        sc.AddSingleton<BuyService>();
-        sc.AddSingleton<WishlistService>();
-        sc.AddSingleton<MoneyService>();
-        sc.AddSingleton<BudgetService>();
-        sc.AddSingleton<CalendarService>();
-        sc.AddSingleton<DiscordSocketHolder>();
-        sc.AddSingleton<DiscordGuildDirectoryService>();
-        sc.AddSingleton<IDiscordChannelNotifier, DiscordChannelNotifier>();
-        sc.AddSingleton<DiscordAuthAuditNotifier>();
+        sc.AddHomeBotApiTestServices(_dbPath);
         _services = sc.BuildServiceProvider();
 
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions

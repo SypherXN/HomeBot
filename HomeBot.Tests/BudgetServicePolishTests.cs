@@ -94,6 +94,7 @@ public sealed class BudgetServicePolishTests : IDisposable
             null,
             null,
             null,
+            null,
             false,
             "USD",
             1,
@@ -110,12 +111,14 @@ public sealed class BudgetServicePolishTests : IDisposable
                 other,
                 "2026-02-15",
                 "lunch",
+                null,
                 "Cafe",
                 false,
                 DateTime.UtcNow.ToString("o"),
                 null,
                 new List<string> { "dining", "out" },
                 null,
+                false,
                 false,
                 Actor));
 

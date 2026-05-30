@@ -1,10 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   downloadCalendarIcs,
   getCalendarItems,
   getCalendarRange,
+  getGoogleCalendarOAuthUrl,
+  getGoogleCalendarStatus,
+  getGoogleCalendars,
+  postCalendarImportIcs,
+  putGoogleCalendarPick,
+  postGoogleCalendarDisconnect,
+  postGoogleCalendarSync,
   postUndo,
+  type GoogleCalendarStatus,
+  type GoogleCalendarListItem,
   type CalendarRangeItem,
   type PagedCalendarList,
 } from "../api";
@@ -26,6 +35,7 @@ import {
   ymdListForDays,
 } from "../calendar/calendarZoned";
 import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
+import { useSearchHighlightId } from "../lib/searchHighlight";
 import { validActorId } from "../lib/validation";
 import AddItemModal from "../calendar/AddItemModal";
 import AgendaView from "../calendar/AgendaView";
@@ -78,8 +88,12 @@ export default function CalendarPage() {
   const [tasksError, setTasksError] = useState<string | null>(null);
 
   const [banner, setBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [gcal, setGcal] = useState<GoogleCalendarStatus | null>(null);
+  const [gcalCalendars, setGcalCalendars] = useState<GoogleCalendarListItem[]>([]);
   const [undoBusy, setUndoBusy] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   type ModalState =
     | { kind: "none" }
@@ -164,6 +178,85 @@ export default function CalendarPage() {
     void loadTasks();
   }, [loadTasks]);
 
+  const highlightId = useSearchHighlightId();
+
+  useEffect(() => {
+    if (!canAuth || !highlightId) return;
+    setModal({ kind: "detail", itemId: highlightId });
+  }, [canAuth, highlightId]);
+
+  useEffect(() => {
+    if (!canAuth) {
+      setGcal(null);
+      return;
+    }
+    void getGoogleCalendarStatus(tok)
+      .then(async (status) => {
+        setGcal(status);
+        if (status.connected) {
+          try {
+            const { calendars } = await getGoogleCalendars(tok);
+            setGcalCalendars(calendars);
+          } catch {
+            setGcalCalendars([]);
+          }
+        } else {
+          setGcalCalendars([]);
+        }
+      })
+      .catch(() => setGcal({ configured: false, connected: false }));
+    if (params.get("google") === "connected") {
+      showBanner("ok", "Google Calendar connected.");
+      const p = new URLSearchParams(params);
+      p.delete("google");
+      setParams(p, { replace: true });
+    }
+  }, [canAuth, tok, params, setParams]);
+
+  async function connectGoogle() {
+    if (!canAuth) return;
+    try {
+      const { url } = await getGoogleCalendarOAuthUrl(tok);
+      window.location.href = url;
+    } catch (e) {
+      showBanner("err", e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function disconnectGoogle() {
+    if (!canAuth) return;
+    try {
+      await postGoogleCalendarDisconnect(tok);
+      setGcal(await getGoogleCalendarStatus(tok));
+      showBanner("ok", "Google Calendar disconnected.");
+    } catch (e) {
+      showBanner("err", e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function pickGoogleCalendar(calendarId: string) {
+    if (!canAuth || !calendarId) return;
+    try {
+      await putGoogleCalendarPick(tok, calendarId);
+      setGcal(await getGoogleCalendarStatus(tok));
+      showBanner("ok", "Google calendar updated.");
+    } catch (e) {
+      showBanner("err", e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function syncGoogleNow() {
+    if (!canAuth) return;
+    try {
+      await postGoogleCalendarSync(tok);
+      setGcal(await getGoogleCalendarStatus(tok));
+      showBanner("ok", "Google sync started.");
+      void loadRange();
+    } catch (e) {
+      showBanner("err", e instanceof Error ? e.message : String(e));
+    }
+  }
+
   function showBanner(kind: "ok" | "err", text: string) {
     setBanner({ kind, text });
     setTimeout(() => setBanner(null), 5000);
@@ -238,6 +331,24 @@ export default function CalendarPage() {
     }
   }
 
+  async function handleImportIcs(file: File) {
+    if (!canAuth || !canActor) {
+      showBanner("err", "Set actorUserId in Settings to import events.");
+      return;
+    }
+    setImportBusy(true);
+    try {
+      const res = await postCalendarImportIcs(tok, actor, file);
+      showBanner("ok", `Imported ${res.imported} event(s) from .ics (${res.parsed} parsed).`);
+      void loadRange();
+      void loadTasks();
+    } catch (err) {
+      showBanner("err", err instanceof Error ? err.message : String(err));
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
   return (
     <div className="mx-auto min-w-0 max-w-6xl px-3 pb-12 sm:px-4">
       <header className="mb-4 border-b border-slate-800 pb-4">
@@ -263,6 +374,65 @@ export default function CalendarPage() {
           {banner.text}
         </div>
       )}
+
+      {canAuth && gcal?.configured ? (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/40 px-4 py-3 text-sm text-slate-300">
+          <span className="font-medium text-slate-200">Google Calendar</span>
+          {gcal.connected ? (
+            <>
+              <span className="text-emerald-400">Connected</span>
+              {gcal.connection?.lastSyncAt ? (
+                <span className="text-xs text-slate-500">Last sync: {gcal.connection.lastSyncAt}</span>
+              ) : null}
+              {gcal.connection?.lastSyncError ? (
+                <span className="text-xs text-amber-400" title={gcal.connection.lastSyncError}>
+                  Sync issue
+                </span>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void syncGoogleNow()}
+                className="rounded-md bg-slate-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-slate-600"
+              >
+                Sync now
+              </button>
+              <button
+                type="button"
+                onClick={() => void disconnectGoogle()}
+                className="rounded-md border border-slate-600 px-2.5 py-1 text-xs text-slate-300 hover:bg-slate-800"
+              >
+                Disconnect
+              </button>
+              {gcalCalendars.length > 0 ? (
+                <select
+                  value={gcal.connection?.calendarId ?? "primary"}
+                  onChange={(e) => void pickGoogleCalendar(e.target.value)}
+                  className="rounded-md border border-slate-600 bg-slate-950 px-2 py-1 text-xs text-slate-200"
+                  title="Target Google calendar"
+                >
+                  {gcalCalendars.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.summary}
+                      {c.primary ? " (primary)" : ""}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <span className="text-slate-500">Not connected</span>
+              <button
+                type="button"
+                onClick={() => void connectGoogle()}
+                className="rounded-md bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-500"
+              >
+                Connect Google
+              </button>
+            </>
+          )}
+        </div>
+      ) : null}
 
       {!canAuth && (
         <div className="mb-6 rounded-lg border border-amber-700/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">
@@ -294,6 +464,21 @@ export default function CalendarPage() {
         onExportIcs={() => void handleExportIcs()}
         exportBusy={exportBusy}
         canExport={canAuth}
+        onImportIcs={() => importInputRef.current?.click()}
+        importBusy={importBusy}
+        canImport={canAuth && canActor}
+      />
+
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".ics,text/calendar"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void handleImportIcs(f);
+          e.target.value = "";
+        }}
       />
 
       {rangeError && (
@@ -468,6 +653,9 @@ function Toolbar({
   onExportIcs,
   exportBusy,
   canExport,
+  onImportIcs,
+  importBusy,
+  canImport,
 }: {
   view: View;
   onViewChange: (v: View) => void;
@@ -488,6 +676,9 @@ function Toolbar({
   onExportIcs: () => void;
   exportBusy: boolean;
   canExport: boolean;
+  onImportIcs: () => void;
+  importBusy: boolean;
+  canImport: boolean;
 }) {
   return (
     <div className="flex min-w-0 w-full flex-col gap-3 rounded-xl border border-slate-800 bg-slate-900/40 p-3">
@@ -508,6 +699,16 @@ function Toolbar({
               className="shrink-0 rounded-md border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-50"
             >
               {exportBusy ? "Exporting…" : "Export .ics"}
+            </button>
+          )}
+          {canImport && (
+            <button
+              type="button"
+              disabled={importBusy}
+              onClick={onImportIcs}
+              className="shrink-0 rounded-md border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+            >
+              {importBusy ? "Importing…" : "Import .ics"}
             </button>
           )}
           <button

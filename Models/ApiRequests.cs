@@ -186,6 +186,7 @@ public sealed class BudgetTransactionCreateRequest
     public ulong SpentByUserId { get; set; }
     public string? TransactionDate { get; set; }
     public string? Note { get; set; }
+    public string? ReceiptUrl { get; set; }
     public string? Merchant { get; set; }
     public int? AccountId { get; set; }
     public bool IsPending { get; set; }
@@ -203,6 +204,7 @@ public sealed class BudgetTransactionUpdateRequest
     public ulong? SpentByUserId { get; set; }
     public string? TransactionDate { get; set; }
     public string? Note { get; set; }
+    public string? ReceiptUrl { get; set; }
     public string? Merchant { get; set; }
     public bool? IsPending { get; set; }
     public string? ClearedAt { get; set; }
@@ -254,6 +256,24 @@ public sealed class BudgetIncomePlanSetRequest
 {
     public string Month { get; set; } = "";
     public double PlannedAmount { get; set; }
+}
+
+public sealed class BudgetNotificationDismissRequest
+{
+    public string Key { get; set; } = "";
+}
+
+public sealed class HouseholdSettingPutRequest
+{
+    public string Key { get; set; } = "";
+    public string Value { get; set; } = "";
+}
+
+public sealed class HouseholdChannelBindingPutRequest
+{
+    public string Feature { get; set; } = "";
+    [JsonConverter(typeof(SnowflakeUlongJsonConverter))]
+    public ulong ChannelId { get; set; }
 }
 
 public sealed class BudgetRecurringCreateRequest
@@ -325,4 +345,11 @@ public sealed class BudgetExchangeRateSetRequest
     public string ToCurrency { get; set; } = "";
     public double Rate { get; set; }
     public string? EffectiveDate { get; set; }
+}
+
+public sealed class BulkItemIdsRequest
+{
+    [JsonConverter(typeof(SnowflakeUlongJsonConverter))]
+    public ulong ActorUserId { get; set; }
+    public List<int> Ids { get; set; } = new();
 }

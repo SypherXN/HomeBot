@@ -458,7 +458,7 @@ public partial class BudgetService
             ulong spender = defaultSpentBy;
             if (cols.Count > 6 && ulong.TryParse(cols[6], out var u))
                 spender = u;
-            CreateTransaction(type, amountInput, null, spender, date, note, merchant, null, false, "USD", 1, null,
+            CreateTransaction(type, amountInput, null, spender, date, note, null, merchant, null, false, "USD", 1, null,
                 null, actor);
             count++;
         }

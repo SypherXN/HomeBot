@@ -71,18 +71,219 @@ public sealed class WebAuthService
         if (!IsJwtSecretConfigured(ReadJwtSecret()))
             return ApiResults.BadRequest("HOMEBOT_WEB_JWT_SECRET (min 32 UTF-8 bytes) is required.", "jwt_not_configured");
 
+        if (!ValidateInviteToken(inviteToken, out var inviteErr))
+            return inviteErr;
+
+        return TryInsertUser(username, password, discordUserId);
+    }
+
+    public bool ValidateInviteToken(string inviteToken, out IResult? error)
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(inviteToken))
+        {
+            error = ApiResults.Validation("Invalid invite token.");
+            return false;
+        }
+
+        if (TryValidateDbInviteToken(inviteToken))
+            return true;
+
         var invite = Environment.GetEnvironmentVariable("HOMEBOT_WEB_INVITE_TOKEN")?.Trim();
         if (string.IsNullOrEmpty(invite))
-            return ApiResults.BadRequest("Registration is disabled (HOMEBOT_WEB_INVITE_TOKEN not set).", "invite_disabled");
+        {
+            error = ApiResults.BadRequest("Registration is disabled (no invite token configured).", "invite_disabled");
+            return false;
+        }
 
-        if (string.IsNullOrEmpty(inviteToken) || !CryptographicOperations.FixedTimeEquals(
+        if (!CryptographicOperations.FixedTimeEquals(
                 Encoding.UTF8.GetBytes(invite),
                 Encoding.UTF8.GetBytes(inviteToken)))
         {
-            return ApiResults.Validation("Invalid invite token.");
+            error = ApiResults.Validation("Invalid invite token.");
+            return false;
         }
 
-        return TryInsertUser(username, password, discordUserId);
+        return true;
+    }
+
+    public List<WebUserAdminModel> ListUsers()
+    {
+        using var conn = _db.GetConnection();
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT Username, DiscordUserId, IsActive, IsAdmin, CreatedAt
+            FROM WebUsers
+            ORDER BY Username COLLATE NOCASE";
+        using var r = cmd.ExecuteReader();
+        var list = new List<WebUserAdminModel>();
+        while (r.Read())
+        {
+            list.Add(new WebUserAdminModel
+            {
+                Username = r.GetString(0),
+                DiscordUserId = r.GetString(1),
+                IsActive = r.GetInt32(2) == 1,
+                IsAdmin = r.GetInt32(3) == 1,
+                CreatedAt = r.IsDBNull(4) ? null : r.GetString(4),
+            });
+        }
+
+        return list;
+    }
+
+    public IResult? TryDeactivateUser(string username)
+    {
+        using var conn = _db.GetConnection();
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE WebUsers SET IsActive = 0 WHERE Username = $u COLLATE NOCASE";
+        cmd.Parameters.AddWithValue("$u", username.Trim());
+        if (cmd.ExecuteNonQuery() == 0)
+            return ApiResults.NotFound("User not found.");
+        return null;
+    }
+
+    public IResult? TryResetPassword(string username, string newPassword)
+    {
+        var passErr = ValidatePassword(newPassword);
+        if (passErr != null)
+            return ApiResults.Validation(passErr);
+
+        using var conn = _db.GetConnection();
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE WebUsers SET PasswordHash = $p WHERE Username = $u COLLATE NOCASE AND IsActive = 1";
+        cmd.Parameters.AddWithValue("$p", HashPassword(newPassword));
+        cmd.Parameters.AddWithValue("$u", username.Trim());
+        if (cmd.ExecuteNonQuery() == 0)
+            return ApiResults.NotFound("User not found or inactive.");
+        return null;
+    }
+
+    public (string PlainToken, WebInviteStatusModel Status)? RotateInviteToken(string? label = null)
+    {
+        var plain = GenerateInvitePlainToken();
+        var hash = HashInviteToken(plain);
+        var now = DateTime.UtcNow.ToString("o");
+
+        using var conn = _db.GetConnection();
+        conn.Open();
+        using var revoke = conn.CreateCommand();
+        revoke.CommandText = "UPDATE WebInviteTokens SET RevokedAt = $t WHERE RevokedAt IS NULL";
+        revoke.Parameters.AddWithValue("$t", now);
+        revoke.ExecuteNonQuery();
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            INSERT INTO WebInviteTokens (TokenHash, Label, CreatedAt)
+            VALUES ($h, $l, $t)";
+        cmd.Parameters.AddWithValue("$h", hash);
+        cmd.Parameters.AddWithValue("$l", (object?)label ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$t", now);
+        cmd.ExecuteNonQuery();
+
+        return (plain, GetInviteStatus());
+    }
+
+    public WebInviteStatusModel GetInviteStatus()
+    {
+        var envConfigured = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("HOMEBOT_WEB_INVITE_TOKEN")?.Trim());
+        using var conn = _db.GetConnection();
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT CreatedAt, Label FROM WebInviteTokens
+            WHERE RevokedAt IS NULL
+            ORDER BY Id DESC LIMIT 1";
+        using var r = cmd.ExecuteReader();
+        if (r.Read())
+        {
+            return new WebInviteStatusModel
+            {
+                EnvTokenConfigured = envConfigured,
+                DbTokenActive = true,
+                CreatedAt = r.GetString(0),
+                Label = r.IsDBNull(1) ? null : r.GetString(1),
+            };
+        }
+
+        return new WebInviteStatusModel
+        {
+            EnvTokenConfigured = envConfigured,
+            DbTokenActive = false,
+        };
+    }
+
+    public bool IsAdmin(string username, string discordUserId)
+    {
+        if (IsEnvAdminDiscordId(discordUserId))
+            return true;
+
+        using var conn = _db.GetConnection();
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT IsAdmin FROM WebUsers
+            WHERE Username = $u COLLATE NOCASE AND IsActive = 1";
+        cmd.Parameters.AddWithValue("$u", username.Trim());
+        var o = cmd.ExecuteScalar();
+        return o != null && Convert.ToInt32(o, CultureInfo.InvariantCulture) == 1;
+    }
+
+    private static bool IsEnvAdminDiscordId(string discordUserId)
+    {
+        var raw = Environment.GetEnvironmentVariable("HOMEBOT_WEB_ADMIN_DISCORD_IDS");
+        if (string.IsNullOrWhiteSpace(raw)) return false;
+        foreach (var part in raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (string.Equals(part, discordUserId.Trim(), StringComparison.Ordinal))
+                return true;
+        }
+
+        return false;
+    }
+
+    private bool TryValidateDbInviteToken(string plainToken)
+    {
+        var hash = HashInviteToken(plainToken);
+        using var conn = _db.GetConnection();
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT Id, ExpiresAt FROM WebInviteTokens
+            WHERE TokenHash = $h AND RevokedAt IS NULL
+            LIMIT 1";
+        cmd.Parameters.AddWithValue("$h", hash);
+        using var r = cmd.ExecuteReader();
+        if (!r.Read()) return false;
+        var expires = r.IsDBNull(1) ? null : r.GetString(1);
+        if (!string.IsNullOrEmpty(expires) &&
+            DateTime.TryParse(expires, out var exp) &&
+            DateTime.UtcNow > exp.ToUniversalTime())
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static string GenerateInvitePlainToken()
+    {
+        Span<byte> bytes = stackalloc byte[24];
+        RandomNumberGenerator.Fill(bytes);
+        return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', 'x').Replace('/', 'y');
+    }
+
+    private static string HashInviteToken(string plain) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(plain))).ToLowerInvariant();
+
+    private static int CountUsersInConn(SqliteConnection conn)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM WebUsers";
+        return Convert.ToInt32(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
     public (string accessToken, string username, string discordUserId)? TryLogin(string username, string password)
@@ -91,7 +292,10 @@ public sealed class WebAuthService
         if (!IsJwtSecretConfigured(secret))
             return null;
 
-        if (!TryGetUserCredentials(username.Trim(), out var storedHash, out var discordUserId))
+        if (!TryGetUserCredentials(username.Trim(), out var storedHash, out var discordUserId, out var isActive, out _))
+            return null;
+
+        if (!isActive)
             return null;
 
         if (!VerifyPassword(password, storedHash))
@@ -118,7 +322,7 @@ public sealed class WebAuthService
         using var conn = _db.GetConnection();
         conn.Open();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT Username FROM WebUsers WHERE DiscordUserId = $d";
+        cmd.CommandText = "SELECT Username FROM WebUsers WHERE DiscordUserId = $d AND IsActive = 1";
         cmd.Parameters.AddWithValue("$d", d);
         var o = cmd.ExecuteScalar();
         if (o is null)
@@ -151,13 +355,15 @@ public sealed class WebAuthService
         {
             using var conn = _db.GetConnection();
             conn.Open();
+            var isFirst = CountUsersInConn(conn) == 0;
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
-                INSERT INTO WebUsers (Username, PasswordHash, DiscordUserId)
-                VALUES ($u, $p, $d)";
+                INSERT INTO WebUsers (Username, PasswordHash, DiscordUserId, IsAdmin)
+                VALUES ($u, $p, $d, $admin)";
             cmd.Parameters.AddWithValue("$u", username.Trim());
             cmd.Parameters.AddWithValue("$p", hash);
             cmd.Parameters.AddWithValue("$d", discordUserId.Trim());
+            cmd.Parameters.AddWithValue("$admin", isFirst ? 1 : 0);
             cmd.ExecuteNonQuery();
         }
         catch (SqliteException ex) when (ex.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase))
@@ -185,15 +391,24 @@ public sealed class WebAuthService
         return null;
     }
 
-    private bool TryGetUserCredentials(string username, out string passwordHash, out string discordUserId)
+    private bool TryGetUserCredentials(
+        string username,
+        out string passwordHash,
+        out string discordUserId,
+        out bool isActive,
+        out bool isAdmin)
     {
         passwordHash = "";
         discordUserId = "";
+        isActive = true;
+        isAdmin = false;
 
         using var conn = _db.GetConnection();
         conn.Open();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT PasswordHash, DiscordUserId FROM WebUsers WHERE Username = $u COLLATE NOCASE";
+        cmd.CommandText = @"
+            SELECT PasswordHash, DiscordUserId, IsActive, IsAdmin
+            FROM WebUsers WHERE Username = $u COLLATE NOCASE";
         cmd.Parameters.AddWithValue("$u", username);
 
         using var reader = cmd.ExecuteReader();
@@ -202,6 +417,8 @@ public sealed class WebAuthService
 
         passwordHash = reader.GetString(0);
         discordUserId = reader.GetString(1);
+        isActive = reader.GetInt32(2) == 1;
+        isAdmin = reader.GetInt32(3) == 1;
         return true;
     }
 
@@ -250,4 +467,21 @@ public sealed class WebAuthService
 
         return CryptographicOperations.FixedTimeEquals(actual, expected);
     }
+}
+
+public sealed class WebUserAdminModel
+{
+    public string Username { get; set; } = "";
+    public string DiscordUserId { get; set; } = "";
+    public bool IsActive { get; set; }
+    public bool IsAdmin { get; set; }
+    public string? CreatedAt { get; set; }
+}
+
+public sealed class WebInviteStatusModel
+{
+    public bool EnvTokenConfigured { get; set; }
+    public bool DbTokenActive { get; set; }
+    public string? CreatedAt { get; set; }
+    public string? Label { get; set; }
 }

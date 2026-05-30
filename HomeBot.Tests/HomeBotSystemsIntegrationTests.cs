@@ -32,6 +32,11 @@ public sealed class HomeBotSystemsIntegrationTests : IDisposable
         Assert.Contains("budget", features);
         Assert.Contains("calendar", features);
         Assert.Contains("undo", features);
+        Assert.Contains("search", features);
+        Assert.Contains("webhooks", features);
+        Assert.Contains("household-report", features);
+        Assert.Contains("buy-recurring", features);
+        Assert.Contains("web-admin", features);
     }
 
     [Fact]

@@ -5,6 +5,7 @@ import CalendarPage from "./pages/CalendarPage";
 import DashboardPage from "./pages/DashboardPage";
 import HealthPage from "./pages/HealthPage";
 import LoginPage from "./pages/LoginPage";
+import MealPlanPage from "./pages/MealPlanPage";
 import MoneyPage from "./pages/MoneyPage";
 import BudgetPage from "./pages/BudgetPage";
 import OAuthCallbackPage from "./pages/OAuthCallbackPage";
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/money" element={<MoneyPage />} />
         <Route path="/budget" element={<BudgetPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
+        <Route path="/meals" element={<MealPlanPage />} />
         <Route path="/health" element={<HealthPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/setup" element={<SetupPage />} />

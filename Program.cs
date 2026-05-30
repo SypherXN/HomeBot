@@ -30,6 +30,12 @@ class Program
     {
         _services = ConfigureServices();
 
+        var buyRecurringWorker = _services.GetRequiredService<BuyRecurringService>();
+        _ = buyRecurringWorker.StartWorkerAsync();
+
+        var googleSync = _services.GetRequiredService<GoogleCalendarSyncService>();
+        _ = googleSync.StartWorkerAsync();
+
         // Construct Discord client before the API accepts traffic so DI never caches a null
         // DiscordSocketClient singleton and Web/API notifications can resolve the live socket.
         if (IsDiscordEnabled())

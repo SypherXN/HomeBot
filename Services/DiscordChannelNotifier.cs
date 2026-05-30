@@ -55,4 +55,28 @@ public sealed class DiscordChannelNotifier : IDiscordChannelNotifier
             _log.Exception(ex);
         }
     }
+
+    /// <inheritdoc />
+    public async ValueTask NotifyUserDmAsync(ulong discordUserId, string markdownMessage)
+    {
+        var client = _holder.Client;
+        if (client is null || client.ConnectionState != ConnectionState.Connected)
+            return;
+
+        var user = client.GetUser(discordUserId);
+        if (user is null)
+        {
+            _log.Info($"Discord DM skipped: user {discordUserId} not in cache.");
+            return;
+        }
+
+        try
+        {
+            await user.SendMessageAsync(markdownMessage, allowedMentions: AllowedMentions.None);
+        }
+        catch (Exception ex)
+        {
+            _log.Exception(ex);
+        }
+    }
 }

@@ -1,10 +1,18 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
-import DiscordMemberSelect from "../components/DiscordMemberSelect";
+import MemberIdField from "../components/MemberIdField";
 import TimeZoneSelect from "../components/TimeZoneSelect";
 import { useCalendarZone } from "../calendar/CalendarZoneContext";
 import { Link } from "react-router-dom";
 import { AUTH_STORAGE_REFRESH } from "../auth/storageKeys";
+import HouseholdSettingsPanel from "./settings/HouseholdSettingsPanel";
+import WebUsersAdminPanel from "./settings/WebUsersAdminPanel";
+import BudgetCategorizeRulesPanel from "./settings/BudgetCategorizeRulesPanel";
+import HouseholdReportPanel from "./settings/HouseholdReportPanel";
+import HouseholdAuditPanel from "./settings/HouseholdAuditPanel";
+import NotificationPreferencesPanel from "./settings/NotificationPreferencesPanel";
+import PushNotificationsPanel from "./settings/PushNotificationsPanel";
+import AppearancePanel from "./settings/AppearancePanel";
 import {
   getApiBaseUrl,
   isApiBaseInferred,
@@ -136,6 +144,46 @@ export default function SettingsPage() {
       </div>
 
       <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/30 p-4">
+        <h2 className="text-sm font-semibold text-white">Household config (server)</h2>
+        <HouseholdSettingsPanel token={token} />
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/30 p-4">
+        <h2 className="text-sm font-semibold text-white">Web users (admin)</h2>
+        <WebUsersAdminPanel token={token} />
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/30 p-4">
+        <h2 className="text-sm font-semibold text-white">Budget auto-categorize rules</h2>
+        <BudgetCategorizeRulesPanel token={token} />
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/30 p-4">
+        <h2 className="text-sm font-semibold text-white">Household report</h2>
+        <HouseholdReportPanel token={token} />
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/30 p-4">
+        <h2 className="text-sm font-semibold text-white">Household audit log</h2>
+        <HouseholdAuditPanel token={token} />
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/30 p-4">
+        <h2 className="text-sm font-semibold text-white">Appearance</h2>
+        <AppearancePanel />
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/30 p-4">
+        <h2 className="text-sm font-semibold text-white">Push notifications (PWA)</h2>
+        <PushNotificationsPanel token={token} />
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/30 p-4">
+        <h2 className="text-sm font-semibold text-white">Notification preferences</h2>
+        <NotificationPreferencesPanel token={token} discordUserId={actorUserId} />
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/30 p-4">
         <h2 className="text-sm font-semibold text-white">Calendar display</h2>
         <p className="max-w-2xl text-sm text-slate-400">
           Choose which time zone the calendar grid and range query use when you are away from home. This does not change
@@ -147,23 +195,14 @@ export default function SettingsPage() {
         <TimeZoneSelect id="settings-viewer-tz" value={viewerTimeZone} onChange={setViewerTimeZone} />
       </div>
 
-      <div className="space-y-3">
-        <label htmlFor="settings-actor" className="block text-sm font-medium text-slate-300">
-          actorUserId
-        </label>
-        <DiscordMemberSelect
-          token={token}
-          label="Choose your Discord account (fills the field below)"
-          onPickUserId={setActorUserId}
-        />
-        <input
+      <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/30 p-4">
+        <MemberIdField
           id="settings-actor"
-          type="text"
-          inputMode="numeric"
-          placeholder="Discord user id for mutations that require it"
+          token={token}
           value={actorUserId}
-          onChange={(e) => setActorUserId(e.target.value)}
-          className="w-full max-w-xl rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          onChange={setActorUserId}
+          label="actorUserId"
+          actorId={actorUserId}
         />
         <p className="max-w-2xl text-sm leading-relaxed text-slate-400">
           <strong className="text-slate-300">When required:</strong> buy &amp; wishlist add, item complete/delete, money

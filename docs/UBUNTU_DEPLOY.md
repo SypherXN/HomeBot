@@ -4,6 +4,8 @@ Deploy HomeBot on **Ubuntu 22.04 or 24.04** so the Discord bot and HTTP API star
 
 **Full install guide (Windows + Discord + Web UI):** **[SETUP.md](SETUP.md)**. This document focuses on the **server only**.
 
+**Choosing a host:** Step-by-step **Oracle Always Free + DuckDNS + Caddy + GitHub Pages** — **[SETUP.md §2.5](SETUP.md#25-free-vm-hosting-optional)** (Steps A–J).
+
 **What runs on the server**
 
 | Component | Path / name |
@@ -27,7 +29,7 @@ Deploy HomeBot on **Ubuntu 22.04 or 24.04** so the Discord bot and HTTP API star
 | **Caddy/nginx** | Low | Only if you use HTTPS reverse proxy ([Section 6](#6-public-https-api-optional)). |
 | **SQLite** | Small disk; WAL enabled at startup | Grows with years of buy/budget/calendar data; back up `homebot.db` ([SETUP.md — §20](SETUP.md#20-backing-up-sqlite-homebotdb)). |
 | **Backups (optional)** | Brief stop during weekly snapshot | Local **`/opt/homebot/backups`**; optional **Google Drive** via **rclone** (~**13** weekly files over **90** days — often tens of MB) — [§20.2](SETUP.md#202-off-site-backup-to-google-drive-optional). |
-| **Background work** | Calendar reminder poll (default **30s**); budget alerts every **6h** | Optional: `HOMEBOT_REMINDER_POLL_SECONDS` in `.env` (10–300). |
+| **Background work** | Calendar reminder poll (default **30s**); budget alerts every **6h**; optional buy recurring, Google Calendar sync | `HOMEBOT_REMINDER_POLL_SECONDS`, `HOMEBOT_BUY_RECURRING_POLL_MINUTES`, `HOMEBOT_GOOGLE_CALENDAR_SYNC_MINUTES` in `.env`. |
 | **Web UI polling** | Only when someone keeps a browser tab open | GitHub Pages does not load your server; open tabs poll health (~45s) and budget badge (~5 min). |
 
 A **1 GB RAM / 1 vCPU** VPS is usually enough. Heavy use (very large budget history + UI left open 24/7) may warrant **2 GB**; you do not need a GPU or Node on the server for the standard layout.
@@ -59,6 +61,8 @@ Gather these values **before** running the install script. You will paste them i
 | **`DISCORD_GUILD_ID`** | Your server’s numeric id | Discord → enable **Developer Mode** → right‑click server icon → **Copy Server ID** |
 | **`HOMEBOT_API_TOKEN`** | Long random secret | Password manager or `openssl rand -base64 32` on the server |
 | **`HOMEBOT_WEB_JWT_SECRET`** | Another long secret, **≥ 32 characters** | Same as above (use a **different** value than the API token) |
+
+Optional later (see **`.env.example`** and [SETUP.md §19](SETUP.md#19-reference--every-environment-variable)): **`HOMEBOT_WEBHOOK_SECRET`**, **`HOMEBOT_GOOGLE_OAUTH_*`**, **`HOMEBOT_VAPID_*`**, **`HOMEBOT_GDRIVE_*`**.
 
 You also need:
 
@@ -255,6 +259,8 @@ Restart **`npm run dev`** after changing **`webui/.env`**.
 
 If the browser shows **Cannot reach API**, open port **5050** ([Section 7](#7-firewall)) and set **`HOMEBOT_ALLOWED_ORIGINS`** on the server to include your Web UI origin (e.g. `http://localhost:5173`).
 
+**PWA on iPhone:** After HTTPS is working, use Safari **Add to Home Screen** — **[MOBILE.md](./MOBILE.md)**.
+
 ### 4.2 Backups (optional, recommended on VPS)
 
 | Goal | Action |
@@ -347,7 +353,8 @@ sudo ufw status
 | Health check | `curl -sS http://127.0.0.1:5050/api/health` |
 | Install / reinstall layout | `sudo bash /opt/homebot/app/scripts/ubuntu/install-homebot.sh <git-url>` |
 | Update after `git push` | `sudo bash /opt/homebot/app/scripts/ubuntu/update-homebot.sh` |
-| SQLite backup | [SETUP.md — Section 20](SETUP.md#20-backing-up-sqlite-homebotdb) |
+| SQLite backup | `sudo bash /opt/homebot/app/scripts/backup-homebot-sqlite.sh` |
+| Restore from backup | `sudo bash /opt/homebot/app/scripts/restore-homebot-backup.sh /path/to/homebot-YYYYMMDD.db --apply` |
 | Google Drive backup | [SETUP.md — Section 20.2](SETUP.md#202-off-site-backup-to-google-drive-optional) (`backup-homebot-with-gdrive.sh` + rclone) |
 
 **Custom paths** (optional): set **`HOMEBOT_APP_DIR`**, **`HOMEBOT_INSTALL_ROOT`**, or **`HOMEBOT_SERVICE_NAME`** when calling the scripts.

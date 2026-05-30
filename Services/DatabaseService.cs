@@ -185,10 +185,17 @@ public class DatabaseService
             Username TEXT NOT NULL COLLATE NOCASE UNIQUE,
             PasswordHash TEXT NOT NULL,
             DiscordUserId TEXT NOT NULL,
+            IsActive INTEGER NOT NULL DEFAULT 1,
+            IsAdmin INTEGER NOT NULL DEFAULT 0,
             CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
         );";
 
         cmd.ExecuteNonQuery();
+
+        SchemaMigrationRunner.TryAddColumn(conn,
+            "ALTER TABLE WebUsers ADD COLUMN IsActive INTEGER NOT NULL DEFAULT 1");
+        SchemaMigrationRunner.TryAddColumn(conn,
+            "ALTER TABLE WebUsers ADD COLUMN IsAdmin INTEGER NOT NULL DEFAULT 0");
 
         cmd.CommandText = @"
         CREATE TABLE IF NOT EXISTS WebAuthVerifications (
@@ -242,6 +249,15 @@ public class DatabaseService
     public SqliteConnection GetConnection()
     {
         return new SqliteConnection(_connectionString);
+    }
+
+    /// <summary>Filesystem path when the connection string uses <c>Data Source=…</c>.</summary>
+    public string? GetDatabaseFilePath()
+    {
+        const string prefix = "Data Source=";
+        if (!_connectionString.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            return null;
+        return _connectionString[prefix.Length..].Trim();
     }
 
     /// <summary>

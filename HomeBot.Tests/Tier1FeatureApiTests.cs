@@ -31,24 +31,8 @@ public sealed class Tier1FeatureApiTests : IDisposable
         _notifier = new CapturingDiscordNotifier();
 
         var sc = new ServiceCollection();
-        sc.AddSingleton(_ => new DatabaseService(_dbPath));
-        sc.AddSingleton<WebAuthService>();
-        sc.AddSingleton<WebRefreshTokenService>();
-        sc.AddSingleton<WebAuthDiscordVerificationService>();
-        sc.AddSingleton<DiscordOAuthService>();
-        sc.AddSingleton<ConfigService>();
-        sc.AddSingleton<ChannelBindingService>();
-        sc.AddSingleton<UndoService>();
-        sc.AddSingleton<LoggingService>();
-        sc.AddSingleton<BuyService>();
-        sc.AddSingleton<WishlistService>();
-        sc.AddSingleton<MoneyService>();
-        sc.AddSingleton<BudgetService>();
-        sc.AddSingleton<CalendarService>();
-        sc.AddSingleton<DiscordSocketHolder>();
-        sc.AddSingleton<DiscordGuildDirectoryService>();
+        sc.AddHomeBotApiTestServices(_dbPath);
         sc.AddSingleton<IDiscordChannelNotifier>(_notifier);
-        sc.AddSingleton<DiscordAuthAuditNotifier>();
         _services = sc.BuildServiceProvider();
         _services.GetRequiredService<ConfigService>().Set("timezone", "UTC");
 

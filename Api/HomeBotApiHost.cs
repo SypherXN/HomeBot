@@ -203,6 +203,12 @@ public static class HomeBotApiHost
 
         app.Use(async (context, next) =>
         {
+            if (context.Request.Path.StartsWithSegments("/api"))
+            {
+                var mut = context.Request.Method is "POST" or "PUT" or "PATCH" or "DELETE";
+                OpsMetricsService.RecordRequest(mut);
+            }
+
             if (!context.Request.Path.StartsWithSegments("/api"))
             {
                 await next();
@@ -211,6 +217,7 @@ public static class HomeBotApiHost
 
             if (context.Request.Path.StartsWithSegments("/api/health") ||
                 context.Request.Path.StartsWithSegments("/api/meta") ||
+                context.Request.Path.StartsWithSegments("/api/hooks") ||
                 context.Request.Path.StartsWithSegments("/openapi"))
             {
                 await next();
@@ -228,6 +235,7 @@ public static class HomeBotApiHost
                 context.Request.Path.StartsWithSegments("/api/auth/discord/oauth/url") ||
                 context.Request.Path.StartsWithSegments("/api/auth/discord/oauth/callback") ||
                 context.Request.Path.StartsWithSegments("/api/auth/discord/oauth/consume") ||
+                context.Request.Path.StartsWithSegments("/api/calendar/google/oauth/callback") ||
                 context.Request.Path.StartsWithSegments("/api/auth/refresh") ||
                 context.Request.Path.StartsWithSegments("/api/auth/logout");
 
@@ -287,30 +295,49 @@ public static class HomeBotApiHost
             timestamp = DateTimeOffset.UtcNow
         }));
 
-        app.MapGet("/api/meta", () => Results.Ok(new
+        app.MapGet("/api/meta", (HttpContext ctx) =>
         {
-            name = "HomeBot API",
-            version = "phase3",
-            features = new[] { "buy", "wishlist", "money", "budget", "calendar", "undo" },
-            docs = "Authorization: Bearer accepts HOMEBOT_API_TOKEN and/or HS256 JWTs from POST /api/auth/login (short-lived access) plus POST /api/auth/refresh with refreshToken for browser sessions. Web sign-up: POST /api/auth/discord/start then /webui-verify in Discord, then complete-* . Mutations use query actorUserId=DISCORD_USER_ID where noted.",
-            openApi = "/openapi/v1.json",
-            restExamples = new
+            var backup = root.GetRequiredService<BackupStatsService>().GetLocalBackupStats();
+            return Results.Ok(new
             {
-                buy = "POST /api/buy/items?actorUserId=…",
-                wishlist = "POST /api/wishlist/items?actorUserId=…",
-                moneyExpense = "POST /api/money/expenses",
-                moneyPayment = "POST /api/money/payments",
-                moneySplit = "POST /api/money/expenses/split",
-                calendar = "POST /api/calendar/items",
-                undo = "POST /api/undo?actorUserId=…"
-            }
-        }));
+                name = "HomeBot API",
+                version = "phase3",
+                features = new[]
+                {
+                    "buy", "wishlist", "money", "budget", "calendar", "undo",
+                    "search", "webhooks", "household-report", "buy-recurring", "web-admin",
+                },
+                docs = "Authorization: Bearer accepts HOMEBOT_API_TOKEN and/or HS256 JWTs from POST /api/auth/login (short-lived access) plus POST /api/auth/refresh with refreshToken for browser sessions. Web sign-up: POST /api/auth/discord/start then /webui-verify in Discord, then complete-* . Mutations use query actorUserId=DISCORD_USER_ID where noted.",
+                openApi = "/openapi/v1.json",
+                backups = backup,
+                restExamples = new
+                {
+                    buy = "POST /api/buy/items?actorUserId=…",
+                    wishlist = "POST /api/wishlist/items?actorUserId=…",
+                    moneyExpense = "POST /api/money/expenses",
+                    moneyPayment = "POST /api/money/payments",
+                    moneySplit = "POST /api/money/expenses/split",
+                    moneyBalances = "GET /api/money/balances?userId=…",
+                    search = "GET /api/search?q=…",
+                    calendar = "POST /api/calendar/items",
+                    undo = "POST /api/undo?actorUserId=…",
+                    webhookBuy = "POST /api/hooks/buy/add?actorUserId=… (X-HomeBot-Webhook-Secret)",
+                    householdReport = "GET /api/household/report?month=YYYY-MM",
+                }
+            });
+        });
 
         HomeBotApiPhase3.MapOpenApiDocument(app);
 
         app.MapHomeBotDiscordOAuthApi(root);
         app.MapHomeBotAuthApi(root, apiToken);
         app.MapHomeBotApi(root);
+        app.MapMediumFeaturesApi(root, apiToken);
+        app.MapPolishApi(root);
+        app.MapOpsApi(root, apiToken);
+        app.MapMealPlanningApi(root);
+        app.MapGoogleCalendarApi(root);
+        app.MapPushApi(root);
     }
 
     /// <summary>

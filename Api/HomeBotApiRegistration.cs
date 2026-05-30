@@ -12,6 +12,7 @@ public static class HomeBotApiRegistration
         MapReads(app, root);
         MapWrites(app, root);
         BudgetApiRegistration.MapBudgetApi(app, root);
+        HouseholdConfigApi.MapHouseholdConfigRoutes(app, root);
     }
 
     private static bool TryActor(IQueryCollection query, out ulong actor, out IResult? error)
@@ -72,6 +73,18 @@ public static class HomeBotApiRegistration
             var buy = root.GetRequiredService<BuyService>();
             var tags = buy.GetBuyTagCatalog();
             return Results.Ok(new { tags, catalogEnforced = tags.Count > 0 });
+        });
+
+        app.MapGet("/api/buy/stale", (HttpRequest request) =>
+        {
+            var buy = root.GetRequiredService<BuyService>();
+            var days = 14;
+            if (int.TryParse(request.Query["days"], out var daysParsed) && daysParsed > 0)
+                days = daysParsed;
+            var limit = 10;
+            if (int.TryParse(request.Query["limit"], out var limitParsed) && limitParsed > 0)
+                limit = limitParsed;
+            return Results.Ok(new { days, items = buy.GetStaleItems(days, limit) });
         });
 
         app.MapGet("/api/wishlist", (HttpRequest request) =>
@@ -406,6 +419,26 @@ public static class HomeBotApiRegistration
             return Results.Ok(new { ok = true });
         });
 
+        w.MapPost("/buy/items/bulk-complete", (BulkItemIdsRequest? body) =>
+        {
+            if (body?.Ids is null || body.Ids.Count == 0)
+                return ApiResults.BadRequest("ids array is required.", "missing_ids");
+            if (body.Ids.Count > 50)
+                return ApiResults.BadRequest("At most 50 ids per request.", "too_many_ids");
+            var count = root.GetRequiredService<BuyService>().BulkCompleteItems(body.Ids, body.ActorUserId);
+            return Results.Ok(new { ok = true, count });
+        });
+
+        w.MapPost("/buy/items/bulk-delete", (BulkItemIdsRequest? body) =>
+        {
+            if (body?.Ids is null || body.Ids.Count == 0)
+                return ApiResults.BadRequest("ids array is required.", "missing_ids");
+            if (body.Ids.Count > 50)
+                return ApiResults.BadRequest("At most 50 ids per request.", "too_many_ids");
+            var count = root.GetRequiredService<BuyService>().BulkDeleteItems(body.Ids, body.ActorUserId);
+            return Results.Ok(new { ok = true, count });
+        });
+
         w.MapPost("/buy/items/{id:int}/complete", (HttpRequest http, int id) =>
         {
             if (!TryActor(http.Query, out var actor, out var err))
@@ -542,6 +575,26 @@ public static class HomeBotApiRegistration
             return Results.Ok(new { ok = true });
         });
 
+        w.MapPost("/wishlist/items/bulk-complete", (BulkItemIdsRequest? body) =>
+        {
+            if (body?.Ids is null || body.Ids.Count == 0)
+                return ApiResults.BadRequest("ids array is required.", "missing_ids");
+            if (body.Ids.Count > 50)
+                return ApiResults.BadRequest("At most 50 ids per request.", "too_many_ids");
+            var count = root.GetRequiredService<WishlistService>().BulkCompleteItems(body.Ids, body.ActorUserId);
+            return Results.Ok(new { ok = true, count });
+        });
+
+        w.MapPost("/wishlist/items/bulk-delete", (BulkItemIdsRequest? body) =>
+        {
+            if (body?.Ids is null || body.Ids.Count == 0)
+                return ApiResults.BadRequest("ids array is required.", "missing_ids");
+            if (body.Ids.Count > 50)
+                return ApiResults.BadRequest("At most 50 ids per request.", "too_many_ids");
+            var count = root.GetRequiredService<WishlistService>().BulkDeleteItems(body.Ids, body.ActorUserId);
+            return Results.Ok(new { ok = true, count });
+        });
+
         w.MapPost("/wishlist/items/{id:int}/complete", (HttpRequest http, int id) =>
         {
             if (!TryActor(http.Query, out var actor, out var err))
@@ -552,6 +605,21 @@ public static class HomeBotApiRegistration
                 return ApiResults.Validation(idErr);
 
             root.GetRequiredService<WishlistService>().MarkComplete(id, actor);
+            return Results.Ok(new { ok = true });
+        });
+
+        w.MapPost("/wishlist/items/{id:int}/add-to-buy", (HttpRequest http, int id) =>
+        {
+            if (!TryActor(http.Query, out var actor, out var err))
+                return err!;
+
+            var idErr = Validation.ValidateId(id);
+            if (idErr != null)
+                return ApiResults.Validation(idErr);
+
+            if (!root.GetRequiredService<WishlistService>().AddItemToBuyList(id, actor))
+                return ApiResults.NotFound("Wishlist item not found.");
+
             return Results.Ok(new { ok = true });
         });
 
@@ -681,6 +749,41 @@ public static class HomeBotApiRegistration
 
             root.GetRequiredService<MoneyService>().DeleteTransaction(id, actor);
             return Results.Ok(new { ok = true });
+        });
+
+        w.MapPost("/calendar/import.ics", async (HttpRequest http) =>
+        {
+            if (!TryActor(http.Query, out var actor, out var err))
+                return err!;
+
+            string icsText;
+            if (http.HasFormContentType)
+            {
+                var form = await http.ReadFormAsync();
+                var file = form.Files.FirstOrDefault();
+                if (file == null)
+                    return ApiResults.BadRequest("ics file required (multipart field 'file').", "missing_file");
+                using var reader = new StreamReader(file.OpenReadStream());
+                icsText = await reader.ReadToEndAsync();
+            }
+            else
+            {
+                using var reader = new StreamReader(http.Body);
+                icsText = await reader.ReadToEndAsync();
+                if (string.IsNullOrWhiteSpace(icsText))
+                    return ApiResults.BadRequest("Request body or multipart file is required.", "missing_body");
+            }
+
+            var parsed = CalendarIcsImport.Parse(icsText);
+            var calendar = root.GetRequiredService<CalendarService>();
+            var config = root.GetRequiredService<ConfigService>();
+            var imported = CalendarIcsImport.ImportIntoCalendar(calendar, config, parsed, actor);
+
+            await root.GetRequiredService<IDiscordChannelNotifier>().NotifyFeatureChannelAsync(
+                "calendar",
+                $"📅 **Calendar** (via web): imported **{imported}** event(s) from .ics");
+
+            return Results.Ok(new { imported, parsed = parsed.Count });
         });
 
         w.MapPost("/calendar/items", async (CalendarItemCreateRequest? body) =>

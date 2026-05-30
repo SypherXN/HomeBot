@@ -64,8 +64,59 @@ export function createHomeBotFetchMock(
     if (url.includes("/api/wishlist/tags")) {
       return jsonResponse({ tags: [], catalogEnforced: false });
     }
+    if (url.includes("/api/budget/notifications/count")) {
+      return jsonResponse({ count: 0 });
+    }
     if (url.includes("/api/budget/notifications")) {
       return jsonResponse([]);
+    }
+    if (url.includes("/api/household/settings")) {
+      return jsonResponse({ settings: { page_size: "10", timezone: "UTC" } });
+    }
+    if (url.includes("/api/household/channel-bindings")) {
+      return jsonResponse({ bindings: {} });
+    }
+    if (url.includes("/api/push/vapid-public-key")) {
+      return jsonResponse({ configured: false, publicKey: null });
+    }
+    if (url.includes("/api/push/")) {
+      return jsonResponse({ ok: true });
+    }
+    if (url.includes("/api/meals/")) {
+      return jsonResponse({ recipes: [], entries: [] });
+    }
+    if (url.includes("/api/audit/household")) {
+      return jsonResponse({ entries: [] });
+    }
+    if (url.includes("/api/notifications/preferences")) {
+      return jsonResponse({ discordUserId: "0", budgetAlerts: true, calendarDm: true, weeklyDigest: true });
+    }
+    if (url.includes("/api/ops/")) {
+      return jsonResponse({ service: "homebot-api", uptimeSeconds: 1, databaseBytes: 0, tableCounts: {} });
+    }
+    if (url.includes("/api/calendar/google/calendars")) {
+      return jsonResponse({ calendars: [{ id: "primary", summary: "Primary", primary: true }] });
+    }
+    if (url.includes("/api/calendar/google/")) {
+      return jsonResponse({ configured: false, connected: false });
+    }
+    if (url.includes("/api/search")) {
+      return jsonResponse({ query: "", buy: [], wishlist: [], budget: [], calendar: [] });
+    }
+    if (url.includes("/api/money/balances")) {
+      return jsonResponse({ userId: "0", memberLabel: "", balances: [] });
+    }
+    if (url.includes("/api/buy/recurring")) {
+      return jsonResponse({ items: [] });
+    }
+    if (url.includes("/api/admin/")) {
+      return jsonResponse({ users: [], ok: true, envTokenConfigured: false, dbTokenActive: false });
+    }
+    if (url.includes("/api/household/report")) {
+      return jsonResponse({ month: "2026-01", monthLabel: "January 2026", markdown: "", activeBuyItems: 0, upcomingCalendarEvents: 0 });
+    }
+    if (url.includes("/api/budget/categorize-rules")) {
+      return jsonResponse({ rules: [] });
     }
     if (url.includes("/api/calendar/range")) {
       return jsonResponse([]);
@@ -73,7 +124,10 @@ export function createHomeBotFetchMock(
     if (url.includes("/api/calendar/today") || url.includes("/api/calendar/upcoming")) {
       return jsonResponse(emptyPage);
     }
-    if (url.includes("/api/buy")) {
+    if (url.includes("/api/buy/stale")) {
+      return jsonResponse({ days: 14, items: [] });
+    }
+    if (url.includes("/api/buy/items") || (url.includes("/api/buy") && !url.includes("/api/buy/recurring"))) {
       return jsonResponse(emptyPage);
     }
     if (url.includes("/api/wishlist")) {

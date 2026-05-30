@@ -7,9 +7,11 @@ function formatMoney(n: number): string {
 type Props = {
   forecast: BudgetForecastCategory[];
   notifications: BudgetNotificationItem[];
+  onDismiss?: (key: string) => void;
+  dismissBusyKey?: string | null;
 };
 
-export default function BudgetAlertsPanel({ forecast, notifications }: Props) {
+export default function BudgetAlertsPanel({ forecast, notifications, onDismiss, dismissBusyKey }: Props) {
   const paceWarnings = forecast.filter(
     (f) => f.envelopeTarget != null && f.envelopeTarget > 0 && f.projectedMonthEnd > f.envelopeTarget
   );
@@ -50,12 +52,22 @@ export default function BudgetAlertsPanel({ forecast, notifications }: Props) {
             Active alerts (also sent to Discord when configured)
           </h3>
           <ul className="space-y-2">
-            {notifications.map((n, i) => (
+            {notifications.map((n) => (
               <li
-                key={`${n.kind}-${i}`}
-                className="rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-300"
+                key={n.key || `${n.kind}-${n.message}`}
+                className="flex items-start justify-between gap-3 rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-300"
               >
-                {n.message}
+                <span>{n.message}</span>
+                {onDismiss && n.key ? (
+                  <button
+                    type="button"
+                    disabled={dismissBusyKey === n.key}
+                    onClick={() => onDismiss(n.key)}
+                    className="shrink-0 text-xs text-slate-400 hover:text-white disabled:opacity-50"
+                  >
+                    {dismissBusyKey === n.key ? "…" : "Dismiss"}
+                  </button>
+                ) : null}
               </li>
             ))}
           </ul>

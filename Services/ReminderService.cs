@@ -10,15 +10,21 @@ public class ReminderService
     private readonly DatabaseService _db;
     private readonly DiscordSocketClient _client;
     private readonly ChannelBindingService _binding;
+    private readonly NotificationPreferencesService _prefs;
+    private readonly WebPushService _push;
 
     public ReminderService(
         DatabaseService db,
         DiscordSocketClient client,
-        ChannelBindingService binding)
+        ChannelBindingService binding,
+        NotificationPreferencesService prefs,
+        WebPushService push)
     {
         _db = db;
         _client = client;
         _binding = binding;
+        _prefs = prefs;
+        _push = push;
     }
 
     /// <summary>
@@ -42,6 +48,12 @@ public class ReminderService
             return 30;
         return Math.Clamp(seconds, 10, 300);
     }
+
+    private static bool ShouldSendCalendarReminderDm() =>
+        string.Equals(
+            Environment.GetEnvironmentVariable("HOMEBOT_CALENDAR_REMINDER_DM")?.Trim(),
+            "true",
+            StringComparison.OrdinalIgnoreCase);
 
     private static void AdvanceRecurringStart(SqliteConnection conn, int id, DateTime currentStart, string recurrence)
     {
@@ -178,6 +190,36 @@ public class ReminderService
                         $"📅 Event Time: {eventTimeForReminder}",
                         allowedMentions: AllowedMentions.All
                     );
+                }
+
+                if (ShouldSendCalendarReminderDm() &&
+                    assigned.HasValue &&
+                    assigned.Value != 0 &&
+                    _prefs.ShouldReceive(assigned.Value, "calendar_dm") &&
+                    _client.GetUser(assigned.Value) is IUser dmUser)
+                {
+                    try
+                    {
+                        await dmUser.SendMessageAsync(
+                            $"⏰ **Calendar reminder**\n" +
+                            $"📝 {titleForMessage}\n" +
+                            $"📅 {eventTimeForReminder:yyyy-MM-dd HH:mm}");
+                    }
+                    catch
+                    {
+                        // DMs may be disabled — channel reminder still sent.
+                    }
+                }
+
+                if (assigned.HasValue &&
+                    assigned.Value != 0 &&
+                    _prefs.ShouldReceive(assigned.Value, "calendar_dm"))
+                {
+                    await _push.TryNotifyUserAsync(
+                        assigned.Value,
+                        "Calendar reminder",
+                        $"{titleForMessage} · {eventTimeForReminder:yyyy-MM-dd HH:mm}",
+                        $"/calendar?highlight={id}");
                 }
 
                 if (!string.IsNullOrWhiteSpace(recurrence))

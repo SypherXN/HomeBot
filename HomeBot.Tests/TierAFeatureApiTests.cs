@@ -28,24 +28,7 @@ public sealed class TierAFeatureApiTests : IDisposable
             File.Delete(_dbPath);
 
         var sc = new ServiceCollection();
-        sc.AddSingleton(_ => new DatabaseService(_dbPath));
-        sc.AddSingleton<WebAuthService>();
-        sc.AddSingleton<WebRefreshTokenService>();
-        sc.AddSingleton<WebAuthDiscordVerificationService>();
-        sc.AddSingleton<DiscordOAuthService>();
-        sc.AddSingleton<ConfigService>();
-        sc.AddSingleton<ChannelBindingService>();
-        sc.AddSingleton<UndoService>();
-        sc.AddSingleton<LoggingService>();
-        sc.AddSingleton<BuyService>();
-        sc.AddSingleton<WishlistService>();
-        sc.AddSingleton<MoneyService>();
-        sc.AddSingleton<BudgetService>();
-        sc.AddSingleton<CalendarService>();
-        sc.AddSingleton<DiscordSocketHolder>();
-        sc.AddSingleton<DiscordGuildDirectoryService>();
-        sc.AddSingleton<IDiscordChannelNotifier, DiscordChannelNotifier>();
-        sc.AddSingleton<DiscordAuthAuditNotifier>();
+        sc.AddHomeBotApiTestServices(_dbPath);
         _services = sc.BuildServiceProvider();
         _services.GetRequiredService<ConfigService>().Set("timezone", "UTC");
 
@@ -173,6 +156,48 @@ public sealed class TierAFeatureApiTests : IDisposable
         res.EnsureSuccessStatusCode();
         var json = await res.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(JsonValueKind.Array, json.ValueKind);
+    }
+
+    [Fact]
+    public async Task Budget_notifications_count_returns_number()
+    {
+        var res = await _client.GetAsync("/api/budget/notifications/count");
+        res.EnsureSuccessStatusCode();
+        var json = await res.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(json.TryGetProperty("count", out var count));
+        Assert.Equal(JsonValueKind.Number, count.ValueKind);
+    }
+
+    [Fact]
+    public async Task Budget_notification_dismiss_reduces_pending_list()
+    {
+        var before = await _client.GetFromJsonAsync<JsonElement>("/api/budget/notifications");
+        if (before.ValueKind != JsonValueKind.Array || before.GetArrayLength() == 0)
+            return;
+
+        var key = before[0].GetProperty("key").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(key));
+
+        var dismiss = await _client.PostAsJsonAsync(
+            $"/api/budget/notifications/dismiss?actorUserId={Actor}",
+            new { key });
+        dismiss.EnsureSuccessStatusCode();
+
+        var after = await _client.GetFromJsonAsync<JsonElement>("/api/budget/notifications");
+        foreach (var item in after.EnumerateArray())
+        {
+            Assert.NotEqual(key, item.GetProperty("key").GetString());
+        }
+    }
+
+    [Fact]
+    public async Task Household_settings_round_trip_page_size()
+    {
+        var put = await _client.PutAsJsonAsync("/api/household/settings", new { key = "page_size", value = "12" });
+        put.EnsureSuccessStatusCode();
+
+        var get = await _client.GetFromJsonAsync<JsonElement>("/api/household/settings");
+        Assert.Equal("12", get.GetProperty("settings").GetProperty("page_size").GetString());
     }
 
     private async Task<int> CreateCategoryAsync(string name)

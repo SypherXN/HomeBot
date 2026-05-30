@@ -41,11 +41,16 @@ public class HelpCommands : InteractionModuleBase<SocketInteractionContext>
                 embed.Description =
     @"🌐 Web UI & HTTP API
 
-    • The household can use a **browser app** (Vite/React) against the same **HTTP API** the bot may host (`/api/...`): buy, wishlist, money, **budget**, calendar (range, today, upcoming, item detail, per-instance actions), undo, auth.
-    • Sign-in: password JWT and/or Discord OAuth (when configured); **actorUserId** on mutations records who acted.
-    • Data is the **same SQLite** as Discord — not a separate product database.
+    • Browser app (Vite/React) + HTTP API: buy, wishlist, money, budget, calendar, meals, search, webhooks, undo.
+    • **Dashboard** (`/`): meals tonight, **stale buy**, backup warning, budget alerts, Google sync status.
+    • **Search** in the header (press **`/`** to focus); **Meals** page; **theme** toggle; **bulk** on Buy/Wishlist; **Diagnostics** for ops/backup.
+    • **Wishlist → buy** one-click on the wishlist page; **Push notifications** in Settings (VAPID on server).
+    • Discord meals: `/meal-plan`, `/meal-dinner`, `/meal-add-recipe`.
+    • Google Calendar two-way sync: Calendar page → Connect Google (OAuth).
+    • Webhooks: POST /api/hooks/buy/add, /calendar/add, /budget/expense — see docs/WEBHOOKS.md.
+    • PWA + push on iPhone: Add to Home Screen — see docs/MOBILE.md; Siri/automation — docs/SHORTCUTS.md.
 
-    Discord help still applies to slash commands; use **/help** topics for those.";
+    Sign-in: password JWT and/or Discord OAuth; actorUserId on mutations.";
                 break;
 
             // ================= CONFIG =================
@@ -160,7 +165,9 @@ public class HelpCommands : InteractionModuleBase<SocketInteractionContext>
     /wishlist-complete /wishlist-delete
     /wishlist-clear-completed
 
-    Supports assignees, links, priority, tags (when catalog is configured).";
+    Supports assignees, links, priority, tags (when catalog is configured).
+
+    Web UI: **Add to buy** copies an item to the shopping list in one click.";
                 break;
 
             // ================= BUY =================

@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import App from "./App";
 import { AuthProvider } from "./auth/AuthContext";
 import { CalendarZoneProvider } from "./calendar/CalendarZoneContext";
+import { ThemeProvider } from "./theme/ThemeProvider";
 import { AUTH_STORAGE_ACTOR, AUTH_STORAGE_TOKEN } from "./auth/storageKeys";
 import { createHomeBotFetchMock } from "./test/fetchMock";
 
@@ -11,9 +12,11 @@ function renderRoute(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <AuthProvider>
-        <CalendarZoneProvider>
-          <App />
-        </CalendarZoneProvider>
+        <ThemeProvider>
+          <CalendarZoneProvider>
+            <App />
+          </CalendarZoneProvider>
+        </ThemeProvider>
       </AuthProvider>
     </MemoryRouter>
   );
@@ -26,10 +29,11 @@ const routes: { path: string; heading: RegExp }[] = [
   { path: "/money", heading: /^money$/i },
   { path: "/budget", heading: /^budget$/i },
   { path: "/calendar", heading: /^calendar$/i },
+  { path: "/meals", heading: /^meal planning$/i },
   { path: "/settings", heading: /^settings$/i },
   { path: "/login", heading: /^sign in$/i },
   { path: "/setup", heading: /^household accounts$/i },
-  { path: "/health", heading: /^api diagnostics$/i },
+  { path: "/health", heading: /^ops & diagnostics$/i },
 ];
 
 describe("Web UI — route smoke (all feature areas)", () => {

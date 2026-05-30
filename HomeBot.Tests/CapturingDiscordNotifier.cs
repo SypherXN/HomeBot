@@ -25,4 +25,11 @@ public sealed class CapturingDiscordNotifier : IDiscordChannelNotifier
             _messages.Add((feature, markdownMessage));
         return ValueTask.CompletedTask;
     }
+
+    public ValueTask NotifyUserDmAsync(ulong discordUserId, string markdownMessage)
+    {
+        lock (_lock)
+            _messages.Add(($"dm:{discordUserId}", markdownMessage));
+        return ValueTask.CompletedTask;
+    }
 }

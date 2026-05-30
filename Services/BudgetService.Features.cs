@@ -195,6 +195,7 @@ public partial class BudgetService
                 r.SpentByUserId,
                 today,
                 r.Note,
+                null,
                 r.Merchant,
                 r.AccountId,
                 false,
@@ -428,6 +429,7 @@ public partial class BudgetService
             spentByUserId,
             DateTime.UtcNow.ToString("yyyy-MM-dd"),
             $"Bill: {bill.Name}",
+            null,
             bill.Name,
             null,
             false,
@@ -504,24 +506,34 @@ public partial class BudgetService
 
     // ——— Notifications & digest ———
 
+    public int CountPendingNotifications(int billDueWithinDays = 3) =>
+        CollectPendingNotifications(billDueWithinDays).Count;
+
     public List<BudgetNotificationItemModel> CollectPendingNotifications(int billDueWithinDays = 3)
     {
+        var dismissed = GetDismissedNotificationKeys();
         var items = new List<BudgetNotificationItemModel>();
         var month = NormalizeMonth(null);
         foreach (var env in GetEnvelopes(month, null))
         {
             if (env.TargetAmount > 0 && env.PercentUsed >= 100)
             {
+                var key = $"over_budget:{month}:{env.CategoryId}";
+                if (dismissed.Contains(key)) continue;
                 items.Add(new BudgetNotificationItemModel
                 {
+                    Key = key,
                     Kind = "over_budget",
                     Message = $"Over budget: {env.CategoryName} ({env.PercentUsed}% of ${env.TargetAmount:N2})"
                 });
             }
             else if (env.TargetAmount > 0 && env.PercentUsed >= 85)
             {
+                var key = $"pace_warning:{month}:{env.CategoryId}";
+                if (dismissed.Contains(key)) continue;
                 items.Add(new BudgetNotificationItemModel
                 {
+                    Key = key,
                     Kind = "pace_warning",
                     Message = $"Pace warning: {env.CategoryName} at {env.PercentUsed}% of envelope"
                 });
@@ -534,8 +546,11 @@ public partial class BudgetService
             var daysUntil = bill.DueDay >= today ? bill.DueDay - today : bill.DueDay + 28 - today;
             if (daysUntil <= billDueWithinDays)
             {
+                var key = $"bill_due:{bill.Id}";
+                if (dismissed.Contains(key)) continue;
                 items.Add(new BudgetNotificationItemModel
                 {
+                    Key = key,
                     Kind = "bill_due",
                     Message = $"Bill due soon: {bill.Name} (day {bill.DueDay}, ~${bill.AmountEstimate:N2})"
                 });
@@ -560,6 +575,8 @@ public partial class BudgetService
             while (r.Read())
             {
                 var id = r.GetInt32(0);
+                var key = $"large_expense:{id}";
+                if (dismissed.Contains(key)) continue;
                 var amt = r.GetDouble(1);
                 var merchant = r.GetString(2);
                 var note = r.GetString(3);
@@ -567,6 +584,7 @@ public partial class BudgetService
                 if (string.IsNullOrWhiteSpace(label)) label = "expense";
                 items.Add(new BudgetNotificationItemModel
                 {
+                    Key = key,
                     Kind = "large_expense",
                     Message = $"Large expense #{id}: ${amt:N2} ({label.Trim()})"
                 });
@@ -574,6 +592,33 @@ public partial class BudgetService
         }
 
         return items;
+    }
+
+    public void DismissNotification(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key)) return;
+        using var conn = _db.GetConnection();
+        conn.Open();
+        var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            INSERT INTO BudgetNotificationDismissals (NotificationKey, DismissedAt) VALUES ($k, $t)
+            ON CONFLICT(NotificationKey) DO UPDATE SET DismissedAt=$t";
+        cmd.Parameters.AddWithValue("$k", key.Trim());
+        cmd.Parameters.AddWithValue("$t", DateTime.UtcNow.ToString("o"));
+        cmd.ExecuteNonQuery();
+    }
+
+    private HashSet<string> GetDismissedNotificationKeys()
+    {
+        using var conn = _db.GetConnection();
+        conn.Open();
+        var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT NotificationKey FROM BudgetNotificationDismissals";
+        using var r = cmd.ExecuteReader();
+        var set = new HashSet<string>(StringComparer.Ordinal);
+        while (r.Read())
+            set.Add(r.GetString(0));
+        return set;
     }
 
     private static double ReadLargeExpenseThresholdUsd()

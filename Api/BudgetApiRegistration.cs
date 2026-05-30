@@ -107,6 +107,12 @@ public static class BudgetApiRegistration
         app.MapGet("/api/budget/notifications", () =>
             Results.Ok(root.GetRequiredService<BudgetService>().CollectPendingNotifications()));
 
+        app.MapGet("/api/budget/notifications/count", () =>
+        {
+            var count = root.GetRequiredService<BudgetService>().CountPendingNotifications();
+            return Results.Ok(new { count });
+        });
+
         app.MapGet("/api/budget/exchange-rates", () =>
             Results.Ok(root.GetRequiredService<BudgetService>().GetExchangeRates()));
 
@@ -182,6 +188,7 @@ public static class BudgetApiRegistration
                 body.SpentByUserId,
                 date,
                 body.Note,
+                body.ReceiptUrl,
                 body.Merchant,
                 body.AccountId,
                 body.IsPending,
@@ -227,6 +234,7 @@ public static class BudgetApiRegistration
                 body.SpentByUserId,
                 body.TransactionDate,
                 body.Note,
+                body.ReceiptUrl,
                 body.Merchant,
                 body.IsPending,
                 body.ClearedAt,
@@ -234,6 +242,7 @@ public static class BudgetApiRegistration
                 body.Tags,
                 body.AccountId,
                 applyAccountId: body.AccountId.HasValue,
+                applyReceiptUrl: body.ReceiptUrl != null,
                 actor);
             return ok ? Results.Ok(new { ok = true }) : ApiResults.NotFound("Transaction not found.", "not_found");
         });
@@ -451,6 +460,16 @@ public static class BudgetApiRegistration
             if (count > 0)
                 await BudgetApiDiscordNotify.CsvImportedAsync(root, count, actor);
             return Results.Ok(new { imported = count });
+        });
+
+        w.MapPost("/budget/notifications/dismiss", (HttpRequest http, BudgetNotificationDismissRequest? body) =>
+        {
+            if (!HomeBotApiRegistrationTryActor.TryActor(http.Query, out _, out var err))
+                return err!;
+            if (body is null || string.IsNullOrWhiteSpace(body.Key))
+                return ApiResults.BadRequest("key is required.", "missing_key");
+            root.GetRequiredService<BudgetService>().DismissNotification(body.Key.Trim());
+            return Results.Ok(new { ok = true });
         });
     }
 }

@@ -197,5 +197,164 @@ public static class DatabaseSchemaMigrations
             SchemaMigrationRunner.TryAddColumn(conn,
                 "ALTER TABLE BudgetAccounts ADD COLUMN IsActive INTEGER NOT NULL DEFAULT 1");
         }),
+
+        new SchemaMigrationRunner.Migration("004_budget_notification_dismissals", conn =>
+        {
+            SchemaMigrationRunner.Execute(conn, @"
+                CREATE TABLE IF NOT EXISTS BudgetNotificationDismissals (
+                    NotificationKey TEXT PRIMARY KEY,
+                    DismissedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            ");
+        }),
+
+        new SchemaMigrationRunner.Migration("005_medium_features", conn =>
+        {
+            SchemaMigrationRunner.Execute(conn, @"
+                CREATE TABLE IF NOT EXISTS WebInviteTokens (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    TokenHash TEXT NOT NULL UNIQUE,
+                    Label TEXT,
+                    CreatedAt TEXT NOT NULL,
+                    ExpiresAt TEXT,
+                    RevokedAt TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS BuyRecurringItems (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    Name TEXT NOT NULL,
+                    Quantity TEXT,
+                    Store TEXT,
+                    AssignedTo INTEGER,
+                    Tags TEXT,
+                    Notes TEXT,
+                    Cadence TEXT NOT NULL DEFAULT 'weekly',
+                    NextDueDate TEXT NOT NULL,
+                    IsActive INTEGER NOT NULL DEFAULT 1,
+                    CreatedBy INTEGER,
+                    CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS BudgetCategorizeRules (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    MatchField TEXT NOT NULL DEFAULT 'merchant',
+                    MatchContains TEXT NOT NULL,
+                    CategoryId INTEGER NOT NULL,
+                    Priority INTEGER NOT NULL DEFAULT 0,
+                    IsActive INTEGER NOT NULL DEFAULT 1,
+                    FOREIGN KEY (CategoryId) REFERENCES BudgetCategories(Id)
+                );
+            ");
+        }),
+
+        new SchemaMigrationRunner.Migration("006_polish_meals_gcal_ops", conn =>
+        {
+            SchemaMigrationRunner.Execute(conn, @"
+                CREATE TABLE IF NOT EXISTS HouseholdAuditLog (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    Category TEXT NOT NULL,
+                    Action TEXT NOT NULL,
+                    ActorUserId INTEGER,
+                    ActorUsername TEXT,
+                    Detail TEXT,
+                    CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS NotificationPreferences (
+                    DiscordUserId TEXT PRIMARY KEY,
+                    BudgetAlerts INTEGER NOT NULL DEFAULT 1,
+                    CalendarDm INTEGER NOT NULL DEFAULT 1,
+                    WeeklyDigest INTEGER NOT NULL DEFAULT 1
+                );
+
+                CREATE TABLE IF NOT EXISTS MealRecipes (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    Name TEXT NOT NULL,
+                    Description TEXT,
+                    IngredientsJson TEXT NOT NULL DEFAULT '[]',
+                    Instructions TEXT,
+                    Servings INTEGER NOT NULL DEFAULT 4,
+                    Tags TEXT,
+                    CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS MealPlanEntries (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    PlanDate TEXT NOT NULL,
+                    MealSlot TEXT NOT NULL,
+                    RecipeId INTEGER,
+                    CustomLabel TEXT,
+                    Notes TEXT,
+                    FOREIGN KEY (RecipeId) REFERENCES MealRecipes(Id)
+                );
+
+                CREATE INDEX IF NOT EXISTS IX_MealPlanEntries_Date ON MealPlanEntries(PlanDate);
+
+                CREATE TABLE IF NOT EXISTS GoogleCalendarConnections (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    DiscordUserId TEXT NOT NULL UNIQUE,
+                    RefreshToken TEXT NOT NULL,
+                    CalendarId TEXT NOT NULL DEFAULT 'primary',
+                    SyncToken TEXT,
+                    LastSyncAt TEXT,
+                    LastSyncError TEXT,
+                    IsActive INTEGER NOT NULL DEFAULT 1
+                );
+
+                CREATE TABLE IF NOT EXISTS CalendarExternalLinks (
+                    CalendarItemId INTEGER NOT NULL,
+                    Provider TEXT NOT NULL,
+                    ExternalId TEXT NOT NULL,
+                    ETag TEXT,
+                    UpdatedAt TEXT,
+                    PendingPush INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY (CalendarItemId, Provider),
+                    FOREIGN KEY (CalendarItemId) REFERENCES CalendarItems(Id)
+                );
+
+                CREATE UNIQUE INDEX IF NOT EXISTS IX_CalendarExternalLinks_ProviderExt
+                    ON CalendarExternalLinks(Provider, ExternalId);
+            ");
+        }),
+
+        new SchemaMigrationRunner.Migration("007_gcal_followups_meals_calendar", conn =>
+        {
+            SchemaMigrationRunner.TryAddColumn(conn,
+                "ALTER TABLE CalendarExternalLinks ADD COLUMN GoogleUpdatedAt TEXT");
+            SchemaMigrationRunner.TryAddColumn(conn,
+                "ALTER TABLE MealPlanEntries ADD COLUMN CalendarItemId INTEGER");
+
+            SchemaMigrationRunner.Execute(conn, @"
+                CREATE TABLE IF NOT EXISTS GoogleCalendarPendingDeletes (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ConnectionId INTEGER NOT NULL,
+                    CalendarId TEXT NOT NULL,
+                    ExternalId TEXT NOT NULL,
+                    QueuedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            ");
+        }),
+
+        new SchemaMigrationRunner.Migration("008_push_subscriptions", conn =>
+        {
+            SchemaMigrationRunner.Execute(conn, @"
+                CREATE TABLE IF NOT EXISTS PushSubscriptions (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    DiscordUserId TEXT NOT NULL,
+                    Endpoint TEXT NOT NULL UNIQUE,
+                    P256dh TEXT NOT NULL,
+                    Auth TEXT NOT NULL,
+                    CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE INDEX IF NOT EXISTS IX_PushSubscriptions_DiscordUserId
+                    ON PushSubscriptions(DiscordUserId);
+            ");
+        }),
+
+        new SchemaMigrationRunner.Migration("009_polish_receipt_bulk", conn =>
+        {
+            SchemaMigrationRunner.TryAddColumn(conn,
+                "ALTER TABLE BudgetTransactions ADD COLUMN ReceiptUrl TEXT");
+        }),
     };
 }

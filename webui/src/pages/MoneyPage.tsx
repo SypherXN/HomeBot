@@ -7,12 +7,15 @@ import {
   deleteMoneyTransaction,
   getMoneySummary,
   getMoneyTransactions,
+  getMoneyBalances,
   patchMoneyTransaction,
+  postMoneyExpense,
   postMoneyExpenseSplit,
   postMoneyPayment,
   postUndo,
   type DiscordGuildMember,
   type MoneySummary,
+  type MoneyBalances,
   type MoneyTransactionListItem,
   type PagedMoneyTransactions,
 } from "../api";
@@ -163,6 +166,12 @@ export default function MoneyPage() {
   const [payTo, setPayTo] = useState("");
   const [paySubmitting, setPaySubmitting] = useState(false);
 
+  const [expName, setExpName] = useState("");
+  const [expAmount, setExpAmount] = useState("");
+  const [expPaidBy, setExpPaidBy] = useState("");
+  const [expOwedBy, setExpOwedBy] = useState("");
+  const [expSubmitting, setExpSubmitting] = useState(false);
+
   const [sumUser1, setSumUser1] = useState("");
   const [sumUser2, setSumUser2] = useState("");
   const [summary, setSummary] = useState<MoneySummary | null>(null);
@@ -170,6 +179,10 @@ export default function MoneyPage() {
   const [summaryQueryIds, setSummaryQueryIds] = useState<{ u1: string; u2: string } | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
+
+  const [allBalances, setAllBalances] = useState<MoneyBalances | null>(null);
+  const [allBalancesLoading, setAllBalancesLoading] = useState(false);
+  const [allBalancesError, setAllBalancesError] = useState<string | null>(null);
 
   const loadList = useCallback(async () => {
     if (!canAuth) {
@@ -196,6 +209,22 @@ export default function MoneyPage() {
   useEffect(() => {
     void loadList();
   }, [loadList]);
+
+  useEffect(() => {
+    if (!canActor) {
+      setAllBalances(null);
+      return;
+    }
+    setAllBalancesLoading(true);
+    setAllBalancesError(null);
+    void getMoneyBalances(tok, actor)
+      .then(setAllBalances)
+      .catch((e) => {
+        setAllBalancesError(e instanceof Error ? e.message : String(e));
+        setAllBalances(null);
+      })
+      .finally(() => setAllBalancesLoading(false));
+  }, [canActor, tok, actor, data?.totalCount]);
 
   function showBanner(kind: "ok" | "err", text: string) {
     setBanner({ kind, text });
@@ -571,7 +600,107 @@ export default function MoneyPage() {
         </section>
       )}
 
+      {canAuth && canActor && (
+        <section className="mb-8 rounded-xl border border-slate-800 bg-slate-900/40 p-4 sm:p-5">
+          <h2 className="text-lg font-semibold text-white">All balances (you)</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Non-zero net balances with everyone else in the ledger.
+          </p>
+          {allBalancesLoading ? <p className="mt-3 text-sm text-slate-500">Loading…</p> : null}
+          {allBalancesError ? <p className="mt-3 text-sm text-red-300">{allBalancesError}</p> : null}
+          {allBalances && allBalances.balances.length === 0 && !allBalancesLoading ? (
+            <p className="mt-3 text-sm text-slate-400">All settled up.</p>
+          ) : null}
+          {allBalances && allBalances.balances.length > 0 ? (
+            <ul className="mt-3 space-y-2">
+              {allBalances.balances.map((b) => (
+                <li
+                  key={b.otherUserId}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm"
+                >
+                  <span className="text-slate-200">{b.otherMemberLabel}</span>
+                  <span className={b.balance >= 0 ? "text-emerald-300" : "text-amber-300"}>
+                    {b.balance >= 0 ? "+" : ""}
+                    {formatMoney(b.balance)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+      )}
+
       <div className="mb-8 grid gap-6 lg:grid-cols-2">
+        <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 sm:p-5">
+          <h2 className="text-lg font-semibold text-white">Simple expense</h2>
+          <p className="mt-1 text-sm text-slate-400">One person paid; one person owes the full amount.</p>
+          <form
+            className="mt-4 space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void (async () => {
+                setExpSubmitting(true);
+                try {
+                  await postMoneyExpense(tok, {
+                    name: expName.trim(),
+                    amountInput: expAmount.trim(),
+                    paidBy: expPaidBy,
+                    owedBy: expOwedBy,
+                  });
+                  setExpName("");
+                  setExpAmount("");
+                  setBanner({ kind: "ok", text: "Expense logged." });
+                  await loadList();
+                } catch (err) {
+                  setBanner({ kind: "err", text: err instanceof Error ? err.message : String(err) });
+                } finally {
+                  setExpSubmitting(false);
+                }
+              })();
+            }}
+          >
+            <input
+              value={expName}
+              onChange={(e) => setExpName(e.target.value)}
+              placeholder="Description"
+              className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-slate-100"
+            />
+            <input
+              value={expAmount}
+              onChange={(e) => setExpAmount(e.target.value)}
+              placeholder="Amount"
+              className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-slate-100"
+            />
+            <UserField
+              id="exp-paid"
+              label="Paid by"
+              value={expPaidBy}
+              onChange={setExpPaidBy}
+              rosterOptions={rosterOptions}
+              manualHint="(user id)"
+              canActor={canActor}
+              onPickActor={() => setExpPaidBy(actor)}
+            />
+            <UserField
+              id="exp-owed"
+              label="Owes"
+              value={expOwedBy}
+              onChange={setExpOwedBy}
+              rosterOptions={rosterOptions}
+              manualHint="(user id)"
+              canActor={canActor}
+              onPickActor={() => setExpOwedBy(actor)}
+            />
+            <button
+              type="submit"
+              disabled={expSubmitting || !expName.trim() || !expAmount.trim() || !expPaidBy || !expOwedBy}
+              className="min-h-[44px] rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+            >
+              {expSubmitting ? "Saving…" : "Log expense"}
+            </button>
+          </form>
+        </section>
+
         <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 sm:p-5">
           <h2 className="text-lg font-semibold text-white">Add split expense</h2>
           <p className="mt-1 text-sm text-slate-400">

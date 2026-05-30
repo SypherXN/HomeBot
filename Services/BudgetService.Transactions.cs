@@ -69,6 +69,27 @@ public partial class BudgetService
         };
     }
 
+    /// <summary>Zero-based ledger page for a transaction in its month (default filters).</summary>
+    public int FindTransactionPage(int transactionId, string? month = null)
+    {
+        var tx = GetTransactionById(transactionId);
+        if (tx == null) return 0;
+        var m = NormalizeMonth(month ?? tx.TransactionDate);
+        var list = LoadAllTransactions()
+            .Where(t => MonthContainsDate(m, t.TransactionDate))
+            .Where(t => string.IsNullOrEmpty(t.CategoryName) ||
+                        !PersonalCategoryNames.Contains(t.CategoryName))
+            .OrderByDescending(t => t.TransactionDate)
+            .ThenByDescending(t => t.Id)
+            .ToList();
+        var index = list.FindIndex(t => t.Id == transactionId);
+        if (index < 0) return 0;
+        using var conn = _db.GetConnection();
+        conn.Open();
+        var pageSize = GetPageSize(conn);
+        return index / pageSize;
+    }
+
     private HashSet<string> PersonalCategoryNames
     {
         get
@@ -88,6 +109,7 @@ public partial class BudgetService
         ulong spentByUserId,
         string transactionDate,
         string? note,
+        string? receiptUrl,
         string? merchant,
         int? accountId,
         bool isPending,
@@ -106,13 +128,16 @@ public partial class BudgetService
         using var tx = conn.BeginTransaction();
 
         var accId = accountId ?? GetDefaultAccountId(conn);
+        if (!categoryId.HasValue)
+            categoryId = ResolveCategoryFromRules(merchant, note);
+
         var cmd = conn.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText = @"
             INSERT INTO BudgetTransactions
-            (Type, Amount, AmountInput, CategoryId, SpentByUserId, AccountId, Note, Merchant,
+            (Type, Amount, AmountInput, CategoryId, SpentByUserId, AccountId, Note, ReceiptUrl, Merchant,
              TransactionDate, IsPending, Currency, ExchangeRateToHome)
-            VALUES ($type, $amt, $input, $cat, $user, $acc, $note, $merchant, $date, $pend, $cur, $rate)";
+            VALUES ($type, $amt, $input, $cat, $user, $acc, $note, $receipt, $merchant, $date, $pend, $cur, $rate)";
         cmd.Parameters.AddWithValue("$type", type);
         cmd.Parameters.AddWithValue("$amt", amount);
         cmd.Parameters.AddWithValue("$input", amountInput);
@@ -120,6 +145,7 @@ public partial class BudgetService
         cmd.Parameters.AddWithValue("$user", (long)spentByUserId);
         cmd.Parameters.AddWithValue("$acc", accId);
         cmd.Parameters.AddWithValue("$note", (object?)note ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$receipt", (object?)receiptUrl ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$merchant", (object?)merchant ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$date", transactionDate);
         cmd.Parameters.AddWithValue("$pend", isPending ? 1 : 0);
@@ -182,6 +208,7 @@ public partial class BudgetService
         ulong? spentByUserId,
         string? transactionDate,
         string? note,
+        string? receiptUrl,
         string? merchant,
         bool? isPending,
         string? clearedAt,
@@ -189,6 +216,7 @@ public partial class BudgetService
         List<string>? tags,
         int? accountId,
         bool applyAccountId,
+        bool applyReceiptUrl,
         ulong actor)
     {
         var existing = GetTransactionById(id);
@@ -247,6 +275,11 @@ public partial class BudgetService
             sets.Add("Note=$note");
             cmd.Parameters.AddWithValue("$note", note);
         }
+        if (applyReceiptUrl)
+        {
+            sets.Add("ReceiptUrl=$receipt");
+            cmd.Parameters.AddWithValue("$receipt", string.IsNullOrWhiteSpace(receiptUrl) ? DBNull.Value : receiptUrl);
+        }
         if (merchant != null)
         {
             sets.Add("Merchant=$merchant");
@@ -269,7 +302,7 @@ public partial class BudgetService
             cmd.Parameters.AddWithValue("$acc", accountId ?? GetDefaultAccountId(conn));
         }
 
-        if (sets.Count == 0 && splits == null && tags == null && !applyAccountId)
+        if (sets.Count == 0 && splits == null && tags == null && !applyAccountId && !applyReceiptUrl)
             return false;
 
         if (sets.Count > 0)
@@ -330,7 +363,7 @@ public partial class BudgetService
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
             SELECT t.Id, t.Type, t.Amount, t.AmountInput, t.CategoryId, t.SpentByUserId, t.AccountId,
-                   t.TransferToAccountId, t.Note, t.Merchant, t.TransactionDate, t.ClearedAt, t.IsPending,
+                   t.TransferToAccountId, t.Note, t.ReceiptUrl, t.Merchant, t.TransactionDate, t.ClearedAt, t.IsPending,
                    t.Currency, t.ExchangeRateToHome,
                    c.Name
             FROM BudgetTransactions t
@@ -355,13 +388,14 @@ public partial class BudgetService
                     AccountId = reader.IsDBNull(6) ? null : reader.GetInt32(6),
                     TransferToAccountId = reader.IsDBNull(7) ? null : reader.GetInt32(7),
                     Note = reader.IsDBNull(8) ? null : reader.GetString(8),
-                    Merchant = reader.IsDBNull(9) ? null : reader.GetString(9),
-                    TransactionDate = reader.GetString(10),
-                    ClearedAt = reader.IsDBNull(11) ? null : reader.GetString(11),
-                    IsPending = reader.GetInt64(12) != 0,
-                    Currency = reader.GetString(13),
-                    ExchangeRateToHome = reader.GetDouble(14),
-                    CategoryName = reader.IsDBNull(15) ? null : reader.GetString(15)
+                    ReceiptUrl = reader.IsDBNull(9) ? null : reader.GetString(9),
+                    Merchant = reader.IsDBNull(10) ? null : reader.GetString(10),
+                    TransactionDate = reader.GetString(11),
+                    ClearedAt = reader.IsDBNull(12) ? null : reader.GetString(12),
+                    IsPending = reader.GetInt64(13) != 0,
+                    Currency = reader.GetString(14),
+                    ExchangeRateToHome = reader.GetDouble(15),
+                    CategoryName = reader.IsDBNull(16) ? null : reader.GetString(16)
                 });
             }
         }

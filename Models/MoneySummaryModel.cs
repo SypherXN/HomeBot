@@ -15,3 +15,19 @@ public class MoneySummaryModel
     public string User2MemberLabel { get; set; } = "";
     public double Balance { get; set; }
 }
+
+public sealed class MoneyBalancesModel
+{
+    [JsonConverter(typeof(SnowflakeUlongJsonConverter))]
+    public ulong UserId { get; set; }
+    public string MemberLabel { get; set; } = "";
+    public List<MoneyBalanceEntryModel> Balances { get; set; } = [];
+}
+
+public sealed class MoneyBalanceEntryModel
+{
+    [JsonConverter(typeof(SnowflakeUlongJsonConverter))]
+    public ulong OtherUserId { get; set; }
+    public string OtherMemberLabel { get; set; } = "";
+    public double Balance { get; set; }
+}

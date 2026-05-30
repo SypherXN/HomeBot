@@ -16,4 +16,7 @@ public static class ApiResults
 
     public static IResult Validation(string message) =>
         BadRequest(message, "validation_error");
+
+    public static IResult Forbidden(string message, string code = "forbidden") =>
+        Results.Json(new ApiErrorBody(message, code), statusCode: StatusCodes.Status403Forbidden);
 }

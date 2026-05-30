@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import BulkActionBar from "../components/BulkActionBar";
+import { useBulkSelection } from "../hooks/useBulkSelection";
 import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
 import { validActorId } from "../lib/validation";
 import {
@@ -11,6 +13,9 @@ import {
   getWishlistTagCatalog,
   postWishlistItem,
   postWishlistItemComplete,
+  postWishlistBulkComplete,
+  postWishlistBulkDelete,
+  postWishlistAddToBuy,
   postUndo,
   putWishlistItem,
   putWishlistTagCatalog,
@@ -19,6 +24,7 @@ import {
   type WishlistListSort,
   type WishlistOwnerRow,
 } from "../api";
+import { highlightRowClass, useSearchHighlightId } from "../lib/searchHighlight";
 
 const TAG_TOKEN = /^[a-z0-9_-]{1,48}$/;
 
@@ -40,6 +46,10 @@ export default function WishlistPage() {
   const canAuth = tok.length > 0;
   const canActor = canAuth && validActorId(actor);
   const guildRoster = useDiscordGuildRoster(token);
+  const [params] = useSearchParams();
+  const highlightId = useSearchHighlightId();
+  const highlightRef = useRef<HTMLLIElement>(null);
+  const initialPage = Number.parseInt(params.get("page") ?? "0", 10);
 
   const [catalogTags, setCatalogTags] = useState<string[]>([]);
   const [draftCatalogTags, setDraftCatalogTags] = useState<string[]>([]);
@@ -52,10 +62,17 @@ export default function WishlistPage() {
   const [filterTag, setFilterTag] = useState("");
   const [sortBy, setSortBy] = useState<WishlistListSort>("id");
 
-  const [listPage, setListPage] = useState(0);
+  const [listPage, setListPage] = useState(
+    Number.isFinite(initialPage) && initialPage >= 0 ? initialPage : 0
+  );
   const [data, setData] = useState<PagedWishlistList | null>(null);
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!highlightId || !data?.items.some((i) => i.id === highlightId)) return;
+    highlightRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [highlightId, data]);
 
   const [addName, setAddName] = useState("");
   const [addOwnerUserId, setAddOwnerUserId] = useState("");
@@ -80,7 +97,15 @@ export default function WishlistPage() {
   const [editTagPick, setEditTagPick] = useState<string[]>([]);
   const [clearBusy, setClearBusy] = useState(false);
   const [undoBusy, setUndoBusy] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [banner, setBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  const pageIds = useMemo(() => data?.items.map((i) => i.id) ?? [], [data?.items]);
+  const bulk = useBulkSelection(pageIds);
+
+  useEffect(() => {
+    bulk.clear();
+  }, [listPage, bulk.clear]);
 
   const ownerPickerOptions = useMemo(() => {
     const base: { value: string; label: string }[] = [{ value: "", label: "Default (actor / you)" }];
@@ -209,6 +234,37 @@ export default function WishlistPage() {
     window.setTimeout(() => setBanner(null), 5000);
   }
 
+  async function handleBulkComplete() {
+    if (!canActor || bulk.selectedIds.length === 0) return;
+    setBulkBusy(true);
+    try {
+      const res = await postWishlistBulkComplete(tok, actor, bulk.selectedIds);
+      showBanner("ok", `Completed ${res.count} wish(es).`);
+      bulk.clear();
+      await loadList();
+    } catch (e) {
+      showBanner("err", e instanceof Error ? e.message : String(e));
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (!canActor || bulk.selectedIds.length === 0) return;
+    if (!window.confirm(`Remove ${bulk.selectedIds.length} wish(es)?`)) return;
+    setBulkBusy(true);
+    try {
+      const res = await postWishlistBulkDelete(tok, actor, bulk.selectedIds);
+      showBanner("ok", `Removed ${res.count} wish(es).`);
+      bulk.clear();
+      await loadList();
+    } catch (e) {
+      showBanner("err", e instanceof Error ? e.message : String(e));
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   function startEdit(item: WishlistListItem) {
     setEditingId(item.id);
     setEditName(item.name);
@@ -301,6 +357,19 @@ export default function WishlistPage() {
       showBanner("err", err instanceof Error ? err.message : String(err));
     } finally {
       setAddSubmitting(false);
+    }
+  }
+
+  async function handleAddToBuy(item: WishlistListItem) {
+    if (!canActor) return;
+    setActionBusyId(item.id);
+    try {
+      await postWishlistAddToBuy(tok, actor, item.id);
+      showBanner("ok", `Added “${item.name}” to buy list.`);
+    } catch (e) {
+      showBanner("err", e instanceof Error ? e.message : String(e));
+    } finally {
+      setActionBusyId(null);
     }
   }
 
@@ -743,9 +812,22 @@ export default function WishlistPage() {
 
       <section aria-labelledby="wl-list-heading">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <h2 id="wl-list-heading" className="text-lg font-semibold text-white">
-            Wishes
-          </h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 id="wl-list-heading" className="text-lg font-semibold text-white">
+              Wishes
+            </h2>
+            {data && data.items.length > 0 && canActor && (
+              <label className="flex items-center gap-2 text-sm text-slate-400">
+                <input
+                  type="checkbox"
+                  checked={bulk.allOnPageSelected}
+                  onChange={bulk.toggleAllOnPage}
+                  className="h-4 w-4 rounded border-slate-600"
+                />
+                Select page
+              </label>
+            )}
+          </div>
           {canAuth && (
             <button
               type="button"
@@ -773,11 +855,20 @@ export default function WishlistPage() {
         )}
 
         {data && data.items.length > 0 && (
+          <>
+            <BulkActionBar
+              count={bulk.count}
+              busy={bulkBusy}
+              onComplete={() => void handleBulkComplete()}
+              onDelete={() => void handleBulkDelete()}
+              onClear={bulk.clear}
+            />
           <ul className="space-y-3">
             {data.items.map((item) => (
               <li
                 key={item.id}
-                className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 shadow-sm sm:p-5"
+                ref={item.id === highlightId ? highlightRef : undefined}
+                className={`rounded-xl border border-slate-800 bg-slate-900/50 p-4 shadow-sm sm:p-5 ${highlightRowClass(item.id, highlightId)}`}
               >
                 {editingId === item.id ? (
                   <div className="space-y-3">
@@ -870,6 +961,17 @@ export default function WishlistPage() {
                   </div>
                 ) : (
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  {canActor && (
+                    <label className="flex shrink-0 items-start pt-1">
+                      <input
+                        type="checkbox"
+                        checked={bulk.selected.has(item.id)}
+                        onChange={() => bulk.toggle(item.id)}
+                        className="mt-1 h-4 w-4 rounded border-slate-600"
+                        aria-label={`Select ${item.name}`}
+                      />
+                    </label>
+                  )}
                   <div className="min-w-0 flex-1 space-y-2">
                     <p className="text-lg font-semibold leading-snug text-white">{item.name}</p>
                     <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
@@ -958,6 +1060,14 @@ export default function WishlistPage() {
                     <button
                       type="button"
                       disabled={!canActor || actionBusyId === item.id}
+                      onClick={() => void handleAddToBuy(item)}
+                      className="min-h-[44px] w-full rounded-lg border border-sky-700 bg-sky-950/40 px-3 py-2.5 text-sm font-medium text-sky-100 hover:bg-sky-950/60 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Add to buy
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!canActor || actionBusyId === item.id}
                       onClick={() => void handleComplete(item)}
                       className="min-h-[44px] w-full rounded-lg border border-emerald-700 bg-emerald-900/40 px-3 py-2.5 text-sm font-medium text-emerald-100 hover:bg-emerald-900/60 disabled:cursor-not-allowed disabled:opacity-50"
                     >
@@ -977,6 +1087,7 @@ export default function WishlistPage() {
               </li>
             ))}
           </ul>
+          </>
         )}
 
         {data && data.totalCount > 0 && (

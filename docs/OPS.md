@@ -64,7 +64,7 @@ HomeBot backups are **operator scripts**, not API features. Data lives in **`hom
 | **Before upgrades** | Always back up — see below. |
 | **Local (Linux)** | `sudo bash /opt/homebot/app/scripts/backup-homebot-sqlite.sh` or enable **`homebot-sqlite-backup.timer`**. |
 | **Local + Drive (recommended on VPS)** | Set **`HOMEBOT_GDRIVE_*`** in `.env`, configure **`rclone`**, enable **`homebot-backup-with-gdrive.timer`**. |
-| **Restore** | Stop service → restore file → start — [SETUP.md §20.1.5](SETUP.md#2015-restore-from-a-backup-short-procedure). |
+| **Restore** | Stop service → restore file → start — [SETUP.md §20.1.5](SETUP.md#2015-restore-from-a-backup-short-procedure) or **`scripts/restore-homebot-backup.sh`** (dry-run by default; pass **`--apply`**). |
 
 Full guide: **[SETUP.md — Section 20](SETUP.md#20-backing-up-sqlite-homebotdb)** (local §20.1, Google Drive §20.2 with retention).
 
@@ -75,9 +75,31 @@ Full guide: **[SETUP.md — Section 20](SETUP.md#20-backing-up-sqlite-homebotdb)
 | `scripts/backup-homebot-sqlite.sh` | Stop → copy → start |
 | `scripts/backup-homebot-with-gdrive.sh` | Local backup + Drive sync |
 | `scripts/sync-homebot-backups-to-gdrive.sh` | Upload/prune only (needs existing local copies) |
+| `scripts/restore-homebot-backup.sh` | Dry-run restore plan; **`--apply`** stops service, replaces DB, restarts |
 | `scripts/systemd/homebot-backup-with-gdrive.*.example` | Weekly timer with `EnvironmentFile=` |
 
+When **`HOMEBOT_GDRIVE_BACKUP_ENCRYPT=true`**, uploads are GPG-encrypted (`.gpg` on Drive); keep the passphrase file safe and test restore on a copy first.
+
 ---
+
+## Ops API (admin only)
+
+Requires **web admin** auth (admin web user or **`HOMEBOT_WEB_ADMIN_DISCORD_IDS`**) plus bearer JWT or **`HOMEBOT_API_TOKEN`**.
+
+| Endpoint | Purpose |
+|----------|---------|
+| **`GET /api/ops/health`** | Detailed health JSON (DB, backup age, Google sync, workers) |
+| **`GET /api/ops/metrics`** | Prometheus text with **`Accept: text/plain`**; JSON wrapper otherwise |
+
+The Web UI **Diagnostics** page (`/health`) calls these when you are signed in as admin.
+
+---
+
+## Optional VM deploy workflow
+
+**`.github/workflows/deploy-vm.yml`** runs tests on **`main`**, then SSHs to your server and runs **`git pull`**, **`dotnet publish`**, and **`systemctl restart homebot.service`**.
+
+Required GitHub **secrets:** **`DEPLOY_HOST`**, **`DEPLOY_USER`**, **`DEPLOY_SSH_KEY`**. Optional **`DEPLOY_APP_DIR`** (default **`/opt/homebot/app`**). Trigger manually via **Actions → Deploy VM** or on every push to **`main`**.
 
 ## Renewals
 

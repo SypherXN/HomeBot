@@ -42,6 +42,7 @@ public sealed class BudgetTransactionListItemModel
     public int? AccountId { get; set; }
     public int? TransferToAccountId { get; set; }
     public string? Note { get; set; }
+    public string? ReceiptUrl { get; set; }
     public string? Merchant { get; set; }
     public string TransactionDate { get; set; } = "";
     public string? ClearedAt { get; set; }
@@ -163,6 +164,7 @@ public sealed class BudgetTaxSummaryLineModel
 
 public sealed class BudgetNotificationItemModel
 {
+    public string Key { get; set; } = "";
     public string Kind { get; set; } = "";
     public string Message { get; set; } = "";
 }

@@ -2,17 +2,24 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   getBuyItems,
+  getStaleBuyItems,
+  getBudgetNotificationCount,
   getCalendarItems,
   getCalendarToday,
   getCalendarUpcoming,
+  getGoogleCalendarStatus,
+  getMealPlan,
+  getMeta,
   getMoneySummary,
   getMoneyTransactions,
   getBudgetSummaryMonth,
   getBudgetSummaryByCategory,
   getBudgetGoals,
   getWishlistItems,
+  type MealPlanEntry,
   type MoneySummary,
   type PagedBuyList,
+  type BuyListItem,
   type PagedCalendarList,
   type PagedMoneyTransactions,
   type PagedWishlistList,
@@ -60,9 +67,16 @@ type DashboardBundle = {
     goalsCount: number;
     goalsProgress: string | null;
   } | null;
+  budgetAlertCount: number;
   today: PagedCalendarList;
   upcoming: PagedCalendarList;
   tasks: PagedCalendarList;
+  mealsToday: MealPlanEntry[];
+  staleBuy: BuyListItem[];
+  ops: {
+    backupWarning: string | null;
+    googleConnected: boolean | null;
+  };
 };
 
 export default function DashboardPage() {
@@ -89,7 +103,8 @@ export default function DashboardPage() {
       const n2 = canPairSummary ? roster.members[1].displayName : "";
 
       const month = new Date().toISOString().slice(0, 7);
-      const [buy, wishlist, moneyTx, today, upcoming, tasks, moneySummary, budgetSummary, budgetCats, budgetGoals] =
+      const todayYmd = new Date().toISOString().slice(0, 10);
+      const [buy, wishlist, moneyTx, today, upcoming, tasks, moneySummary, budgetSummary, budgetCats, budgetGoals, meta, mealPlan, budgetAlerts, gcal, staleBuy] =
         await Promise.all([
         getBuyItems(tok, 0),
         getWishlistItems(tok, 0),
@@ -103,6 +118,11 @@ export default function DashboardPage() {
         getBudgetSummaryMonth(tok, month).catch(() => null),
         getBudgetSummaryByCategory(tok, month).catch(() => []),
         getBudgetGoals(tok).catch(() => []),
+        getMeta().catch(() => null),
+        getMealPlan(tok, todayYmd, todayYmd).catch(() => ({ entries: [] as MealPlanEntry[] })),
+        getBudgetNotificationCount(tok).catch(() => ({ count: 0 })),
+        getGoogleCalendarStatus(tok).catch(() => null),
+        getStaleBuyItems(tok, 14, 8).catch(() => ({ days: 14, items: [] as BuyListItem[] })),
       ]);
       const topCat = budgetCats[0];
       const topGoal = budgetGoals[0];
@@ -120,6 +140,19 @@ export default function DashboardPage() {
             }
           : null;
 
+      const backups =
+        meta && typeof meta === "object" && meta !== null
+          ? (meta as { backups?: { exists?: boolean; latestModifiedUtc?: string } }).backups
+          : undefined;
+      let backupWarning: string | null = null;
+      if (backups && backups.exists === false) backupWarning = "No backup directory configured.";
+      else if (backups?.latestModifiedUtc) {
+        const ageMs = Date.now() - Date.parse(backups.latestModifiedUtc);
+        if (Number.isFinite(ageMs) && ageMs > 7 * 24 * 60 * 60 * 1000) {
+          backupWarning = `Latest backup is ${Math.floor(ageMs / 86400000)} days old.`;
+        }
+      }
+
       setSlice({
         status: "ready",
         value: {
@@ -128,9 +161,16 @@ export default function DashboardPage() {
           moneyTx,
           moneySummary,
           budgetMonth,
+          budgetAlertCount: budgetAlerts.count,
           today,
           upcoming,
           tasks,
+          mealsToday: mealPlan.entries,
+          staleBuy: staleBuy.items,
+          ops: {
+            backupWarning,
+            googleConnected: gcal ? gcal.connected : null,
+          },
         },
       });
     } catch (e) {
@@ -150,14 +190,50 @@ export default function DashboardPage() {
       <div>
         <h1 className="text-2xl font-semibold text-white">Dashboard</h1>
         <p className="mt-1 text-slate-400">
-          Snapshot of your household data. Connection status is shown in the header. Configure the API
-          in{" "}
+          Today at a glance — meals, calendar, lists, budget, and ops. Press{" "}
+          <kbd className="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-300">/</kbd> to search. Configure in{" "}
           <Link to="/settings" className="text-blue-400 hover:underline">
             Settings
           </Link>
           .
         </p>
       </div>
+
+      {slice.status === "ready" && (slice.value.ops.backupWarning || slice.value.budgetAlertCount > 0) ? (
+        <div className="space-y-2">
+          {slice.value.ops.backupWarning ? (
+            <div className="rounded-lg border border-amber-800/50 bg-amber-950/40 px-4 py-2 text-sm text-amber-100">
+              {slice.value.ops.backupWarning}{" "}
+              <Link to="/health" className="font-medium underline">
+                Diagnostics
+              </Link>
+            </div>
+          ) : null}
+          {slice.value.budgetAlertCount > 0 ? (
+            <div className="rounded-lg border border-amber-800/50 bg-amber-950/40 px-4 py-2 text-sm text-amber-100">
+              {slice.value.budgetAlertCount} budget alert{slice.value.budgetAlertCount === 1 ? "" : "s"} pending.{" "}
+              <Link to="/budget" className="font-medium underline">
+                Review budget
+              </Link>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {slice.status === "ready" && slice.value.ops.googleConnected != null ? (
+        <p className="text-xs text-slate-500">
+          Google Calendar:{" "}
+          {slice.value.ops.googleConnected ? (
+            <span className="text-emerald-400">connected</span>
+          ) : (
+            <span className="text-slate-400">not connected</span>
+          )}{" "}
+          ·{" "}
+          <Link to="/calendar" className="text-blue-400 hover:underline">
+            Calendar settings
+          </Link>
+        </p>
+      ) : null}
 
       {!canAuth && (
         <div className="rounded-lg border border-amber-700/50 bg-amber-950/40 px-4 py-3 text-sm text-amber-100">
@@ -193,6 +269,26 @@ export default function DashboardPage() {
       {slice.status === "ready" && (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <SnapshotCard
+            to="/meals"
+            title="Meals today"
+            subtitle="Plan & dinner"
+            stat={`${slice.value.mealsToday.length} planned`}
+          >
+            <ul className="mt-2 space-y-1 text-sm text-slate-400">
+              {slice.value.mealsToday.length === 0 ? (
+                <li>Nothing on the meal plan today.</li>
+              ) : (
+                slice.value.mealsToday.map((e) => (
+                  <li key={e.id} className="truncate">
+                    <span className="text-slate-500">{e.mealSlot}:</span>{" "}
+                    {e.customLabel || e.recipeName || "TBD"}
+                  </li>
+                ))
+              )}
+            </ul>
+          </SnapshotCard>
+
+          <SnapshotCard
             to="/buy"
             title="Buy list"
             subtitle="Active shopping items"
@@ -213,6 +309,24 @@ export default function DashboardPage() {
               )}
             </ul>
           </SnapshotCard>
+
+          {slice.value.staleBuy.length > 0 ? (
+            <SnapshotCard
+              to="/buy"
+              title="Stale buy items"
+              subtitle="On the list 14+ days"
+              stat={`${slice.value.staleBuy.length} aging`}
+            >
+              <ul className="mt-2 space-y-1 text-sm text-amber-200/90">
+                {slice.value.staleBuy.map((it) => (
+                  <li key={it.id} className="truncate">
+                    {it.name}
+                    {it.store ? <span className="text-amber-200/60"> · {it.store}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </SnapshotCard>
+          ) : null}
 
           <SnapshotCard
             to="/wishlist"
