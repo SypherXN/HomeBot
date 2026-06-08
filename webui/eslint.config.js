@@ -25,7 +25,7 @@ export default defineConfig([
         'error',
         {
           allowConstantExport: true,
-          allowExportNames: ['useAuth', 'useCalendarZone'],
+          allowExportNames: ['useAuth', 'useCalendarZone', 'useTheme'],
         },
       ],
     },
