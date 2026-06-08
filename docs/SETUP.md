@@ -40,7 +40,7 @@ Follow the sections **in order** unless a heading says “optional.” Each majo
 13. [Optional — GitHub Pages (static Web UI)](#13-optional--github-pages-static-web-ui)
 14. [Optional — public HTTPS API (reverse proxy)](#14-optional--public-https-api-reverse-proxy)
 15. [Phone or another PC on your LAN (Windows dev)](#15-phone-or-another-pc-on-your-lan-windows-dev)
-16. [Tests and lint](#16-tests-and-lint)
+16. [Tests, lint, and GitHub Actions](#16-tests-lint-and-github-actions)
 17. [Troubleshooting](#17-troubleshooting)
 18. [Reference — how configuration works](#18-reference--how-configuration-works)
 19. [Reference — every environment variable](#19-reference--every-environment-variable)
@@ -61,7 +61,7 @@ Follow the sections **in order** unless a heading says “optional.” Each majo
 | 6 | Run **`npm run dev`** in **`webui`** | [Section 9](#9-web-ui-on-your-pc) |
 | 7 | In Discord, run **`/setup-set`** to bind features to channels (including **`budget`**) | [Section 10](#10-discord--finish-in-server-setup-setup-set) |
 | 8 | Create your **first web account**, then **Sign in** | [Section 11](#11-web-accounts--sign-in-discord-verify-bootstrap) |
-| 9 | (Optional) OAuth button, **GitHub Pages**, **HTTPS** for the API | [Section 12](#12-optional--discord-oauth-continue-with-discord)–[Section 14](#14-optional--public-https-api-reverse-proxy) |
+| 9 | (Optional) OAuth button, **GitHub Pages**, **HTTPS** for the API, **GitHub Actions** CI | [Section 12](#12-optional--discord-oauth-continue-with-discord)–[Section 14](#14-optional--public-https-api-reverse-proxy), [Section 16](#16-tests-lint-and-github-actions) |
 | 10 | (Ongoing) **Back up** SQLite locally and optionally to **Google Drive** (retention) | [Section 20](#20-backing-up-sqlite-homebotdb) · [20.1](#201-automated-backups-optional) · [20.2](#202-off-site-backup-to-google-drive-optional) |
 
 **Which sections apply to you**
@@ -205,8 +205,11 @@ Use this section if you want HomeBot **always online** (Discord + API) but **do 
 | H | GitHub Pages + API URL variable | [Step H](#step-h--github-pages-web-ui) |
 | I | CORS in server `.env` | [Step I](#step-i--cors-on-the-server) |
 | J | Google Drive backups (optional) | [Step J](#step-j--google-drive-backups-optional) |
+| — | **Ongoing:** update VM after `git push` | [Updates after push](#updates-after-you-push-to-github) |
 
 Then: [Section 10](#10-discord--finish-in-server-setup-setup-set) → [Section 11](#11-web-accounts--sign-in-discord-verify-bootstrap) on your PC / Pages.
+
+**Note:** You can do **Step I** (CORS) **before Step H** if you already know **`YOUR_PAGES_ORIGIN`** from the worksheet (`https://YOUR_GITHUB_USER.github.io` — no repo path).
 
 ---
 
@@ -438,16 +441,20 @@ More proxy options: [Section 14](#14-optional--public-https-api-reverse-proxy).
 
 #### Step H — GitHub Pages (Web UI)
 
-Do this in the browser on **github.com** (your PC).
+Do this in the browser on **github.com** (your PC). **Prerequisite:** **`YOUR_API_PUBLIC`** from Step G must work (`curl https://YOUR_API_HOST/api/health`).
 
-1. **Settings** → **Pages** → **Build and deployment** → **Source** → **GitHub Actions**.
+1. **Settings** → **Pages** → **Build and deployment** → **Source** → **GitHub Actions** (not “Deploy from a branch”).
 2. **Settings** → **Secrets and variables** → **Actions** → **Variables** → **New repository variable**
    - Name: **`HOMEBOT_API_PUBLIC_URL`**
    - Value: **`YOUR_API_PUBLIC`** (e.g. `https://myhomebot.duckdns.org`) — **no trailing slash**
-3. Trigger a build — push to **`main`** (or **Actions** → **Deploy Web UI to GitHub Pages** → **Run workflow**).
-4. First run may require approving the **`github-pages`** environment under **Settings** → **Environments**.
-5. After a green run, open **`https://YOUR_GITHUB_USER.github.io/YOUR_REPO/`**.
-6. Worksheet:
+   - **Required** for a working remote Web UI. Without it, Pages may deploy but the built app still calls **`localhost:5050`**.
+3. (Optional) **Variables** → **`HOMEBOT_WEBUI_BASE_PATH`** — only if your Pages URL is not the default project layout **`/REPO_NAME/`** ([Section 13.1](#131-urls-and-vite-base-path)).
+4. Trigger a build — push to **`main`** that touches **`webui/**`**, or **Actions** → **Deploy Web UI to GitHub Pages** → **Run workflow**.
+5. Open **Actions** → **Deploy Web UI to GitHub Pages**. The **build** job must succeed before **deploy** runs.
+   - First run may require approving the **`github-pages`** environment under **Settings** → **Environments**.
+   - If **build** fails, open the log. Reproduce locally: `cd webui && npm ci && npm run lint && npm run test && npm run build` ([Section 16](#16-tests-lint-and-github-actions)).
+6. After a green run, open **`https://YOUR_GITHUB_USER.github.io/YOUR_REPO/`**.
+7. Worksheet:
    - `YOUR_PAGES_ORIGIN` = `https://YOUR_GITHUB_USER.github.io` (no path)
    - `YOUR_PAGES_URL` = full URL with repo path
 
@@ -526,6 +533,36 @@ Full detail: [Section 20.2](#202-off-site-backup-to-google-drive-optional).
 
 ---
 
+#### Updates after you push to GitHub
+
+HomeBot uses **three separate** GitHub Actions workflows. Only some need your VM to be set up first.
+
+| Workflow | Runs on | Needs VM? | What it does |
+|----------|---------|-----------|--------------|
+| **[CI](../.github/workflows/ci.yml)** | Every push/PR to **`main`** | **No** | **`dotnet test`** + **`npm run lint`**, **`test`**, **`build`** — validates the repo on GitHub’s runners. |
+| **[Deploy Web UI to GitHub Pages](../.github/workflows/pages-webui.yml)** | Push to **`main`** when **`webui/**`** changes (or manual) | **No** for the build; **yes** for a *working* site (API must be live + CORS) | Builds static **`webui/dist`** and publishes to Pages. Set **`HOMEBOT_API_PUBLIC_URL`** ([Step H](#step-h--github-pages-web-ui)). |
+| **[Deploy VM](../.github/workflows/deploy-vm.yml)** | Push to **`main`** (optional) | **Yes**, when enabled | SSH to your server and runs **`update-homebot.sh`**. **Off by default** — see below. |
+
+**Update the bot on your VM (manual — always works after install):**
+
+```bash
+sudo bash /opt/homebot/app/scripts/ubuntu/update-homebot.sh
+```
+
+Same as [Section 8.8](#88-updates-after-git-pull). Your **`.env`** and **`homebot.db`** are not overwritten.
+
+**Optional — automatic VM deploy after each push:**
+
+1. **Settings** → **Secrets and variables** → **Actions** → **Secrets:** **`DEPLOY_HOST`**, **`DEPLOY_USER`**, **`DEPLOY_SSH_KEY`** (SSH private key; public key in **`~/.ssh/authorized_keys`** on the VM).
+2. **Variables:** **`DEPLOY_VM_ENABLED`** = **`true`**
+3. Optional secret **`DEPLOY_APP_DIR`** if the clone is not **`/opt/homebot/app`**.
+
+The SSH user needs passwordless **`sudo`** for **`update-homebot.sh`**. Until **`DEPLOY_VM_ENABLED`** is set, **Deploy VM** runs tests only and **skips** deploy (so missing secrets do not fail CI).
+
+Detail: **[OPS.md](OPS.md)** · **[UBUNTU_DEPLOY.md](UBUNTU_DEPLOY.md) §5**.
+
+---
+
 #### Other hosting options (honest notes)
 
 | Option | Notes |
@@ -544,8 +581,10 @@ Full detail: [Section 20.2](#202-off-site-backup-to-google-drive-optional).
 - [ ] `ssh -i ... ubuntu@YOUR_VM_PUBLIC_IP` works from Windows.
 - [ ] Oracle Security List + **`ufw`** allow **22**, **80**, **443** (not **5050** to the world).
 - [ ] `curl https://YOUR_API_PUBLIC/api/health` works from Windows.
-- [ ] GitHub Pages loads; Network tab calls **`YOUR_API_PUBLIC`**.
+- [ ] **`HOMEBOT_API_PUBLIC_URL`** set; **Deploy Web UI to GitHub Pages** workflow **build** job green.
+- [ ] GitHub Pages loads; Network tab calls **`YOUR_API_PUBLIC`** (not **`localhost`**).
 - [ ] No CORS errors after Step I.
+- [ ] **CI** workflow green on **`main`** (sanity check — no VM required).
 - [ ] Bot **online** in Discord; `/setup-set` + first web user done ([Sections 10–11](#10-discord--finish-in-server-setup-setup-set)).
 - [ ] (Optional) Backup file visible on Google Drive.
 
@@ -1003,6 +1042,8 @@ sudo bash /opt/homebot/app/scripts/ubuntu/update-homebot.sh
 
 (Manual equivalent: `git pull`, `dotnet publish`, `systemctl restart` — see [UBUNTU_DEPLOY.md](UBUNTU_DEPLOY.md).)
 
+**Optional:** enable GitHub **Deploy VM** so pushes to **`main`** run the same script over SSH — [§2.5 Updates after push](#updates-after-you-push-to-github) and **[OPS.md](OPS.md)**.
+
 ### 8.9 Optional: restart on any crash
 
 In the unit file, change **`Restart=on-failure`** to **`Restart=always`**, then:
@@ -1319,10 +1360,12 @@ On the API host:
 1. Push the repository to GitHub.
 2. **Settings** → **Pages** → **Build and deployment** → **Source** → **GitHub Actions** (recommended).
 3. **Settings** → **Secrets and variables** → **Actions** → **Variables**:
-   - **`HOMEBOT_API_PUBLIC_URL`** (recommended) — public API base baked into the static build, e.g. **`https://api.example.com`** (no trailing slash). If unset, the workflow still builds but logs a **warning** (easy to ship a broken SPA by mistake).
+   - **`HOMEBOT_API_PUBLIC_URL`** (**required** for a working remote Web UI) — public API base baked into the static build, e.g. **`https://api.example.com`** or **`https://myhomebot.duckdns.org`** (**no** trailing slash). If unset, the workflow may still **build** but logs a **warning** and the SPA will call **`localhost:5050`** in users’ browsers.
    - **`HOMEBOT_WEBUI_BASE_PATH`** (optional) — override **`VITE_BASE_PATH`** for the Actions build. If unset, the workflow defaults to **`/REPO_NAME/`** from **`GITHUB_REPOSITORY`** (correct for **project** Pages at **`https://OWNER.github.io/REPO/`**). Use **`/`** for a **user** site at the domain root.
 
-The repo ships **[`.github/workflows/pages-webui.yml`](../.github/workflows/pages-webui.yml)** (runs on **`webui/**`** pushes to **`main`** and **`workflow_dispatch`**). The first **`deploy-pages`** run may ask you to approve the **`github-pages`** environment.
+The repo ships **[`.github/workflows/pages-webui.yml`](../.github/workflows/pages-webui.yml)** (runs on **`webui/**`** pushes to **`main`** and **`workflow_dispatch`**). The **build** job runs **`npm ci`**, **`npm run lint`**, **`npm run test`**, and **`npm run build`** — same as [Section 16.2](#162-ci-ciyml--every-push-to-main) **`webui`** job. The first **`deploy-pages`** run may ask you to approve the **`github-pages`** environment.
+
+**If the workflow fails:** open the failed **build** job (not **deploy**). Reproduce locally: `cd webui && npm ci && npm run lint && npm run test && npm run build` ([Section 16.1](#161-local-checks)).
 
 **Optional:** keep a **local-only** workflow filename **`deploy-webui.yml`** — it stays **gitignored** in this repo so it never overwrites the shared **`pages-webui.yml`** on push.
 
@@ -1419,7 +1462,9 @@ Set **`webui`** build variable **`VITE_API_BASE_URL=https://api.example.com`** w
 
 **Keyboard shortcuts** in the Web UI: **`/`** search, **`?`** help — see **[FEATURES.md](./FEATURES.md)**.
 
-## 16. Tests and lint
+## 16. Tests, lint, and GitHub Actions
+
+### 16.1 Local checks
 
 Optional sanity checks after setup or before you change code.
 
@@ -1440,15 +1485,54 @@ npm run openapi:types
 
 Writes **`webui/src/generated/openapi.d.ts`** from **`GET /openapi/v1.json`**.
 
-**Web UI:**
+**Web UI** (match what CI runs):
 
 ```bash
 cd webui
+npm ci
 npm run lint
 npm run test
+npm run build
 ```
 
+Use **`npm ci`** (not **`npm install`**) when you want the exact versions from **`package-lock.json`**, same as GitHub Actions.
+
 Stop any running **`dotnet run`** if the build cannot overwrite **`HomeBot.dll`**.
+
+### 16.2 CI (`ci.yml`) — every push to `main`
+
+**[`.github/workflows/ci.yml`](../.github/workflows/ci.yml)** runs on push and pull requests to **`main`**.
+
+| Job | What it runs |
+|-----|----------------|
+| **`dotnet`** | Restore, Release build, **`dotnet test`** |
+| **`webui`** | **`npm ci`**, **`npm run lint`**, **`npm run test`**, **`npm run build`** (Node **22**) |
+
+**Does not need your VM, Discord, or GitHub Pages secrets.** It only proves the repo builds on GitHub’s runners.
+
+If **`webui`** fails, open **Actions → CI → webui** and scroll to the first **error** (often **`npm run lint`** or **`npm run build`**). Fix locally with the commands in [§16.1](#161-local-checks), commit, and push.
+
+### 16.3 Deploy Web UI to GitHub Pages (`pages-webui.yml`)
+
+**[`.github/workflows/pages-webui.yml`](../.github/workflows/pages-webui.yml)** publishes the static Web UI.
+
+| Prerequisite | Where |
+|--------------|--------|
+| **Pages → Source: GitHub Actions** | Repo **Settings → Pages** |
+| **`HOMEBOT_API_PUBLIC_URL`** | **Settings → Secrets and variables → Actions → Variables** — your public API origin (**no** trailing slash) |
+| **`github-pages` environment** | Approve on first deploy if prompted |
+
+Triggers: pushes to **`main`** that change **`webui/**`**, or **Actions → Deploy Web UI to GitHub Pages → Run workflow**.
+
+The **build** job must pass before **deploy** runs. A green deploy does **not** mean the site works in the browser until your VM API is up, **HTTPS** is configured, **`HOMEBOT_API_PUBLIC_URL`** matches **`YOUR_API_PUBLIC`**, and **CORS** includes your Pages origin ([Step I](#step-i--cors-on-the-server), [Section 13](#13-optional--github-pages-static-web-ui)).
+
+### 16.4 Optional — Deploy VM (`deploy-vm.yml`)
+
+**[`.github/workflows/deploy-vm.yml`](../.github/workflows/deploy-vm.yml)** can SSH to your Ubuntu server after tests pass and run **`scripts/ubuntu/update-homebot.sh`**.
+
+**Disabled by default.** Set repository variable **`DEPLOY_VM_ENABLED`** = **`true`** only after you add secrets **`DEPLOY_HOST`**, **`DEPLOY_USER`**, **`DEPLOY_SSH_KEY`**. Without the variable, the workflow runs tests and **skips** deploy (missing secrets will not fail the run).
+
+Full checklist: [§2.5 Updates after push](#updates-after-you-push-to-github) · **[OPS.md](OPS.md)**.
 
 ---
 
@@ -1470,6 +1554,12 @@ Stop any running **`dotnet run`** if the build cannot overwrite **`HomeBot.dll`*
 | Google Calendar connect fails | **`HOMEBOT_GOOGLE_OAUTH_*`** redirect must match Google Cloud Console; API must be HTTPS in production. |
 | Web Push not offered | Set **`HOMEBOT_VAPID_PUBLIC_KEY`**, **`HOMEBOT_VAPID_PRIVATE_KEY`**, **`HOMEBOT_VAPID_SUBJECT`**; use HTTPS or localhost. |
 | Webhooks return **401** | **`HOMEBOT_WEBHOOK_SECRET`** must match header **`X-HomeBot-Webhook-Secret`**. |
+| GitHub **CI** **`webui`** job failed | **Actions → CI → webui** log. Locally: `cd webui && npm ci && npm run lint && npm run test && npm run build` ([Section 16](#16-tests-lint-and-github-actions)). |
+| **Deploy Web UI to GitHub Pages** **build** failed | Same local commands as CI **`webui`**. Confirm **Pages → Source: GitHub Actions**. |
+| Pages loads but API calls **`localhost`** | Set **`HOMEBOT_API_PUBLIC_URL`** to **`YOUR_API_PUBLIC`**, re-run **Deploy Web UI to GitHub Pages**. |
+| Pages **CORS** errors | **`HOMEBOT_ALLOWED_ORIGINS`** on the VM must include **`YOUR_PAGES_ORIGIN`** (no path) — [Step I](#step-i--cors-on-the-server). |
+| **Deploy VM** job skipped | Normal until **`DEPLOY_VM_ENABLED=true`**. Manual update: `sudo bash /opt/homebot/app/scripts/ubuntu/update-homebot.sh`. |
+| **Deploy VM** “missing server host” | Add secrets **`DEPLOY_HOST`**, **`DEPLOY_USER`**, **`DEPLOY_SSH_KEY`**, then set **`DEPLOY_VM_ENABLED=true`**. |
 
 ---
 
@@ -1942,8 +2032,9 @@ Work through this table after Sections 1–11.
 | 6 | Web sign-in | **Sign in** on **`/login`** after [Section 11](#11-web-accounts--sign-in-discord-verify-bootstrap) | **Home** loads; header shows **Connected**; writes work on **Buy** |
 | 7 | One write path | Add a buy item in Web UI or **`/buy-add`** in Discord | Item appears in list / channel notify (if bound) |
 | 8 | Dashboard | Open **Home** | Stale buy, budget alerts, backup warning (if applicable) |
-| 9 | GitHub Pages (if used) | Open your Pages URL | No 404 under **`/REPO/assets/`**; API URL in build matches production |
-| 10 | Backups (if enabled) | After [20.2](#202-off-site-backup-to-google-drive-optional): files under **`HomeBot/backups`** on Drive; old copies pruned per retention |
+| 9 | GitHub Pages (if used) | Open your Pages URL; **Actions → Deploy Web UI to GitHub Pages** | No 404 under **`/REPO/assets/`**; Network tab calls **`HOMEBOT_API_PUBLIC_URL`**; **build** job green |
+| 10 | CI (optional sanity) | **Actions → CI** on latest **`main`** | **`dotnet`** and **`webui`** jobs green (no VM required) |
+| 11 | Backups (if enabled) | After [20.2](#202-off-site-backup-to-google-drive-optional): files under **`HomeBot/backups`** on Drive; old copies pruned per retention |
 
 **Next steps (optional):** Discord OAuth [Section 12](#12-optional--discord-oauth-continue-with-discord), GitHub Pages [Section 13](#13-optional--github-pages-static-web-ui), HTTPS API [Section 14](#14-optional--public-https-api-reverse-proxy), **PWA / push** [MOBILE.md](./MOBILE.md), **Google Calendar** / **webhooks** (Section 19 env + **[FEATURES.md](./FEATURES.md)**), backups [Section 20](#20-backing-up-sqlite-homebotdb).
 
