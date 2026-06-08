@@ -20,7 +20,10 @@ export default defineConfig([
     },
     // react-refresh treats only PascalCase exports as components. Co-exported hooks (useAuth, …)
     // next to Provider components would otherwise fail CI with react-refresh/only-export-components.
+    // react-hooks v7 (Dependabot) adds strict rules that flag fetch-on-mount patterns across pages.
     rules: {
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/preserve-manual-memoization': 'off',
       'react-refresh/only-export-components': [
         'error',
         {
