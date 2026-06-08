@@ -96,7 +96,11 @@ describe("API client — all subsystems", () => {
       paidBy: "300002",
       receivedBy: ACTOR,
     });
-    body = JSON.parse(lastCall().body ?? "{}") as { paidBy?: string; receivedBy?: string };
+    body = JSON.parse(lastCall().body ?? "{}") as {
+      paidBy?: string;
+      owedBy?: string;
+      receivedBy?: string;
+    };
     expect(body.paidBy).toBe("300002");
     expect(body.receivedBy).toBe(ACTOR);
 

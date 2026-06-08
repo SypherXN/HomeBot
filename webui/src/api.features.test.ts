@@ -95,6 +95,7 @@ describe("API client — FEATURES.md surfaces", () => {
     expect(lastCall().url).toContain("/api/notifications/preferences");
 
     await putNotificationPreferences(TOKEN, {
+      discordUserId: ACTOR,
       budgetAlerts: false,
       calendarDm: true,
       weeklyDigest: true,

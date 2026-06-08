@@ -619,8 +619,11 @@ export function postMealPlanEntry(
   },
   actorUserId?: string
 ) {
-  const q = body.addToCalendar && actorUserId ? { actorUserId } : undefined;
-  return apiJson<{ ok: boolean; id: number }>(mergeQuery("/api/meals/plan", q), {
+  const path =
+    body.addToCalendar && actorUserId
+      ? mergeQuery("/api/meals/plan", { actorUserId })
+      : "/api/meals/plan";
+  return apiJson<{ ok: boolean; id: number }>(path, {
     token,
     method: "POST",
     body,
