@@ -1,5 +1,8 @@
 # Optional: deploy main to a self-hosted VM after tests pass.
-# Required secrets: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_APP_DIR (optional)
+#
+# Off by default — set repository variable DEPLOY_VM_ENABLED=true when ready.
+# Required secrets: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY
+# Optional secrets: DEPLOY_APP_DIR (default /opt/homebot/app on the server)
 name: Deploy VM
 
 on:
@@ -19,23 +22,32 @@ jobs:
 
   deploy:
     needs: test
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && vars.DEPLOY_VM_ENABLED == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Validate deploy secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          missing=0
+          if [ -z "$DEPLOY_HOST" ]; then echo "::error::Missing secret DEPLOY_HOST (VM public IP or hostname)"; missing=1; fi
+          if [ -z "$DEPLOY_USER" ]; then echo "::error::Missing secret DEPLOY_USER (SSH login, e.g. ubuntu)"; missing=1; fi
+          if [ -z "$DEPLOY_SSH_KEY" ]; then echo "::error::Missing secret DEPLOY_SSH_KEY (private key for that user)"; missing=1; fi
+          exit "$missing"
+
       - name: SSH deploy
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 15m
           script: |
-            set -e
+            set -euo pipefail
             APP="${{ secrets.DEPLOY_APP_DIR }}"
             if [ -z "$APP" ]; then APP="/opt/homebot/app"; fi
-            cd "$APP"
-            git fetch origin main
-            git checkout main
-            git pull --ff-only origin main
-            dotnet publish -c Release -o ./publish
-            sudo systemctl restart homebot.service
-            echo "Deployed $(git rev-parse --short HEAD)"
+            sudo bash "${APP}/scripts/ubuntu/update-homebot.sh"
+            curl -fsS http://127.0.0.1:5050/api/health
+            echo "Deployed $(git -C "$APP" rev-parse --short HEAD)"
