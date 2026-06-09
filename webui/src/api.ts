@@ -683,8 +683,8 @@ export function postGoogleCalendarSync(token: string) {
 
 export type PushPublicConfig = { configured: boolean; publicKey?: string | null };
 
-export function getPushPublicConfig() {
-  return apiJson<PushPublicConfig>("/api/push/vapid-public-key");
+export function getPushPublicConfig(token?: string) {
+  return apiJson<PushPublicConfig>("/api/push/vapid-public-key", { token });
 }
 
 export function postPushSubscribe(

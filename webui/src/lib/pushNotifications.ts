@@ -14,7 +14,7 @@ export async function subscribeToPushNotifications(token: string): Promise<void>
     throw new Error("Push notifications are not supported in this browser.");
   }
 
-  const cfg = await getPushPublicConfig();
+  const cfg = await getPushPublicConfig(token);
   if (!cfg.configured || !cfg.publicKey) {
     throw new Error("Push is not configured on the server (VAPID keys missing).");
   }

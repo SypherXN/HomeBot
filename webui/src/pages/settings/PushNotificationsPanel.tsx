@@ -12,15 +12,16 @@ export default function PushNotificationsPanel({ token }: Props) {
   const [msg, setMsg] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
+    if (!tok) return;
     try {
-      const cfg = await getPushPublicConfig();
+      const cfg = await getPushPublicConfig(tok);
       setConfigured(cfg.configured);
       setSubscribed(await isPushSubscribed());
     } catch {
       setConfigured(false);
       setSubscribed(false);
     }
-  }, []);
+  }, [tok]);
 
   useEffect(() => {
     void refresh();

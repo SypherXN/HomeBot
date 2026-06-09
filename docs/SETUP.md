@@ -296,15 +296,17 @@ sudo ufw status
 
 #### Step D — Free hostname with DuckDNS
 
-**Why:** Let’s Encrypt and GitHub Pages need a **hostname**, not only an IP.
+**Why:** Let’s Encrypt, GitHub Pages, and iPhone Safari need a **hostname**, not only an IP. **DuckDNS is free** (optional supporter donations; no payment required for a subdomain).
 
 **If you own a domain:** create an **A record** `api.yourdomain.com` → `YOUR_VM_PUBLIC_IP`, set `YOUR_API_HOST` to that name, skip DuckDNS.
 
 **DuckDNS (free):**
 
-1. Open [https://www.duckdns.org](https://www.duckdns.org) → sign in.
-2. Add a subdomain (e.g. `myhomebot`) → set **current ip** to `YOUR_VM_PUBLIC_IP` → **update ip**.
-3. Worksheet: `YOUR_API_HOST` = `myhomebot.duckdns.org`.
+1. Open [https://www.duckdns.org](https://www.duckdns.org) → **sign in** (Google, GitHub, Reddit, etc.).
+2. Under **sub domain**, enter a label (e.g. **`myhomebot`**) → **add domain**.
+3. Set **current ip** to **`YOUR_VM_PUBLIC_IP`** → **update ip**.
+4. Copy your **token** from the DuckDNS account page (shown near your domains). Store it in a password manager — not in Git.
+5. Worksheet: `YOUR_API_HOST` = `myhomebot.duckdns.org` (your label + `.duckdns.org`).
 
 Verify from Windows:
 
@@ -312,7 +314,40 @@ Verify from Windows:
 nslookup YOUR_API_HOST
 ```
 
-If the VM IP changes later, update DuckDNS (Step F helps prevent surprise IP changes).
+**Auto-update on the VM (recommended):** if the public IP ever changes, DuckDNS should track it without manual edits. SSH to the VM:
+
+```bash
+sudo mkdir -p /opt/duckdns
+sudo nano /opt/duckdns/duck.sh
+```
+
+Paste (replace **`myhomebot`** and **`YOUR_DUCKDNS_TOKEN`**):
+
+```bash
+#!/bin/bash
+echo url="https://www.duckdns.org/update?domains=myhomebot&token=YOUR_DUCKDNS_TOKEN&ip=" | curl -k -o /opt/duckdns/duck.log -K -
+```
+
+```bash
+sudo chmod 700 /opt/duckdns/duck.sh
+sudo /opt/duckdns/duck.sh && cat /opt/duckdns/duck.log
+```
+
+Expect **`OK`**. Schedule every 5 minutes:
+
+```bash
+sudo crontab -e
+```
+
+Add:
+
+```cron
+*/5 * * * * /opt/duckdns/duck.sh >/dev/null 2>&1
+```
+
+Step F (reserved IP) still helps avoid Let's Encrypt hiccups; the cron is a safety net.
+
+If the VM IP changes later, DuckDNS updates automatically when cron runs (or run **`/opt/duckdns/duck.sh`** once). Step F helps prevent surprise IP changes.
 
 ---
 

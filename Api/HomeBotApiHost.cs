@@ -217,6 +217,7 @@ public static class HomeBotApiHost
 
             if (context.Request.Path.StartsWithSegments("/api/health") ||
                 context.Request.Path.StartsWithSegments("/api/meta") ||
+                context.Request.Path.StartsWithSegments("/api/push/vapid-public-key") ||
                 context.Request.Path.StartsWithSegments("/api/hooks") ||
                 context.Request.Path.StartsWithSegments("/openapi"))
             {

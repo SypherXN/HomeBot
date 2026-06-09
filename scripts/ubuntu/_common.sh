@@ -49,7 +49,9 @@ print_env_reminder() {
 }
 
 install_systemd_unit() {
-  local app_dir="$1" service_name="$2" unit_dest="/etc/systemd/system/${service_name}"
+  local app_dir="$1"
+  local service_name="$2"
+  local unit_dest="/etc/systemd/system/${service_name}"
   local script_dir unit_src dotnet_bin
 
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
