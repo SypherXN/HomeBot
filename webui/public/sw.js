@@ -1,5 +1,5 @@
 /* Offline shell + Web Push for HomeBot PWA */
-const CACHE = "homebot-static-v3";
+const CACHE = "homebot-static-v4";
 
 function appUrl(path) {
   return new URL(path || "/", self.registration.scope).href;
@@ -8,7 +8,7 @@ function appUrl(path) {
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE).then((cache) =>
-      cache.addAll(["/", "/index.html", "/favicon.svg", "/manifest.webmanifest"].map((p) => new URL(p, self.location).pathname))
+      cache.addAll(["/", "/index.html", "/favicon.svg", "/apple-touch-icon.png", "/manifest.webmanifest"].map((p) => new URL(p, self.location).pathname))
     )
   );
   self.skipWaiting();
