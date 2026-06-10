@@ -18,7 +18,7 @@ export default function MonthView({ anchorYmd, displayZone, events, onPickDay, o
   const todayYmd = ymdInZone(new Date(), displayZone);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/40">
+    <div className="overflow-hidden hb-card">
       <div className="grid grid-cols-7 border-b border-slate-800 bg-slate-900/60 text-center text-xs font-medium uppercase tracking-wide text-slate-400">
         {SHORT_WEEKDAYS.map((d) => (
           <div key={d} className="px-2 py-2">
@@ -43,7 +43,7 @@ export default function MonthView({ anchorYmd, displayZone, events, onPickDay, o
                 <span
                   className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${
                     isToday
-                      ? "bg-blue-600 text-white"
+                      ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white"
                       : inMonth
                         ? "text-slate-200"
                         : "text-slate-500"

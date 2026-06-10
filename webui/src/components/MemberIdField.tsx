@@ -51,7 +51,7 @@ export default function MemberIdField({
           inputMode="numeric"
           disabled={disabled}
           placeholder="Discord user id"
-          className="box-border min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+          className="box-border min-w-0 w-full max-w-full hb-input px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
         />
       )}
       {canUseActor && (

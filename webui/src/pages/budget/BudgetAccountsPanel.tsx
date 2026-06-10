@@ -119,7 +119,7 @@ export default function BudgetAccountsPanel({ token, actor, accounts: accountsPr
   }
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+    <section className="hb-card p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-medium text-white">Accounts & transfers</h2>
         <label className="flex items-center gap-2 text-xs text-slate-400">
@@ -196,12 +196,12 @@ export default function BudgetAccountsPanel({ token, actor, accounts: accountsPr
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Name"
               required
-              className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+              className="w-full hb-input px-2 py-1 text-sm text-slate-100"
             />
             <select
               value={newType}
               onChange={(e) => setNewType(e.target.value)}
-              className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+              className="w-full hb-input px-2 py-1 text-sm text-slate-100"
             >
               <option value="checking">Checking</option>
               <option value="savings">Savings</option>
@@ -223,7 +223,7 @@ export default function BudgetAccountsPanel({ token, actor, accounts: accountsPr
               value={xferFrom}
               onChange={(e) => setXferFrom(e.target.value)}
               required
-              className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+              className="w-full hb-input px-2 py-1 text-sm text-slate-100"
             >
               <option value="">From</option>
               {activeAccounts.map((a) => (
@@ -236,7 +236,7 @@ export default function BudgetAccountsPanel({ token, actor, accounts: accountsPr
               value={xferTo}
               onChange={(e) => setXferTo(e.target.value)}
               required
-              className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+              className="w-full hb-input px-2 py-1 text-sm text-slate-100"
             >
               <option value="">To</option>
               {activeAccounts.map((a) => (
@@ -250,18 +250,18 @@ export default function BudgetAccountsPanel({ token, actor, accounts: accountsPr
               onChange={(e) => setXferAmount(e.target.value)}
               placeholder="Amount"
               required
-              className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+              className="w-full hb-input px-2 py-1 text-sm text-slate-100"
             />
             <input
               value={xferNote}
               onChange={(e) => setXferNote(e.target.value)}
               placeholder="Note (optional)"
-              className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+              className="w-full hb-input px-2 py-1 text-sm text-slate-100"
             />
             <button
               type="submit"
               disabled={busy || activeAccounts.length < 2}
-              className="rounded bg-blue-600 px-3 py-1 text-xs text-white disabled:opacity-50"
+              className="rounded bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-1 text-xs text-white disabled:opacity-50"
             >
               Record transfer
             </button>

@@ -109,7 +109,7 @@ export default function DiscordMemberSelect({
         id={id}
         disabled={disabled}
         value={value}
-        className="box-border min-w-0 w-full max-w-full rounded-md border border-slate-600 bg-slate-900 px-2 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        className="box-border min-w-0 w-full max-w-full hb-input px-2 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         onChange={(e) => onPickUserId(e.target.value)}
       >
         <option value="">— Choose a person —</option>

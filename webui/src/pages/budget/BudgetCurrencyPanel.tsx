@@ -16,7 +16,7 @@ export default function BudgetCurrencyPanel({ token, actor, rates, onSaved }: Pr
   const [effectiveDate, setEffectiveDate] = useState(new Date().toISOString().slice(0, 10));
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+    <section className="hb-card p-4">
       <h2 className="mb-2 text-lg font-medium text-white">Multi-currency</h2>
       <p className="mb-3 text-xs text-slate-500">
         Home reporting currency is {HOME}. Set exchange rates for foreign transactions; rates apply on
@@ -54,13 +54,13 @@ export default function BudgetCurrencyPanel({ token, actor, rates, onSaved }: Pr
             <input
               value={from}
               onChange={(e) => setFrom(e.target.value)}
-              className="w-14 rounded border border-slate-600 bg-slate-950 px-1 py-0.5 uppercase text-slate-100"
+              className="w-14 hb-input px-1 py-0.5 uppercase text-slate-100"
             />{" "}
             =
             <input
               value={rate}
               onChange={(e) => setRate(e.target.value)}
-              className="mx-1 w-16 rounded border border-slate-600 bg-slate-950 px-1 py-0.5 text-slate-100"
+              className="mx-1 w-16 hb-input px-1 py-0.5 text-slate-100"
             />
             {HOME}
           </label>
@@ -68,7 +68,7 @@ export default function BudgetCurrencyPanel({ token, actor, rates, onSaved }: Pr
             type="date"
             value={effectiveDate}
             onChange={(e) => setEffectiveDate(e.target.value)}
-            className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+            className="hb-input px-2 py-1 text-sm text-slate-100"
           />
           <button type="submit" className="rounded bg-slate-700 px-3 py-1 text-sm text-white">
             Save rate

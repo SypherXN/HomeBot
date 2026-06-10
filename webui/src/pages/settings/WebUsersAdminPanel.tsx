@@ -94,7 +94,7 @@ export default function WebUsersAdminPanel({ token }: Props) {
         <button
           type="button"
           disabled={busy}
-          className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 hover:bg-slate-700 disabled:opacity-50"
+          className="rounded-lg hb-btn-soft px-3 py-2 text-slate-100 hover:bg-slate-700 disabled:opacity-50"
           onClick={() => {
             void (async () => {
               setBusy(true);
@@ -128,14 +128,14 @@ export default function WebUsersAdminPanel({ token }: Props) {
             value={resetUser}
             onChange={(e) => setResetUser(e.target.value)}
             placeholder="username"
-            className="rounded border border-slate-600 bg-slate-950 px-2 py-1.5 text-slate-100"
+            className="hb-input px-2 py-1.5 text-slate-100"
           />
           <input
             type="password"
             value={resetPass}
             onChange={(e) => setResetPass(e.target.value)}
             placeholder="new password"
-            className="rounded border border-slate-600 bg-slate-950 px-2 py-1.5 text-slate-100"
+            className="hb-input px-2 py-1.5 text-slate-100"
           />
           <button
             type="button"

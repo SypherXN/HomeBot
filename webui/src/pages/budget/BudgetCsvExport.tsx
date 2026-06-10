@@ -47,7 +47,7 @@ export default function BudgetCsvExport({ token, defaultMonth }: Props) {
             type="date"
             value={from}
             onChange={(e) => setFrom(e.target.value)}
-            className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+            className="mt-1 w-full hb-input px-2 py-1 text-sm text-slate-100"
           />
         </label>
         <label className="block text-xs text-slate-400">
@@ -56,7 +56,7 @@ export default function BudgetCsvExport({ token, defaultMonth }: Props) {
             type="date"
             value={to}
             onChange={(e) => setTo(e.target.value)}
-            className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+            className="mt-1 w-full hb-input px-2 py-1 text-sm text-slate-100"
           />
         </label>
       </div>

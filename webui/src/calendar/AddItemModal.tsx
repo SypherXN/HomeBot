@@ -289,7 +289,7 @@ export default function AddItemModal({
           <button
             type="submit"
             disabled={submitting}
-            className="rounded-lg border border-blue-600 bg-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-50"
+            className="rounded-lg border border-blue-500/60 bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
           >
             {submitting ? "Saving…" : `Add ${mode}`}
           </button>
@@ -307,7 +307,7 @@ function normalizeHm(t: string): string {
 }
 
 const inputClass =
-  "box-border min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+  "box-border min-w-0 w-full max-w-full hb-input px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
 
 function Field({
   label,
@@ -343,7 +343,7 @@ function ModalShell({
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-heading"
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overflow-x-hidden bg-black/60 p-3 sm:p-4"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overflow-x-hidden hb-overlay p-3 sm:p-4"
       onClick={onClose}
     >
       <div

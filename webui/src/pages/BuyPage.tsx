@@ -463,7 +463,7 @@ export default function BuyPage() {
       {canAuth && (
         <section
           aria-labelledby="tags-heading"
-          className="mb-6 rounded-xl border border-slate-800 bg-slate-900/40 p-4 sm:p-5"
+          className="mb-6 hb-card p-4 sm:p-5"
         >
           <h2 id="tags-heading" className="text-lg font-semibold text-white">
             Tag catalog
@@ -509,13 +509,13 @@ export default function BuyPage() {
                   }
                 }}
                 placeholder="e.g. groceries"
-                className="box-border min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="box-border min-w-0 w-full max-w-full hb-input px-3 py-2.5 text-base text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <button
               type="button"
               onClick={() => appendDraftTag()}
-              className="min-h-[44px] shrink-0 rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm text-slate-100 hover:bg-slate-700"
+              className="min-h-[44px] shrink-0 rounded-lg hb-btn-soft px-4 py-2 text-sm text-slate-100 hover:bg-slate-700"
             >
               Add to draft
             </button>
@@ -523,7 +523,7 @@ export default function BuyPage() {
               type="button"
               disabled={catalogBusy}
               onClick={() => void handleSaveCatalog()}
-              className="min-h-[44px] shrink-0 rounded-lg border border-blue-600 bg-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-50"
+              className="min-h-[44px] shrink-0 rounded-lg border border-blue-500/60 bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
             >
               {catalogBusy ? "Saving…" : "Save catalog"}
             </button>
@@ -545,7 +545,7 @@ export default function BuyPage() {
                 setFilterTag(e.target.value);
                 setListPage(0);
               }}
-              className="h-11 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="h-11 w-full hb-input px-3 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="">All items</option>
               {catalogTags.map((t) => (
@@ -567,7 +567,7 @@ export default function BuyPage() {
                 setListPage(0);
               }}
               placeholder="e.g. Costco"
-              className="h-11 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="h-11 w-full hb-input px-3 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
           <div>
@@ -581,7 +581,7 @@ export default function BuyPage() {
                 setFilterAssigned(e.target.value);
                 setListPage(0);
               }}
-              className="h-11 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="h-11 w-full hb-input px-3 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="">Anyone</option>
               {guildRoster.data?.available &&
@@ -603,7 +603,7 @@ export default function BuyPage() {
                 setSortBy(e.target.value as BuyListSort);
                 setListPage(0);
               }}
-              className="h-11 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="h-11 w-full hb-input px-3 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="id">List order (id)</option>
               <option value="name">Name</option>
@@ -619,7 +619,7 @@ export default function BuyPage() {
       {/* Add item */}
       <section
         aria-labelledby="add-heading"
-        className="mb-8 min-w-0 max-w-full overflow-x-hidden rounded-xl border border-slate-800 bg-slate-900/40 p-4 shadow-sm sm:p-5"
+        className="mb-8 min-w-0 max-w-full overflow-x-hidden hb-card p-4 shadow-sm sm:p-5"
       >
         <h2 id="add-heading" className="text-lg font-semibold text-white">
           Add an item
@@ -636,7 +636,7 @@ export default function BuyPage() {
                 onChange={(e) => setAddName(e.target.value)}
                 placeholder="Milk, bread, …"
                 autoComplete="off"
-                className="box-border min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="box-border min-w-0 w-full max-w-full hb-input px-3 py-2.5 text-base text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <div>
@@ -647,7 +647,7 @@ export default function BuyPage() {
                 id="buy-add-qty"
                 value={addQty}
                 onChange={(e) => setAddQty(e.target.value)}
-                className="box-border min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="box-border min-w-0 w-full max-w-full hb-input px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <div>
@@ -658,7 +658,7 @@ export default function BuyPage() {
                 id="buy-add-store"
                 value={addStore}
                 onChange={(e) => setAddStore(e.target.value)}
-                className="box-border min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="box-border min-w-0 w-full max-w-full hb-input px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <div className="sm:col-span-2">
@@ -693,7 +693,7 @@ export default function BuyPage() {
                     value={addTags}
                     onChange={(e) => setAddTags(e.target.value)}
                     placeholder="comma-separated (no catalog yet)"
-                    className="box-border min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="box-border min-w-0 w-full max-w-full hb-input px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </>
               )}
@@ -710,7 +710,7 @@ export default function BuyPage() {
                 value={addNotes}
                 onChange={(e) => setAddNotes(e.target.value)}
                 rows={2}
-                className="box-border min-w-0 w-full max-w-full resize-y rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="box-border min-w-0 w-full max-w-full resize-y hb-input px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <div className="sm:col-span-2">
@@ -730,7 +730,7 @@ export default function BuyPage() {
             <button
               type="submit"
               disabled={addSubmitting || !canActor}
-              className="min-h-[44px] w-full rounded-lg border border-blue-600 bg-blue-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:min-w-[140px]"
+              className="min-h-[44px] w-full rounded-lg border border-blue-500/60 bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2.5 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:min-w-[140px]"
             >
               {addSubmitting ? "Adding…" : "Add to list"}
             </button>
@@ -762,7 +762,7 @@ export default function BuyPage() {
               type="button"
               onClick={() => void loadList()}
               disabled={listLoading}
-              className="min-h-[40px] rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+              className="min-h-[40px] rounded-lg hb-btn-soft px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-50"
             >
               {listLoading ? "Refreshing…" : "Refresh"}
             </button>
@@ -799,7 +799,7 @@ export default function BuyPage() {
               <li
                 key={item.id}
                 ref={item.id === highlightId ? highlightRef : undefined}
-                className={`rounded-xl border border-slate-800 bg-slate-900/50 p-4 shadow-sm sm:p-5 ${highlightRowClass(item.id, highlightId)}`}
+                className={`hb-card p-4 shadow-sm sm:p-5 ${highlightRowClass(item.id, highlightId)}`}
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   {canActor && editingId !== item.id && (
@@ -819,20 +819,20 @@ export default function BuyPage() {
                     <input
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
-                      className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                      className="w-full hb-input px-3 py-2 text-slate-100"
                     />
                     <div className="grid gap-2 sm:grid-cols-2">
                       <input
                         value={editQty}
                         onChange={(e) => setEditQty(e.target.value)}
                         placeholder="Quantity"
-                        className="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                        className="hb-input px-3 py-2 text-slate-100"
                       />
                       <input
                         value={editStore}
                         onChange={(e) => setEditStore(e.target.value)}
                         placeholder="Store"
-                        className="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                        className="hb-input px-3 py-2 text-slate-100"
                       />
                     </div>
                     <textarea
@@ -840,13 +840,13 @@ export default function BuyPage() {
                       onChange={(e) => setEditNotes(e.target.value)}
                       rows={2}
                       placeholder="Notes"
-                      className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                      className="w-full hb-input px-3 py-2 text-slate-100"
                     />
                     <input
                       value={editAssigned}
                       onChange={(e) => setEditAssigned(e.target.value)}
                       placeholder="Assigned to (Discord user id)"
-                      className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                      className="w-full hb-input px-3 py-2 text-slate-100"
                     />
                     {catalogTags.length > 0 && (
                       <div className="flex flex-wrap gap-2">
@@ -873,7 +873,7 @@ export default function BuyPage() {
                       <button
                         type="button"
                         onClick={() => void saveEdit(item)}
-                        className="rounded-lg border border-blue-600 bg-blue-700 px-3 py-2 text-sm text-white"
+                        className="rounded-lg border border-blue-500/60 bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-2 text-sm text-white"
                       >
                         Save
                       </button>
@@ -961,7 +961,7 @@ export default function BuyPage() {
                         type="button"
                         disabled={actionBusyId === item.id}
                         onClick={() => startEdit(item)}
-                        className="min-h-[44px] w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2.5 text-sm font-medium text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="min-h-[44px] w-full rounded-lg hb-btn-soft px-3 py-2.5 text-sm font-medium text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Edit
                       </button>
@@ -1016,7 +1016,7 @@ export default function BuyPage() {
                 type="button"
                 disabled={!data.hasPrev || listLoading}
                 onClick={() => setListPage((p) => Math.max(0, p - 1))}
-                className="min-h-[44px] min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[100px] sm:flex-none sm:px-4"
+                className="min-h-[44px] min-w-0 flex-1 rounded-lg hb-btn-soft px-3 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[100px] sm:flex-none sm:px-4"
               >
                 Previous
               </button>
@@ -1024,7 +1024,7 @@ export default function BuyPage() {
                 type="button"
                 disabled={!data.hasNext || listLoading}
                 onClick={() => setListPage((p) => p + 1)}
-                className="min-h-[44px] min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[100px] sm:flex-none sm:px-4"
+                className="min-h-[44px] min-w-0 flex-1 rounded-lg hb-btn-soft px-3 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[100px] sm:flex-none sm:px-4"
               >
                 Next
               </button>
@@ -1087,12 +1087,12 @@ export default function BuyPage() {
               value={recurName}
               onChange={(e) => setRecurName(e.target.value)}
               placeholder="Item name"
-              className="min-w-[10rem] flex-1 rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+              className="min-w-[10rem] flex-1 hb-input px-3 py-2 text-slate-100"
             />
             <select
               value={recurCadence}
               onChange={(e) => setRecurCadence(e.target.value as "weekly" | "daily")}
-              className="rounded border border-slate-600 bg-slate-950 px-2 py-2 text-slate-100"
+              className="hb-input px-2 py-2 text-slate-100"
             >
               <option value="weekly">Weekly</option>
               <option value="daily">Daily</option>
@@ -1100,7 +1100,7 @@ export default function BuyPage() {
             <button
               type="button"
               disabled={recurBusy || !recurName.trim()}
-              className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:opacity-50"
+              className="rounded-lg hb-btn-soft px-4 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:opacity-50"
               onClick={() => {
                 void (async () => {
                   setRecurBusy(true);
@@ -1135,7 +1135,7 @@ export default function BuyPage() {
             type="button"
             disabled={clearBusy}
             onClick={() => void handleClearCompleted()}
-            className="mt-3 min-h-[44px] rounded-lg border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+            className="mt-3 min-h-[44px] rounded-xl hb-btn-soft px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50"
           >
             {clearBusy ? "Working…" : "Clear all completed items"}
           </button>

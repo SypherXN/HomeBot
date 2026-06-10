@@ -101,13 +101,13 @@ export default function HouseholdSettingsPanel({ token }: Props) {
               onChange={(e) => setPageSize(e.target.value)}
               inputMode="numeric"
               placeholder="e.g. 10"
-              className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+              className="w-full hb-input px-3 py-2 text-sm text-slate-100"
             />
             <button
               type="button"
               disabled={busy}
               onClick={() => void saveSetting("page_size", pageSize)}
-              className="shrink-0 rounded-md bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-500 disabled:opacity-50"
+              className="shrink-0 rounded-md bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-2 text-sm text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
             >
               Save
             </button>
@@ -125,7 +125,7 @@ export default function HouseholdSettingsPanel({ token }: Props) {
               type="button"
               disabled={busy}
               onClick={() => void saveSetting("timezone", timezone || "UTC")}
-              className="shrink-0 rounded-md bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-500 disabled:opacity-50"
+              className="shrink-0 rounded-md bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-2 text-sm text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
             >
               Save
             </button>
@@ -144,7 +144,7 @@ export default function HouseholdSettingsPanel({ token }: Props) {
                 onChange={(e) => setBindings((b) => ({ ...b, [feature]: e.target.value }))}
                 inputMode="numeric"
                 placeholder="Channel id"
-                className="min-w-0 flex-1 rounded-md border border-slate-600 bg-slate-900 px-3 py-2 font-mono text-sm text-slate-100"
+                className="min-w-0 flex-1 hb-input px-3 py-2 font-mono text-sm text-slate-100"
               />
               <button
                 type="button"

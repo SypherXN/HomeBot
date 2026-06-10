@@ -65,7 +65,7 @@ function UserField({
           id={id}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="h-11 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="h-11 w-full hb-input px-3 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         >
           <option value="">Select…</option>
           {rosterOptions.map((o) => (
@@ -103,7 +103,7 @@ function UserField({
         onChange={(e) => onChange(e.target.value.trim())}
         inputMode="numeric"
         placeholder="Discord user id"
-        className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        className="w-full hb-input px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
       />
       {canActor && (
         <button
@@ -554,7 +554,7 @@ export default function MoneyPage() {
       {rosterHint && <p className="mb-4 text-xs text-amber-200/90">{rosterHint}</p>}
 
       {canAuth && (
-        <section className="mb-8 rounded-xl border border-slate-800 bg-slate-900/40 p-4 sm:p-5">
+        <section className="mb-8 hb-card p-4 sm:p-5">
           <h2 className="text-lg font-semibold text-white">Balance between two people</h2>
           <p className="mt-1 text-sm text-slate-400">
             Net balance from all expenses and payments (same rules as Discord summary).
@@ -583,7 +583,7 @@ export default function MoneyPage() {
           </div>
           <button
             type="button"
-            className="mt-4 min-h-[44px] rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:opacity-50"
+            className="mt-4 min-h-[44px] rounded-lg hb-btn-soft px-4 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:opacity-50"
             disabled={summaryLoading}
             onClick={() => void handleLoadSummary()}
           >
@@ -601,7 +601,7 @@ export default function MoneyPage() {
       )}
 
       {canAuth && canActor && (
-        <section className="mb-8 rounded-xl border border-slate-800 bg-slate-900/40 p-4 sm:p-5">
+        <section className="mb-8 hb-card p-4 sm:p-5">
           <h2 className="text-lg font-semibold text-white">All balances (you)</h2>
           <p className="mt-1 text-sm text-slate-400">
             Non-zero net balances with everyone else in the ledger.
@@ -631,7 +631,7 @@ export default function MoneyPage() {
       )}
 
       <div className="mb-8 grid gap-6 lg:grid-cols-2">
-        <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 sm:p-5">
+        <section className="hb-card p-4 sm:p-5">
           <h2 className="text-lg font-semibold text-white">Simple expense</h2>
           <p className="mt-1 text-sm text-slate-400">One person paid; one person owes the full amount.</p>
           <form
@@ -663,13 +663,13 @@ export default function MoneyPage() {
               value={expName}
               onChange={(e) => setExpName(e.target.value)}
               placeholder="Description"
-              className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-slate-100"
+              className="w-full hb-input px-3 py-2.5 text-slate-100"
             />
             <input
               value={expAmount}
               onChange={(e) => setExpAmount(e.target.value)}
               placeholder="Amount"
-              className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-slate-100"
+              className="w-full hb-input px-3 py-2.5 text-slate-100"
             />
             <UserField
               id="exp-paid"
@@ -694,14 +694,14 @@ export default function MoneyPage() {
             <button
               type="submit"
               disabled={expSubmitting || !expName.trim() || !expAmount.trim() || !expPaidBy || !expOwedBy}
-              className="min-h-[44px] rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+              className="min-h-[44px] rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
             >
               {expSubmitting ? "Saving…" : "Log expense"}
             </button>
           </form>
         </section>
 
-        <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 sm:p-5">
+        <section className="hb-card p-4 sm:p-5">
           <h2 className="text-lg font-semibold text-white">Add split expense</h2>
           <p className="mt-1 text-sm text-slate-400">
             Total bill × percent = amount stored as owed. Example: $100 at 50% → $50 owed.
@@ -715,7 +715,7 @@ export default function MoneyPage() {
                 id="split-name"
                 value={splitName}
                 onChange={(e) => setSplitName(e.target.value)}
-                className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full hb-input px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <div>
@@ -727,7 +727,7 @@ export default function MoneyPage() {
                 value={splitAmount}
                 onChange={(e) => setSplitAmount(e.target.value)}
                 placeholder="e.g. 48 or 12.5+9.99"
-                className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full hb-input px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -763,7 +763,7 @@ export default function MoneyPage() {
                 max={100}
                 value={splitPercent}
                 onChange={(e) => setSplitPercent(e.target.value)}
-                className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:max-w-[160px]"
+                className="w-full hb-input px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:max-w-[160px]"
               />
             </div>
             <div>
@@ -774,7 +774,7 @@ export default function MoneyPage() {
                 id="split-desc"
                 value={splitDesc}
                 onChange={(e) => setSplitDesc(e.target.value)}
-                className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full hb-input px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <div>
@@ -786,20 +786,20 @@ export default function MoneyPage() {
                 value={splitNotes}
                 onChange={(e) => setSplitNotes(e.target.value)}
                 rows={2}
-                className="w-full resize-y rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full resize-y hb-input px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <button
               type="submit"
               disabled={splitSubmitting || !canAuth}
-              className="min-h-[44px] rounded-lg border border-blue-600 bg-blue-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+              className="min-h-[44px] rounded-lg border border-blue-500/60 bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2.5 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {splitSubmitting ? "Saving…" : "Add split expense"}
             </button>
           </form>
         </section>
 
-        <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 sm:p-5">
+        <section className="hb-card p-4 sm:p-5">
           <h2 className="text-lg font-semibold text-white">Record payment</h2>
           <p className="mt-1 text-sm text-slate-400">
             Money moved from one person to another (settles part of the running balance).
@@ -814,7 +814,7 @@ export default function MoneyPage() {
                 value={payAmount}
                 onChange={(e) => setPayAmount(e.target.value)}
                 placeholder="e.g. 25"
-                className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full hb-input px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -860,7 +860,7 @@ export default function MoneyPage() {
               type="button"
               onClick={() => void loadList()}
               disabled={listLoading}
-              className="min-h-[40px] rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+              className="min-h-[40px] rounded-lg hb-btn-soft px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-50"
             >
               {listLoading ? "Refreshing…" : "Refresh"}
             </button>
@@ -920,7 +920,7 @@ export default function MoneyPage() {
                         <button
                           type="button"
                           onClick={() => openEdit(row)}
-                          className="rounded-lg border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-700"
+                          className="rounded-lg hb-btn-soft px-2.5 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-700"
                         >
                           Edit
                         </button>
@@ -964,7 +964,7 @@ export default function MoneyPage() {
                 type="button"
                 disabled={!data.hasPrev || listLoading}
                 onClick={() => setListPage((p) => Math.max(0, p - 1))}
-                className="min-h-[44px] min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[100px] sm:flex-none sm:px-4"
+                className="min-h-[44px] min-w-0 flex-1 rounded-lg hb-btn-soft px-3 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[100px] sm:flex-none sm:px-4"
               >
                 Previous
               </button>
@@ -972,7 +972,7 @@ export default function MoneyPage() {
                 type="button"
                 disabled={!data.hasNext || listLoading}
                 onClick={() => setListPage((p) => p + 1)}
-                className="min-h-[44px] min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[100px] sm:flex-none sm:px-4"
+                className="min-h-[44px] min-w-0 flex-1 rounded-lg hb-btn-soft px-3 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[100px] sm:flex-none sm:px-4"
               >
                 Next
               </button>
@@ -996,7 +996,7 @@ export default function MoneyPage() {
       </section>
 
       {editRow && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center hb-overlay p-4">
           <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-xl">
             <h3 className="mb-3 text-lg font-semibold text-white">Edit transaction #{editRow.id}</h3>
             <form onSubmit={(e) => void handleEditSave(e)} className="space-y-3">
@@ -1006,7 +1006,7 @@ export default function MoneyPage() {
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   required
-                  className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                  className="w-full hb-input px-3 py-2 text-slate-100"
                 />
               </div>
               <div>
@@ -1015,7 +1015,7 @@ export default function MoneyPage() {
                   value={editAmount}
                   onChange={(e) => setEditAmount(e.target.value)}
                   required
-                  className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                  className="w-full hb-input px-3 py-2 text-slate-100"
                 />
               </div>
               <div>
@@ -1023,7 +1023,7 @@ export default function MoneyPage() {
                 <input
                   value={editDesc}
                   onChange={(e) => setEditDesc(e.target.value)}
-                  className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                  className="w-full hb-input px-3 py-2 text-slate-100"
                 />
               </div>
               <div>
@@ -1032,7 +1032,7 @@ export default function MoneyPage() {
                   value={editNotes}
                   onChange={(e) => setEditNotes(e.target.value)}
                   rows={2}
-                  className="w-full resize-y rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                  className="w-full resize-y hb-input px-3 py-2 text-slate-100"
                 />
               </div>
               <div className="flex justify-end gap-2">
@@ -1046,7 +1046,7 @@ export default function MoneyPage() {
                 <button
                   type="submit"
                   disabled={editBusy}
-                  className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50"
+                  className="rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-2 text-sm text-white disabled:opacity-50"
                 >
                   {editBusy ? "Saving…" : "Save"}
                 </button>

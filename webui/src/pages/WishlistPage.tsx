@@ -546,7 +546,7 @@ export default function WishlistPage() {
       )}
 
       {canAuth && (
-        <section className="mb-6 rounded-xl border border-slate-800 bg-slate-900/40 p-4 sm:p-5">
+        <section className="mb-6 hb-card p-4 sm:p-5">
           <h2 className="text-lg font-semibold text-white">Tag catalog</h2>
           <p className="mt-1 text-sm text-slate-400">
             When saved, only these tags are stored on new wishes (same rules as Buy tags).
@@ -588,13 +588,13 @@ export default function WishlistPage() {
                   }
                 }}
                 placeholder="e.g. birthday"
-                className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full hb-input px-3 py-2.5 text-base text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <button
               type="button"
               onClick={() => appendDraftTag()}
-              className="min-h-[44px] shrink-0 rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm text-slate-100 hover:bg-slate-700"
+              className="min-h-[44px] shrink-0 rounded-lg hb-btn-soft px-4 py-2 text-sm text-slate-100 hover:bg-slate-700"
             >
               Add to draft
             </button>
@@ -602,7 +602,7 @@ export default function WishlistPage() {
               type="button"
               disabled={catalogBusy}
               onClick={() => void handleSaveCatalog()}
-              className="min-h-[44px] shrink-0 rounded-lg border border-blue-600 bg-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-50"
+              className="min-h-[44px] shrink-0 rounded-lg border border-blue-500/60 bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
             >
               {catalogBusy ? "Saving…" : "Save catalog"}
             </button>
@@ -623,7 +623,7 @@ export default function WishlistPage() {
                 setOwnerFilter(e.target.value);
                 setListPage(0);
               }}
-              className="h-11 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="h-11 w-full hb-input px-3 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               {listOwnerFilterOptions.map((o) => (
                 <option key={o.value || "__all__"} value={o.value}>
@@ -643,7 +643,7 @@ export default function WishlistPage() {
                 setFilterTag(e.target.value);
                 setListPage(0);
               }}
-              className="h-11 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="h-11 w-full hb-input px-3 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="">All tags</option>
               {catalogTags.map((t) => (
@@ -664,7 +664,7 @@ export default function WishlistPage() {
                 setSortBy(e.target.value as WishlistListSort);
                 setListPage(0);
               }}
-              className="h-11 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="h-11 w-full hb-input px-3 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="id">List order</option>
               <option value="name">Name</option>
@@ -677,7 +677,7 @@ export default function WishlistPage() {
         </div>
       )}
 
-      <section className="mb-8 min-w-0 max-w-full overflow-x-hidden rounded-xl border border-slate-800 bg-slate-900/40 p-4 shadow-sm sm:p-5">
+      <section className="mb-8 min-w-0 max-w-full overflow-x-hidden hb-card p-4 shadow-sm sm:p-5">
         <h2 className="text-lg font-semibold text-white">Add a wish</h2>
         <form onSubmit={(e) => void handleAdd(e)} className="mt-4 min-w-0 space-y-4">
           <div className="grid min-w-0 gap-4 sm:grid-cols-2">
@@ -690,7 +690,7 @@ export default function WishlistPage() {
                 value={addName}
                 onChange={(e) => setAddName(e.target.value)}
                 autoComplete="off"
-                className="box-border min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="box-border min-w-0 w-full max-w-full hb-input px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <div className="sm:col-span-2">
@@ -701,7 +701,7 @@ export default function WishlistPage() {
                 id="wl-add-owner"
                 value={addOwnerUserId}
                 onChange={(e) => setAddOwnerUserId(e.target.value)}
-                className="box-border h-11 min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="box-border h-11 min-w-0 w-full max-w-full hb-input px-3 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 {ownerPickerOptions.map((o) => (
                   <option key={`add-${o.value || "def"}`} value={o.value}>
@@ -719,7 +719,7 @@ export default function WishlistPage() {
                 value={addPrice}
                 onChange={(e) => setAddPrice(e.target.value)}
                 placeholder="$20"
-                className="box-border min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="box-border min-w-0 w-full max-w-full hb-input px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <div>
@@ -730,7 +730,7 @@ export default function WishlistPage() {
                 id="wl-add-priority"
                 value={addPriority}
                 onChange={(e) => setAddPriority(e.target.value)}
-                className="box-border min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="box-border min-w-0 w-full max-w-full hb-input px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <div className="sm:col-span-2">
@@ -741,7 +741,7 @@ export default function WishlistPage() {
                 id="wl-add-link"
                 value={addLink}
                 onChange={(e) => setAddLink(e.target.value)}
-                className="box-border min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="box-border min-w-0 w-full max-w-full hb-input px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <div className="sm:col-span-2">
@@ -752,7 +752,7 @@ export default function WishlistPage() {
                 id="wl-add-desc"
                 value={addDesc}
                 onChange={(e) => setAddDesc(e.target.value)}
-                className="box-border min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="box-border min-w-0 w-full max-w-full hb-input px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <div className="sm:col-span-2">
@@ -764,7 +764,7 @@ export default function WishlistPage() {
                 value={addNotes}
                 onChange={(e) => setAddNotes(e.target.value)}
                 rows={2}
-                className="box-border min-w-0 w-full max-w-full resize-y rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="box-border min-w-0 w-full max-w-full resize-y hb-input px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <div className="sm:col-span-2">
@@ -795,7 +795,7 @@ export default function WishlistPage() {
                   value={addTags}
                   onChange={(e) => setAddTags(e.target.value)}
                   placeholder="comma-separated"
-                  className="box-border min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="box-border min-w-0 w-full max-w-full hb-input px-3 py-2.5 text-base text-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
               )}
             </div>
@@ -803,7 +803,7 @@ export default function WishlistPage() {
           <button
             type="submit"
             disabled={addSubmitting || !canActor}
-            className="min-h-[44px] w-full rounded-lg border border-blue-600 bg-blue-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            className="min-h-[44px] w-full rounded-lg border border-blue-500/60 bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2.5 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           >
             {addSubmitting ? "Adding…" : "Add wish"}
           </button>
@@ -833,7 +833,7 @@ export default function WishlistPage() {
               type="button"
               onClick={() => void loadList()}
               disabled={listLoading}
-              className="min-h-[40px] rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+              className="min-h-[40px] rounded-lg hb-btn-soft px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-50"
             >
               {listLoading ? "Refreshing…" : "Refresh"}
             </button>
@@ -868,19 +868,19 @@ export default function WishlistPage() {
               <li
                 key={item.id}
                 ref={item.id === highlightId ? highlightRef : undefined}
-                className={`rounded-xl border border-slate-800 bg-slate-900/50 p-4 shadow-sm sm:p-5 ${highlightRowClass(item.id, highlightId)}`}
+                className={`hb-card p-4 shadow-sm sm:p-5 ${highlightRowClass(item.id, highlightId)}`}
               >
                 {editingId === item.id ? (
                   <div className="space-y-3">
                     <input
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
-                      className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                      className="w-full hb-input px-3 py-2 text-slate-100"
                     />
                     <select
                       value={editOwner}
                       onChange={(e) => setEditOwner(e.target.value)}
-                      className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                      className="w-full hb-input px-3 py-2 text-slate-100"
                     >
                       {ownerPickerOptions.map((o) => (
                         <option key={`edit-${o.value || "def"}`} value={o.value || item.owner}>
@@ -893,33 +893,33 @@ export default function WishlistPage() {
                         value={editPrice}
                         onChange={(e) => setEditPrice(e.target.value)}
                         placeholder="Price"
-                        className="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                        className="hb-input px-3 py-2 text-slate-100"
                       />
                       <input
                         value={editPriority}
                         onChange={(e) => setEditPriority(e.target.value)}
                         placeholder="Priority"
-                        className="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                        className="hb-input px-3 py-2 text-slate-100"
                       />
                     </div>
                     <input
                       value={editLink}
                       onChange={(e) => setEditLink(e.target.value)}
                       placeholder="Link"
-                      className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                      className="w-full hb-input px-3 py-2 text-slate-100"
                     />
                     <input
                       value={editDesc}
                       onChange={(e) => setEditDesc(e.target.value)}
                       placeholder="Description"
-                      className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                      className="w-full hb-input px-3 py-2 text-slate-100"
                     />
                     <textarea
                       value={editNotes}
                       onChange={(e) => setEditNotes(e.target.value)}
                       rows={2}
                       placeholder="Notes"
-                      className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                      className="w-full hb-input px-3 py-2 text-slate-100"
                     />
                     {catalogTags.length > 0 && (
                       <div className="flex flex-wrap gap-2">
@@ -946,7 +946,7 @@ export default function WishlistPage() {
                       <button
                         type="button"
                         onClick={() => void saveEdit(item)}
-                        className="rounded-lg border border-blue-600 bg-blue-700 px-3 py-2 text-sm text-white"
+                        className="rounded-lg border border-blue-500/60 bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-2 text-sm text-white"
                       >
                         Save
                       </button>
@@ -1052,7 +1052,7 @@ export default function WishlistPage() {
                         type="button"
                         disabled={actionBusyId === item.id}
                         onClick={() => startEdit(item)}
-                        className="min-h-[44px] w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2.5 text-sm font-medium text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="min-h-[44px] w-full rounded-lg hb-btn-soft px-3 py-2.5 text-sm font-medium text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Edit
                       </button>
@@ -1112,7 +1112,7 @@ export default function WishlistPage() {
                 type="button"
                 disabled={!data.hasPrev || listLoading}
                 onClick={() => setListPage((p) => Math.max(0, p - 1))}
-                className="min-h-[44px] min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[100px] sm:flex-none sm:px-4"
+                className="min-h-[44px] min-w-0 flex-1 rounded-lg hb-btn-soft px-3 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[100px] sm:flex-none sm:px-4"
               >
                 Previous
               </button>
@@ -1120,7 +1120,7 @@ export default function WishlistPage() {
                 type="button"
                 disabled={!data.hasNext || listLoading}
                 onClick={() => setListPage((p) => p + 1)}
-                className="min-h-[44px] min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[100px] sm:flex-none sm:px-4"
+                className="min-h-[44px] min-w-0 flex-1 rounded-lg hb-btn-soft px-3 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[100px] sm:flex-none sm:px-4"
               >
                 Next
               </button>
@@ -1151,7 +1151,7 @@ export default function WishlistPage() {
             type="button"
             disabled={clearBusy}
             onClick={() => void handleClearCompleted()}
-            className="mt-3 min-h-[44px] rounded-lg border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+            className="mt-3 min-h-[44px] rounded-xl hb-btn-soft px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 disabled:opacity-50"
           >
             {clearBusy ? "Working…" : "Clear all completed wishes"}
           </button>

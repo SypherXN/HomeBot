@@ -26,7 +26,7 @@ export default function TasksPanel({
   return (
     <aside
       aria-labelledby="tasks-panel-heading"
-      className="min-w-0 max-w-full rounded-xl border border-slate-800 bg-slate-900/40 p-4"
+      className="min-w-0 max-w-full hb-card p-4"
     >
       <div className="mb-3 flex min-w-0 items-center justify-between gap-2">
         <h2 id="tasks-panel-heading" className="text-base font-semibold text-white">
@@ -45,7 +45,7 @@ export default function TasksPanel({
             type="button"
             disabled={!canAuth}
             onClick={onAddTask}
-            className="rounded-md border border-blue-600 bg-blue-700 px-2 py-1 text-xs font-medium text-white hover:bg-blue-600 disabled:opacity-50"
+            className="rounded-md border border-blue-500/60 bg-gradient-to-r from-blue-600 to-blue-700 px-2 py-1 text-xs font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
           >
             + Task
           </button>

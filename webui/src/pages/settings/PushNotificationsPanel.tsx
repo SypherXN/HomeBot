@@ -85,7 +85,7 @@ export default function PushNotificationsPanel({ token }: Props) {
           type="button"
           disabled={busy || subscribed}
           onClick={() => void enable()}
-          className="rounded-md bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-500 disabled:opacity-50"
+          className="rounded-md bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-1.5 text-sm text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
         >
           Enable push
         </button>

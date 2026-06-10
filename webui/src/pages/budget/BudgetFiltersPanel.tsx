@@ -33,7 +33,7 @@ export default function BudgetFiltersPanel({
   onClear,
 }: Props) {
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+    <section className="hb-card p-4">
       <h2 className="mb-3 text-lg font-medium text-white">Search & filters</h2>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <DiscordMemberSelect
@@ -48,7 +48,7 @@ export default function BudgetFiltersPanel({
           <input
             value={filters.merchant}
             onChange={(e) => onFiltersChange({ ...filters, merchant: e.target.value })}
-            className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+            className="w-full hb-input px-3 py-2 text-sm text-slate-100"
           />
         </div>
         <div>
@@ -56,7 +56,7 @@ export default function BudgetFiltersPanel({
           <input
             value={filters.noteContains}
             onChange={(e) => onFiltersChange({ ...filters, noteContains: e.target.value })}
-            className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+            className="w-full hb-input px-3 py-2 text-sm text-slate-100"
           />
         </div>
         <div>
@@ -64,7 +64,7 @@ export default function BudgetFiltersPanel({
           <input
             value={filters.amountMin}
             onChange={(e) => onFiltersChange({ ...filters, amountMin: e.target.value })}
-            className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+            className="w-full hb-input px-3 py-2 text-sm text-slate-100"
           />
         </div>
         <div>
@@ -72,7 +72,7 @@ export default function BudgetFiltersPanel({
           <input
             value={filters.amountMax}
             onChange={(e) => onFiltersChange({ ...filters, amountMax: e.target.value })}
-            className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+            className="w-full hb-input px-3 py-2 text-sm text-slate-100"
           />
         </div>
         <div>
@@ -81,7 +81,7 @@ export default function BudgetFiltersPanel({
             list="budget-tag-suggestions"
             value={filters.tag}
             onChange={(e) => onFiltersChange({ ...filters, tag: e.target.value })}
-            className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+            className="w-full hb-input px-3 py-2 text-sm text-slate-100"
           />
           <datalist id="budget-tag-suggestions">
             {allTags.map((t) => (
@@ -94,7 +94,7 @@ export default function BudgetFiltersPanel({
         <button
           type="button"
           onClick={onApply}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-500"
+          className="rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 text-sm text-white hover:from-blue-500 hover:to-blue-600"
         >
           Apply filters
         </button>

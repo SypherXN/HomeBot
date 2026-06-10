@@ -65,7 +65,7 @@ export default function BudgetCategorizeRulesPanel({ token }: Props) {
         <select
           value={matchField}
           onChange={(e) => setMatchField(e.target.value as "merchant" | "note")}
-          className="rounded border border-slate-600 bg-slate-950 px-2 py-1.5 text-slate-100"
+          className="hb-input px-2 py-1.5 text-slate-100"
         >
           <option value="merchant">Merchant</option>
           <option value="note">Note</option>
@@ -74,12 +74,12 @@ export default function BudgetCategorizeRulesPanel({ token }: Props) {
           value={matchContains}
           onChange={(e) => setMatchContains(e.target.value)}
           placeholder="contains text"
-          className="min-w-[8rem] flex-1 rounded border border-slate-600 bg-slate-950 px-2 py-1.5 text-slate-100"
+          className="min-w-[8rem] flex-1 hb-input px-2 py-1.5 text-slate-100"
         />
         <select
           value={categoryId}
           onChange={(e) => setCategoryId(e.target.value)}
-          className="rounded border border-slate-600 bg-slate-950 px-2 py-1.5 text-slate-100"
+          className="hb-input px-2 py-1.5 text-slate-100"
         >
           <option value="">Category…</option>
           {categories.map((c) => (

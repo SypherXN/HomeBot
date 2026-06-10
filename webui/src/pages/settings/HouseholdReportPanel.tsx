@@ -45,7 +45,7 @@ export default function HouseholdReportPanel({ token }: Props) {
           type="month"
           value={month}
           onChange={(e) => setMonth(e.target.value)}
-          className="rounded border border-slate-600 bg-slate-950 px-2 py-1.5 text-slate-100"
+          className="hb-input px-2 py-1.5 text-slate-100"
         />
         <button
           type="button"

@@ -32,7 +32,7 @@ export default function SettingsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Settings</h1>
+        <h1 className="text-3xl font-semibold text-white">Settings</h1>
         <p className="mt-1 text-slate-400">
           Stored only in this browser (localStorage). Never commit tokens to source control.
         </p>
@@ -74,13 +74,13 @@ export default function SettingsPage() {
           placeholder="http://192.168.1.5:5050"
           value={apiDraft}
           onChange={(e) => setApiDraft(e.target.value)}
-          className="w-full max-w-xl rounded-md border border-slate-600 bg-slate-900 px-3 py-2 font-mono text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full max-w-xl hb-input px-3 py-2 font-mono text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => setApiBaseUrl(apiDraft)}
-            className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500"
+            className="rounded-md bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-1.5 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-600"
           >
             Save
           </button>
@@ -135,7 +135,7 @@ export default function SettingsPage() {
           placeholder="HOMEBOT_API_TOKEN or paste JWT"
           value={token}
           onChange={(e) => setToken(e.target.value)}
-          className="w-full max-w-xl rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full max-w-xl hb-input px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
         <p className="max-w-2xl text-xs text-slate-500">
           Advanced: shared <code className="text-slate-400">HOMEBOT_API_TOKEN</code> still works when the server has

@@ -407,7 +407,7 @@ export default function CalendarPage() {
                 <select
                   value={gcal.connection?.calendarId ?? "primary"}
                   onChange={(e) => void pickGoogleCalendar(e.target.value)}
-                  className="rounded-md border border-slate-600 bg-slate-950 px-2 py-1 text-xs text-slate-200"
+                  className="hb-input px-2 py-1 text-xs text-slate-200"
                   title="Target Google calendar"
                 >
                   {gcalCalendars.map((c) => (
@@ -425,7 +425,7 @@ export default function CalendarPage() {
               <button
                 type="button"
                 onClick={() => void connectGoogle()}
-                className="rounded-md bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-500"
+                className="rounded-md bg-gradient-to-r from-blue-600 to-blue-700 px-2.5 py-1 text-xs font-medium text-white hover:from-blue-500 hover:to-blue-600"
               >
                 Connect Google
               </button>
@@ -681,7 +681,7 @@ function Toolbar({
   canImport: boolean;
 }) {
   return (
-    <div className="flex min-w-0 w-full flex-col gap-3 rounded-xl border border-slate-800 bg-slate-900/40 p-3">
+    <div className="flex min-w-0 w-full flex-col gap-3 hb-card p-3">
       <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <button
@@ -696,7 +696,7 @@ function Toolbar({
               type="button"
               disabled={exportBusy}
               onClick={onExportIcs}
-              className="shrink-0 rounded-md border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+              className="shrink-0 rounded-md hb-btn-soft px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-50"
             >
               {exportBusy ? "Exporting…" : "Export .ics"}
             </button>
@@ -706,7 +706,7 @@ function Toolbar({
               type="button"
               disabled={importBusy}
               onClick={onImportIcs}
-              className="shrink-0 rounded-md border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+              className="shrink-0 rounded-md hb-btn-soft px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-50"
             >
               {importBusy ? "Importing…" : "Import .ics"}
             </button>
@@ -799,7 +799,7 @@ function Toolbar({
             type="button"
             disabled={!canAuth}
             onClick={onAddEvent}
-            className="shrink-0 rounded-md border border-blue-600 bg-blue-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-50"
+            className="shrink-0 rounded-md border border-blue-500/60 bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-1.5 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
           >
             + Event
           </button>

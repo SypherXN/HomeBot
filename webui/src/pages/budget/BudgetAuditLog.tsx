@@ -6,7 +6,7 @@ type Props = {
 
 export default function BudgetAuditLog({ entries }: Props) {
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+    <section className="hb-card p-4">
       <h2 className="mb-3 text-lg font-medium text-white">Audit log</h2>
       {entries.length === 0 ? (
         <p className="text-sm text-slate-500">No audit entries yet.</p>

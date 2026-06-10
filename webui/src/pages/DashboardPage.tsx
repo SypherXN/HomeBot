@@ -27,6 +27,7 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
 import { titleCase } from "../lib/titleCase";
+import { Icon, type IconName } from "../components/icons";
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -80,10 +81,24 @@ type DashboardBundle = {
   };
 };
 
+function greetingLine(): { greeting: string; dateLine: string } {
+  const now = new Date();
+  const hour = now.getHours();
+  const greeting =
+    hour < 5 ? "Up late?" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const dateLine = now.toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+  return { greeting, dateLine };
+}
+
 export default function DashboardPage() {
-  const { token } = useAuth();
+  const { token, webUsername } = useAuth();
   const tok = token.trim();
   const canAuth = tok.length > 0;
+  const { greeting, dateLine } = greetingLine();
   const guildRoster = useDiscordGuildRoster(token);
 
   const [slice, setSlice] = useState<Slice<DashboardBundle>>({ status: "loading" });
@@ -189,10 +204,15 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Dashboard</h1>
-        <p className="mt-1 text-slate-400">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-400">{dateLine}</p>
+        <h1 className="mt-1 text-3xl font-semibold text-white">
+          {greeting}
+          {webUsername ? `, ${titleCase(webUsername)}` : ""}
+        </h1>
+        <p className="mt-1.5 text-slate-400">
           Today at a glance — meals, calendar, lists, budget, and ops. Press{" "}
-          <kbd className="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-300">/</kbd> to search. Configure in{" "}
+          <kbd className="rounded-md bg-slate-800 px-1.5 py-0.5 text-xs text-slate-300">/</kbd> to search.
+          Configure in{" "}
           <Link to="/settings" className="text-blue-400 hover:underline">
             Settings
           </Link>
@@ -271,6 +291,7 @@ export default function DashboardPage() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <SnapshotCard
             to="/meals"
+            icon="meals"
             title="Meals today"
             subtitle="Plan & dinner"
             stat={`${slice.value.mealsToday.length} planned`}
@@ -291,6 +312,7 @@ export default function DashboardPage() {
 
           <SnapshotCard
             to="/buy"
+            icon="buy"
             title="Buy list"
             subtitle="Active shopping items"
             stat={`${slice.value.buy.totalCount} open`}
@@ -314,6 +336,7 @@ export default function DashboardPage() {
           {slice.value.staleBuy.length > 0 ? (
             <SnapshotCard
               to="/buy"
+            icon="alert"
               title="Stale buy items"
               subtitle="On the list 14+ days"
               stat={`${slice.value.staleBuy.length} aging`}
@@ -331,6 +354,7 @@ export default function DashboardPage() {
 
           <SnapshotCard
             to="/wishlist"
+            icon="wishlist"
             title="Wishlist"
             subtitle="Open wishes"
             stat={`${slice.value.wishlist.totalCount} open`}
@@ -353,6 +377,7 @@ export default function DashboardPage() {
 
           <SnapshotCard
             to="/budget"
+            icon="budget"
             title="Budget"
             subtitle="This month"
             stat={
@@ -385,6 +410,7 @@ export default function DashboardPage() {
 
           <SnapshotCard
             to="/money"
+            icon="money"
             title="Money"
             subtitle="Transactions & balance"
             stat={`${slice.value.moneyTx.totalCount} transactions`}
@@ -406,6 +432,7 @@ export default function DashboardPage() {
 
           <SnapshotCard
             to="/calendar"
+            icon="calendar"
             title="Calendar"
             subtitle="Today & upcoming (first page each)"
             stat={`${slice.value.today.totalCount} today · ${slice.value.upcoming.totalCount} upcoming`}
@@ -461,6 +488,7 @@ export default function DashboardPage() {
 
           <SnapshotCard
             to="/calendar"
+            icon="tasks"
             title="Tasks"
             subtitle="Open calendar tasks"
             stat={`${slice.value.tasks.totalCount} open`}
@@ -485,12 +513,14 @@ export default function DashboardPage() {
 
 function SnapshotCard({
   to,
+  icon,
   title,
   subtitle,
   stat,
   children,
 }: {
   to: string;
+  icon: IconName;
   title: string;
   subtitle: string;
   stat: string;
@@ -499,19 +529,29 @@ function SnapshotCard({
   return (
     <Link
       to={to}
-      className="flex flex-col rounded-xl border border-slate-800 bg-slate-900/50 p-4 text-left transition hover:border-slate-600 hover:bg-slate-900"
+      className="group flex flex-col hb-card p-4 text-left transition-all hover:-translate-y-0.5 hover:border-blue-500/40"
     >
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <div className="text-sm font-semibold text-white">{title}</div>
-          <p className="mt-0.5 text-xs text-slate-500">{titleCase(subtitle)}</p>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600/15 text-blue-400 transition-colors group-hover:bg-blue-600/25">
+            <Icon name={icon} className="h-4 w-4" />
+          </span>
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-white">{title}</div>
+            <p className="mt-0.5 truncate text-xs text-slate-500">{titleCase(subtitle)}</p>
+          </div>
         </div>
-        <span className="shrink-0 rounded-md bg-slate-800 px-2 py-0.5 text-xs font-medium text-slate-200">
+        <span className="shrink-0 rounded-full bg-slate-800 px-2.5 py-0.5 text-xs font-medium text-slate-200">
           {stat}
         </span>
       </div>
-      <div className="mt-1 flex-1">{children}</div>
-      <span className="mt-3 text-xs font-medium text-blue-400">Open →</span>
+      <div className="mt-2 flex-1">{children}</div>
+      <span className="mt-3 text-xs font-medium text-blue-400">
+        Open{" "}
+        <span aria-hidden className="inline-block transition-transform group-hover:translate-x-0.5">
+          →
+        </span>
+      </span>
     </Link>
   );
 }
