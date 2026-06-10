@@ -214,10 +214,10 @@ export default function AddItemModal({
                   onChange={(e) => setRecurrence(e.target.value as "" | "daily" | "weekly" | "monthly")}
                   className={inputClass}
                 >
-                  <option value="">none</option>
-                  <option value="daily">daily</option>
-                  <option value="weekly">weekly</option>
-                  <option value="monthly">monthly</option>
+                  <option value="">None</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
                 </select>
               </Field>
             </div>

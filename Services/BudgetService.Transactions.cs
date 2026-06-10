@@ -340,10 +340,18 @@ public partial class BudgetService
         var json = JsonSerializer.Serialize(row);
         using var conn = _db.GetConnection();
         conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        var defaultAccountId = BudgetAccountBalance.ResolveDefaultAccountId(conn);
+        BudgetAccountBalance.RevertTransaction(conn, tx, row, defaultAccountId);
+
         var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
         cmd.CommandText = "DELETE FROM BudgetTransactions WHERE Id=$id";
         cmd.Parameters.AddWithValue("$id", id);
         cmd.ExecuteNonQuery();
+
+        tx.Commit();
 
         _undo.LogAction(actor, "delete", "budget", id, json);
         Audit(actor, "transaction", id, "delete");

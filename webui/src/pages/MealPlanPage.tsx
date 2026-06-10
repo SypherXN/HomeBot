@@ -13,6 +13,7 @@ import {
   type MealPlanEntry,
   type MealRecipe,
 } from "../api";
+import { titleCase } from "../lib/titleCase";
 
 function weekRange(base: Date): { from: string; to: string } {
   const day = base.getDay();
@@ -165,7 +166,7 @@ export default function MealPlanPage() {
               {entries.map((e) => (
                 <li key={e.id} className="flex flex-wrap items-center gap-2 rounded border border-slate-700 px-3 py-2">
                   <span className="text-slate-400">{e.planDate}</span>
-                  <span className="text-slate-200">{e.mealSlot}</span>
+                  <span className="text-slate-200">{titleCase(e.mealSlot)}</span>
                   <span className="text-white">{e.recipeName ?? e.customLabel ?? "—"}</span>
                   {canActor && e.recipeId ? (
                     <button
@@ -198,9 +199,9 @@ export default function MealPlanPage() {
                 onChange={(e) => setPlanSlot(e.target.value)}
                 className="rounded border border-slate-600 bg-slate-950 px-2 py-2 text-slate-100"
               >
-                <option value="breakfast">breakfast</option>
-                <option value="lunch">lunch</option>
-                <option value="dinner">dinner</option>
+                <option value="breakfast">Breakfast</option>
+                <option value="lunch">Lunch</option>
+                <option value="dinner">Dinner</option>
               </select>
               <select
                 value={planRecipeId}

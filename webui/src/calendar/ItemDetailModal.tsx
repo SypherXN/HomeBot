@@ -381,7 +381,7 @@ export default function ItemDetailModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="my-4 w-[min(100%,42rem)] min-w-0 max-w-[calc(100vw-1.5rem)] rounded-2xl border border-slate-800 bg-slate-950 p-4 shadow-2xl sm:my-10 sm:p-6"
+        className="my-4 w-[min(100%,42rem)] min-w-0 max-w-[calc(100vw-1.5rem)] overflow-x-hidden rounded-2xl border border-slate-800 bg-slate-950 p-4 shadow-2xl sm:my-10 sm:p-6"
       >
         <div className="mb-4 flex min-w-0 items-center justify-between gap-2">
           <h2 id="detail-modal-heading" className="min-w-0 flex-1 truncate text-lg font-semibold text-white">
@@ -427,13 +427,13 @@ export default function ItemDetailModal({
                     ))}
                   </select>
                 </Field>
-                <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field label="Start date">
                     <input
                       type="date"
                       value={startDate}
                       onChange={(e) => setStartDate(e.target.value)}
-                      className={inputClass}
+                      className={dateTimeInputClass}
                     />
                   </Field>
                   <Field label="Start time">
@@ -441,18 +441,18 @@ export default function ItemDetailModal({
                       type="time"
                       value={startTime}
                       onChange={(e) => setStartTime(e.target.value)}
-                      className={inputClass}
+                      className={dateTimeInputClass}
                     />
                   </Field>
                 </div>
                 {isRecurringInstance ? (
-                  <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
                     <Field label="End date (this day only, optional)">
                       <input
                         type="date"
                         value={endDate}
                         onChange={(e) => setEndDate(e.target.value)}
-                        className={inputClass}
+                        className={dateTimeInputClass}
                       />
                     </Field>
                     <Field label="End time">
@@ -460,18 +460,18 @@ export default function ItemDetailModal({
                         type="time"
                         value={endTime}
                         onChange={(e) => setEndTime(e.target.value)}
-                        className={inputClass}
+                        className={dateTimeInputClass}
                       />
                     </Field>
                   </div>
                 ) : (
-                  <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
                     <Field label="End date (optional)">
                       <input
                         type="date"
                         value={endDate}
                         onChange={(e) => setEndDate(e.target.value)}
-                        className={inputClass}
+                        className={dateTimeInputClass}
                       />
                     </Field>
                     <Field label="End time">
@@ -479,7 +479,7 @@ export default function ItemDetailModal({
                         type="time"
                         value={endTime}
                         onChange={(e) => setEndTime(e.target.value)}
-                        className={inputClass}
+                        className={dateTimeInputClass}
                       />
                     </Field>
                   </div>
@@ -526,10 +526,10 @@ export default function ItemDetailModal({
                     }
                     className={inputClass}
                   >
-                    <option value="">none</option>
-                    <option value="daily">daily</option>
-                    <option value="weekly">weekly</option>
-                    <option value="monthly">monthly</option>
+                    <option value="">None</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
                   </select>
                 </Field>
                 <Field label="Assignee (Discord user id)">
@@ -632,6 +632,8 @@ export default function ItemDetailModal({
 const inputClass =
   "box-border min-w-0 w-full max-w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
 
+const dateTimeInputClass = `${inputClass} calendar-datetime-input`;
+
 function utcStorageToWallParts(raw: string, zone: string): { date: string; time: string } | null {
   const dt = DateTime.fromFormat(raw.trim(), "yyyy-MM-dd HH:mm", { zone: "utc" }).setZone(zone);
   if (!dt.isValid) return null;
@@ -660,7 +662,7 @@ function normalizeHmDetail(t: string): string {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="block min-w-0 max-w-full">
+    <label className="block min-w-0 max-w-full overflow-hidden">
       <span className="mb-1 block text-xs font-medium text-slate-400">{label}</span>
       {children}
     </label>

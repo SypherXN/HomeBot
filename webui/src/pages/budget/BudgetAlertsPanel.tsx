@@ -1,4 +1,5 @@
 import type { BudgetForecastCategory, BudgetNotificationItem } from "../../api";
+import { titleCase } from "../../lib/titleCase";
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -38,7 +39,7 @@ export default function BudgetAlertsPanel({ forecast, notifications, onDismiss, 
                 key={f.categoryId}
                 className="rounded-lg border border-amber-800/40 bg-amber-950/20 px-3 py-2 text-sm text-amber-100"
               >
-                <strong>{f.categoryName}</strong>: on track for ${formatMoney(f.projectedMonthEnd)} this month
+                <strong>{titleCase(f.categoryName)}</strong>: on track for ${formatMoney(f.projectedMonthEnd)} this month
                 (budget ${formatMoney(f.envelopeTarget!)}, MTD ${formatMoney(f.monthToDate)})
               </li>
             ))}

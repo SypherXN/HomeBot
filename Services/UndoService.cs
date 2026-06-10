@@ -272,12 +272,16 @@ public class UndoService
                     if (item == null)
                         return UndoApplyResult.Fail("❌ Failed to restore budget transaction.");
 
+                    using var tx = conn.BeginTransaction();
+                    var defaultAccountId = BudgetAccountBalance.ResolveDefaultAccountId(conn);
+
                     var cmd = conn.CreateCommand();
+                    cmd.Transaction = tx;
                     cmd.CommandText = @"
                         INSERT INTO BudgetTransactions
-                        (Id, Type, Amount, AmountInput, CategoryId, SpentByUserId, AccountId, Note, Merchant,
-                         TransactionDate, ClearedAt, IsPending, Currency, ExchangeRateToHome)
-                        VALUES ($id, $type, $amt, $input, $cat, $user, $acc, $note, $merchant, $date,
+                        (Id, Type, Amount, AmountInput, CategoryId, SpentByUserId, AccountId, TransferToAccountId,
+                         Note, ReceiptUrl, Merchant, TransactionDate, ClearedAt, IsPending, Currency, ExchangeRateToHome)
+                        VALUES ($id, $type, $amt, $input, $cat, $user, $acc, $xfer, $note, $receipt, $merchant, $date,
                                 $cleared, $pend, $cur, $rate)";
                     cmd.Parameters.AddWithValue("$id", id);
                     cmd.Parameters.AddWithValue("$type", item.Type);
@@ -286,7 +290,9 @@ public class UndoService
                     cmd.Parameters.AddWithValue("$cat", (object?)item.CategoryId ?? DBNull.Value);
                     cmd.Parameters.AddWithValue("$user", (long)item.SpentByUserId);
                     cmd.Parameters.AddWithValue("$acc", (object?)item.AccountId ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("$xfer", (object?)item.TransferToAccountId ?? DBNull.Value);
                     cmd.Parameters.AddWithValue("$note", (object?)item.Note ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("$receipt", (object?)item.ReceiptUrl ?? DBNull.Value);
                     cmd.Parameters.AddWithValue("$merchant", (object?)item.Merchant ?? DBNull.Value);
                     cmd.Parameters.AddWithValue("$date", item.TransactionDate);
                     cmd.Parameters.AddWithValue("$cleared", (object?)item.ClearedAt ?? DBNull.Value);
@@ -294,14 +300,34 @@ public class UndoService
                     cmd.Parameters.AddWithValue("$cur", item.Currency);
                     cmd.Parameters.AddWithValue("$rate", item.ExchangeRateToHome);
                     cmd.ExecuteNonQuery();
+
+                    BudgetAccountBalance.ApplyTransaction(conn, tx, item, defaultAccountId);
+                    tx.Commit();
                     applied = true;
                 }
                 else if (type == "create")
                 {
-                    var cmd = conn.CreateCommand();
-                    cmd.CommandText = "DELETE FROM BudgetTransactions WHERE Id = $id";
-                    cmd.Parameters.AddWithValue("$id", id);
-                    cmd.ExecuteNonQuery();
+                    if (BudgetAccountBalance.TryLoadTransaction(conn, id, out var existing))
+                    {
+                        using var tx = conn.BeginTransaction();
+                        var defaultAccountId = BudgetAccountBalance.ResolveDefaultAccountId(conn);
+                        BudgetAccountBalance.RevertTransaction(conn, tx, existing, defaultAccountId);
+
+                        var cmd = conn.CreateCommand();
+                        cmd.Transaction = tx;
+                        cmd.CommandText = "DELETE FROM BudgetTransactions WHERE Id = $id";
+                        cmd.Parameters.AddWithValue("$id", id);
+                        cmd.ExecuteNonQuery();
+                        tx.Commit();
+                    }
+                    else
+                    {
+                        var cmd = conn.CreateCommand();
+                        cmd.CommandText = "DELETE FROM BudgetTransactions WHERE Id = $id";
+                        cmd.Parameters.AddWithValue("$id", id);
+                        cmd.ExecuteNonQuery();
+                    }
+
                     applied = true;
                 }
             }

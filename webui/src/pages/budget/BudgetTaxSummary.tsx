@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { getBudgetTaxSummary, type BudgetTaxSummaryLine } from "../../api";
+import { titleCase } from "../../lib/titleCase";
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -62,7 +63,7 @@ export default function BudgetTaxSummary({ token }: Props) {
           <ul className="space-y-1 text-sm text-slate-300">
             {lines.map((l) => (
               <li key={l.categoryId} className="flex justify-between">
-                <span>{l.categoryName}</span>
+                <span>{titleCase(l.categoryName)}</span>
                 <span>${formatMoney(l.total)}</span>
               </li>
             ))}

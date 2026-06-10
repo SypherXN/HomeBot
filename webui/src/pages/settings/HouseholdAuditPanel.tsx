@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { getHouseholdAudit, type HouseholdAuditEntry } from "../../api";
+import { titleCase } from "../../lib/titleCase";
 
 type Props = { token: string };
 
@@ -31,7 +32,9 @@ export default function HouseholdAuditPanel({ token }: Props) {
         {entries.map((e) => (
           <li key={e.id}>
             <span className="text-slate-500">{e.createdAt}</span>{" "}
-            <span className="text-slate-200">{e.category}/{e.action}</span>
+            <span className="text-slate-200">
+              {titleCase(e.category)}/{titleCase(e.action)}
+            </span>
             {e.actorUsername ? <> · {e.actorUsername}</> : null}
             {e.detail ? <> · {e.detail}</> : null}
           </li>

@@ -1094,8 +1094,8 @@ export default function BuyPage() {
               onChange={(e) => setRecurCadence(e.target.value as "weekly" | "daily")}
               className="rounded border border-slate-600 bg-slate-950 px-2 py-2 text-slate-100"
             >
-              <option value="weekly">weekly</option>
-              <option value="daily">daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="daily">Daily</option>
             </select>
             <button
               type="button"

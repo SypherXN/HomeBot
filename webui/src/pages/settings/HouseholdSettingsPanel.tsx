@@ -6,6 +6,7 @@ import {
   putHouseholdChannelBinding,
   putHouseholdSetting,
 } from "../../api";
+import { titleCase } from "../../lib/titleCase";
 
 const FEATURES = ["buy", "wishlist", "money", "budget", "calendar", "audit"] as const;
 
@@ -137,7 +138,7 @@ export default function HouseholdSettingsPanel({ token }: Props) {
         <ul className="space-y-3">
           {FEATURES.map((feature) => (
             <li key={feature} className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <span className="w-24 shrink-0 text-sm text-slate-400">{feature}</span>
+              <span className="w-24 shrink-0 text-sm text-slate-400">{titleCase(feature)}</span>
               <input
                 value={bindings[feature] ?? ""}
                 onChange={(e) => setBindings((b) => ({ ...b, [feature]: e.target.value }))}

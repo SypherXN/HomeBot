@@ -82,6 +82,56 @@ public sealed class BudgetServicePolishTests : IDisposable
     }
 
     [Fact]
+    public void DeleteTransaction_reverts_account_balance()
+    {
+        var checking = _budget.CreateAccount("Checking", "checking", "USD", null, Actor);
+        var catId = _budget.CreateCategory("Food", null, null, "household", false, Actor);
+        var txId = _budget.CreateTransaction(
+            "expense",
+            "25",
+            catId,
+            Actor,
+            "2026-03-01",
+            null,
+            null,
+            null,
+            checking,
+            false,
+            "USD",
+            1,
+            null,
+            null,
+            Actor);
+
+        var afterCreate = Assert.Single(_budget.GetAccounts(), a => a.Id == checking);
+        Assert.Equal(-25, afterCreate.CurrentBalance);
+
+        _budget.DeleteTransaction(txId, Actor);
+
+        var afterDelete = Assert.Single(_budget.GetAccounts(), a => a.Id == checking);
+        Assert.Equal(0, afterDelete.CurrentBalance);
+        Assert.Null(_budget.GetTransactionById(txId));
+    }
+
+    [Fact]
+    public void DeleteTransaction_reverts_transfer_balances()
+    {
+        var checking = _budget.CreateAccount("Checking", "checking", "USD", null, Actor);
+        var savings = _budget.CreateAccount("Savings", "savings", "USD", null, Actor);
+        var transferId = _budget.CreateTransfer("100", checking, savings, "2026-03-01", "move", Actor);
+
+        var afterTransfer = _budget.GetAccounts();
+        Assert.Equal(-100, Assert.Single(afterTransfer, a => a.Id == checking).CurrentBalance);
+        Assert.Equal(100, Assert.Single(afterTransfer, a => a.Id == savings).CurrentBalance);
+
+        _budget.DeleteTransaction(transferId, Actor);
+
+        var afterDelete = _budget.GetAccounts();
+        Assert.Equal(0, Assert.Single(afterDelete, a => a.Id == checking).CurrentBalance);
+        Assert.Equal(0, Assert.Single(afterDelete, a => a.Id == savings).CurrentBalance);
+    }
+
+    [Fact]
     public void UpdateTransaction_changes_date_spender_and_tags()
     {
         var catId = _budget.CreateCategory("Food", null, null, "household", false, Actor);

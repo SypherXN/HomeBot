@@ -10,6 +10,30 @@
   #root {
     @apply min-h-screen;
   }
+
+  /* Native date/time pickers have a large intrinsic width on WebKit (iOS PWA). */
+  input[type="date"].calendar-datetime-input,
+  input[type="time"].calendar-datetime-input {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  input[type="date"].calendar-datetime-input::-webkit-date-and-time-value,
+  input[type="time"].calendar-datetime-input::-webkit-date-and-time-value {
+    min-width: 0;
+    text-align: left;
+  }
+  input[type="date"].calendar-datetime-input::-webkit-datetime-edit,
+  input[type="time"].calendar-datetime-input::-webkit-datetime-edit {
+    min-width: 0;
+    overflow: hidden;
+  }
+  input[type="date"].calendar-datetime-input::-webkit-datetime-edit-fields-wrapper,
+  input[type="time"].calendar-datetime-input::-webkit-datetime-edit-fields-wrapper {
+    min-width: 0;
+  }
 }
 
 /*

@@ -8,6 +8,7 @@ import {
   type BudgetTaxSummaryLine,
   type BudgetTrendPoint,
 } from "../../api";
+import { titleCase } from "../../lib/titleCase";
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -104,7 +105,7 @@ export default function BudgetAnnualSnapshot({ token, year }: Props) {
                   <ul className="space-y-1 text-sm text-slate-300">
                     {taxLines.map((l) => (
                       <li key={l.categoryId} className="flex justify-between rounded border border-slate-800 px-2 py-1">
-                        <span>{l.categoryName}</span>
+                        <span>{titleCase(l.categoryName)}</span>
                         <span>${formatMoney(l.total)}</span>
                       </li>
                     ))}

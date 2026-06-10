@@ -26,6 +26,7 @@ import {
 } from "../api";
 import { useAuth } from "../auth/AuthContext";
 import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
+import { titleCase } from "../lib/titleCase";
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -280,7 +281,7 @@ export default function DashboardPage() {
               ) : (
                 slice.value.mealsToday.map((e) => (
                   <li key={e.id} className="truncate">
-                    <span className="text-slate-500">{e.mealSlot}:</span>{" "}
+                    <span className="text-slate-500">{titleCase(e.mealSlot)}:</span>{" "}
                     {e.customLabel || e.recipeName || "TBD"}
                   </li>
                 ))
@@ -366,7 +367,7 @@ export default function DashboardPage() {
                   Income ${formatMoney(slice.value.budgetMonth.income)} · spent $
                   {formatMoney(slice.value.budgetMonth.expenses)}
                 </p>
-                <p>Top category: {slice.value.budgetMonth.topCategory}</p>
+                <p>Top category: {titleCase(slice.value.budgetMonth.topCategory)}</p>
                 {slice.value.budgetMonth.goalsCount > 0 && (
                   <p>
                     {slice.value.budgetMonth.goalsCount} savings goal
@@ -503,7 +504,7 @@ function SnapshotCard({
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="text-sm font-semibold text-white">{title}</div>
-          <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>
+          <p className="mt-0.5 text-xs text-slate-500">{titleCase(subtitle)}</p>
         </div>
         <span className="shrink-0 rounded-md bg-slate-800 px-2 py-0.5 text-xs font-medium text-slate-200">
           {stat}

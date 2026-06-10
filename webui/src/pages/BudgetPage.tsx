@@ -4,6 +4,7 @@ import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recha
 import { useAuth } from "../auth/AuthContext";
 import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
 import { validActorId } from "../lib/validation";
+import { titleCase } from "../lib/titleCase";
 import {
   deleteBudgetTransaction,
   postUndo,
@@ -223,7 +224,11 @@ export default function BudgetPage() {
     void load();
   }, [load]);
 
-  const chartData = chartMode === "category" ? byCategory : byUser;
+  const chartData = (chartMode === "category" ? byCategory : byUser).map((slice) => ({
+    key: slice.key,
+    label: titleCase(slice.label),
+    total: slice.total,
+  }));
 
   async function handleDelete(row: BudgetTransactionListItem) {
     if (!tok || !actor) return;
@@ -313,7 +318,7 @@ export default function BudgetPage() {
             className="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
           >
             <option value="household">Household</option>
-            <option value="all">Include personal</option>
+            <option value="all">Include Personal</option>
           </select>
         </div>
         {actor && (
@@ -399,14 +404,14 @@ export default function BudgetPage() {
                   onClick={() => setChartMode("category")}
                   className={`rounded-lg px-3 py-1 text-sm ${chartMode === "category" ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-300"}`}
                 >
-                  By category
+                  By Category
                 </button>
                 <button
                   type="button"
                   onClick={() => setChartMode("user")}
                   className={`rounded-lg px-3 py-1 text-sm ${chartMode === "user" ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-300"}`}
                 >
-                  By spender
+                  By Spender
                 </button>
               </div>
             </div>
@@ -423,10 +428,9 @@ export default function BudgetPage() {
                       cx="50%"
                       cy="50%"
                       outerRadius={100}
-                      label={(entry) => {
-                        const name = String(entry.name ?? "");
-                        const pct = typeof entry.percent === "number" ? (entry.percent * 100).toFixed(0) : "0";
-                        return `${name} ${pct}%`;
+                      label={({ name, percent }) => {
+                        const pct = typeof percent === "number" ? (percent * 100).toFixed(0) : "0";
+                        return `${String(name ?? "")} ${pct}%`;
                       }}
                     >
                       {chartData.map((_, i) => (
@@ -461,8 +465,8 @@ export default function BudgetPage() {
                   onChange={(e) => setTrendGroupBy(e.target.value as "category" | "user")}
                   className="rounded-lg border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
                 >
-                  <option value="category">By category</option>
-                  <option value="user">By spender</option>
+                  <option value="category">By Category</option>
+                  <option value="user">By Spender</option>
                 </select>
               </div>
             </div>
@@ -520,11 +524,13 @@ export default function BudgetPage() {
                         <span className={row.type === "income" ? "text-emerald-400" : "text-amber-300"}>
                           ${formatMoney(row.amount)}
                         </span>{" "}
-                        <span className="text-white">{row.categoryName ?? row.type}</span>
+                        <span className="text-white">
+                          {titleCase(row.categoryName ?? row.type)}
+                        </span>
                         <span className="text-slate-500"> · {row.spentByMemberLabel}</span>
                         {row.merchant && <span className="text-slate-500"> · {row.merchant}</span>}
                         {row.isPending && (
-                          <span className="ml-1 rounded bg-amber-900/50 px-1 text-xs text-amber-200">pending</span>
+                          <span className="ml-1 rounded bg-amber-900/50 px-1 text-xs text-amber-200">Pending</span>
                         )}
                       </div>
                       <span className="flex gap-2">
@@ -652,7 +658,7 @@ export default function BudgetPage() {
               <ul className="grid gap-1 text-sm text-slate-300 sm:grid-cols-2">
                 {taxSummary.map((t) => (
                   <li key={t.categoryId} className="flex justify-between rounded border border-slate-800 px-2 py-1">
-                    <span>{t.categoryName}</span>
+                    <span>{titleCase(t.categoryName)}</span>
                     <span>${formatMoney(t.total)}</span>
                   </li>
                 ))}

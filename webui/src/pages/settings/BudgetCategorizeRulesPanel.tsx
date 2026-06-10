@@ -6,6 +6,7 @@ import {
   postBudgetCategorizeRule,
   type BudgetCategorizeRule,
 } from "../../api";
+import { titleCase } from "../../lib/titleCase";
 
 type Props = {
   token: string;
@@ -46,7 +47,7 @@ export default function BudgetCategorizeRulesPanel({ token }: Props) {
         {rules.filter((r) => r.isActive).map((r) => (
           <li key={r.id} className="flex flex-wrap items-center gap-2">
             <span className="text-slate-200">
-              {r.matchField} contains &quot;{r.matchContains}&quot; → {r.categoryName}
+              {titleCase(r.matchField)} contains &quot;{r.matchContains}&quot; → {titleCase(r.categoryName)}
             </span>
             <button
               type="button"
@@ -66,8 +67,8 @@ export default function BudgetCategorizeRulesPanel({ token }: Props) {
           onChange={(e) => setMatchField(e.target.value as "merchant" | "note")}
           className="rounded border border-slate-600 bg-slate-950 px-2 py-1.5 text-slate-100"
         >
-          <option value="merchant">merchant</option>
-          <option value="note">note</option>
+          <option value="merchant">Merchant</option>
+          <option value="note">Note</option>
         </select>
         <input
           value={matchContains}
