@@ -1,14 +1,102 @@
 @import "tailwindcss";
 
+/*
+ * HomeBot design system — "ink & iris".
+ * The whole app is written with slate-* surfaces and blue-* accents, so the
+ * identity is defined here by re-pointing those Tailwind ramps at a custom
+ * indigo-ink palette (surfaces) and an iris-violet accent ramp.
+ */
+@theme {
+  --font-sans: "Figtree", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Sora", "Figtree", ui-sans-serif, system-ui, sans-serif;
+
+  /* Ink ramp (replaces slate) — deep blue-violet charcoal */
+  --color-slate-950: #070912;
+  --color-slate-900: #0d1120;
+  --color-slate-800: #161b31;
+  --color-slate-700: #242c4d;
+  --color-slate-600: #344068;
+  --color-slate-500: #5d6890;
+  --color-slate-400: #8f97ba;
+  --color-slate-300: #b9bfd8;
+  --color-slate-200: #d7dbeb;
+  --color-slate-100: #eaecf6;
+  --color-slate-50: #f5f6fb;
+
+  /* Iris ramp (replaces blue) — signature violet accent */
+  --color-blue-100: #e7e3ff;
+  --color-blue-200: #d4ccff;
+  --color-blue-300: #b5a6ff;
+  --color-blue-400: #9b85ff;
+  --color-blue-500: #8161fb;
+  --color-blue-600: #6d47f0;
+  --color-blue-700: #5c36d6;
+  --color-blue-800: #4a2caa;
+  --color-blue-900: #3b2581;
+  --color-blue-950: #221650;
+}
+
 @layer base {
   html.dark body {
     @apply m-0 min-h-screen bg-slate-950 text-slate-100 antialiased;
   }
   html:not(.dark) body {
-    @apply m-0 min-h-screen bg-[#eef2f7] text-slate-900 antialiased;
+    @apply m-0 min-h-screen bg-[#eef0f7] text-slate-900 antialiased;
+  }
+
+  /*
+   * Aurora atmosphere on a fixed pseudo-element instead of
+   * `background-attachment: fixed`, which iOS Safari does not support.
+   */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+  }
+  html.dark body::before {
+    background-image:
+      radial-gradient(50rem 28rem at 12% -8%, rgb(109 71 240 / 0.14), transparent 60%),
+      radial-gradient(44rem 26rem at 88% -10%, rgb(34 211 238 / 0.08), transparent 60%);
+  }
+  html:not(.dark) body::before {
+    background-image:
+      radial-gradient(50rem 28rem at 12% -8%, rgb(109 71 240 / 0.07), transparent 60%),
+      radial-gradient(44rem 26rem at 88% -10%, rgb(14 165 233 / 0.06), transparent 60%);
   }
   #root {
     @apply min-h-screen;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  ::selection {
+    background-color: rgb(109 71 240 / 0.35);
+  }
+  html:not(.dark) ::selection {
+    background-color: rgb(109 71 240 / 0.18);
+  }
+
+  /* Slim, palette-matched scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(52 64 104 / 0.7) transparent;
+  }
+  html:not(.dark) * {
+    scrollbar-color: rgb(148 163 184 / 0.7) transparent;
   }
 
   /* Native date/time pickers have a large intrinsic width on WebKit (iOS PWA). */
@@ -36,10 +124,50 @@
   }
 }
 
+@layer components {
+  /* Primary surface card — replaces `rounded-xl border border-slate-800 bg-slate-900/*` */
+  .hb-card {
+    @apply rounded-2xl border border-slate-800/80 bg-slate-900/55;
+    background-image: linear-gradient(165deg, rgb(255 255 255 / 0.03), transparent 32%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.04),
+      0 12px 32px -20px rgb(0 0 0 / 0.65);
+  }
+
+  /* Form field — replaces `rounded* border border-slate-600 bg-slate-950` */
+  .hb-input {
+    @apply rounded-lg border border-slate-700 bg-slate-950/70 text-slate-100 placeholder:text-slate-500;
+    @apply outline-none transition-[border-color,box-shadow] focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25;
+  }
+
+  /* Soft (secondary) button surface */
+  .hb-btn-soft {
+    @apply border border-slate-600/70 bg-slate-800/80 transition-colors hover:bg-slate-700/80;
+  }
+
+  /* Modal backdrop */
+  .hb-overlay {
+    background-color: rgb(7 9 18 / 0.7);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+  }
+
+  /* Horizontal scrollers (mobile nav strip) that should not show a scrollbar */
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /*
  * Light theme — maps dark-first Tailwind utilities to a readable light palette.
  * Surfaces: white cards on cool gray canvas. Semantic blocks use soft tints, not dark-mode inversions.
  */
+html.dark {
+  color-scheme: dark;
+}
 html:not(.dark) {
   color-scheme: light;
 }
@@ -65,7 +193,8 @@ html:not(.dark) .bg-slate-900\/90 {
   background-color: #ffffff;
 }
 html:not(.dark) .bg-slate-800,
-html:not(.dark) .bg-slate-800\/80 {
+html:not(.dark) .bg-slate-800\/80,
+html:not(.dark) .bg-slate-800\/60 {
   background-color: #f1f5f9;
 }
 html:not(.dark) .bg-slate-700 {
@@ -75,10 +204,38 @@ html:not(.dark) .bg-slate-600 {
   background-color: #cbd5e1;
 }
 
+html:not(.dark) .hb-card {
+  background-color: #ffffff;
+  background-image: none;
+  border-color: #e4e8f1;
+  box-shadow:
+    0 1px 2px rgb(15 23 42 / 0.04),
+    0 10px 28px -20px rgb(15 23 42 / 0.14);
+}
+html:not(.dark) .hb-input {
+  background-color: #ffffff;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+html:not(.dark) .hb-btn-soft {
+  background-color: #f1f5f9;
+  border-color: #cbd5e1;
+}
+html:not(.dark) .hb-btn-soft:hover {
+  background-color: #e2e8f0;
+}
+html:not(.dark) .hb-overlay {
+  background-color: rgb(15 23 42 / 0.35);
+}
+
 /* ——— Borders ——— */
 html:not(.dark) .border-slate-800,
+html:not(.dark) .border-slate-800\/80,
+html:not(.dark) .border-slate-800\/60,
 html:not(.dark) .border-slate-700,
-html:not(.dark) .border-slate-600 {
+html:not(.dark) .border-slate-700\/80,
+html:not(.dark) .border-slate-600,
+html:not(.dark) .border-slate-600\/70 {
   border-color: #e2e8f0;
 }
 html:not(.dark) .border-dashed.border-slate-700 {
@@ -106,10 +263,20 @@ html:not(.dark) .text-slate-600 {
   color: #94a3b8;
 }
 
+/* ——— Iris accent in light mode (readable on white) ——— */
+html:not(.dark) .text-blue-300,
+html:not(.dark) .text-blue-400 {
+  color: #5b32cc;
+}
+html:not(.dark) .hover\:text-blue-300:hover {
+  color: #4a26ad;
+}
+
 /* ——— Hovers ——— */
 html:not(.dark) .hover\:bg-slate-900:hover,
 html:not(.dark) .hover\:bg-slate-800:hover,
-html:not(.dark) .hover\:bg-slate-700:hover {
+html:not(.dark) .hover\:bg-slate-700:hover,
+html:not(.dark) .hover\:bg-slate-700\/80:hover {
   background-color: #e2e8f0;
 }
 html:not(.dark) .hover\:text-slate-100:hover,
@@ -209,32 +376,32 @@ html:not(.dark) .hover\:bg-emerald-950\/60:hover {
   background-color: #d1fae5;
 }
 
-/* ——— Semantic: blue (primary actions, calendar events) ——— */
+/* ——— Semantic: iris (primary actions, calendar events) ——— */
 html:not(.dark) .bg-blue-950\/40 {
-  background-color: #eff6ff;
+  background-color: #f3f0ff;
 }
 html:not(.dark) .border-blue-800\/60 {
-  border-color: #93c5fd;
+  border-color: #c4b5fd;
 }
 html:not(.dark) .text-blue-100,
 html:not(.dark) .text-blue-200 {
-  color: #1e40af;
+  color: #4c2dbd;
 }
 html:not(.dark) .bg-blue-900\/40,
 html:not(.dark) .bg-blue-900\/60,
 html:not(.dark) .hover\:bg-blue-800\/70:hover {
-  background-color: #dbeafe;
+  background-color: #ece9fe;
 }
 html:not(.dark) .bg-blue-700\/70,
 html:not(.dark) .hover\:bg-blue-600\/80:hover {
-  background-color: #2563eb;
+  background-color: #6d47f0;
 }
 html:not(.dark) .bg-blue-700\/70.text-white,
 html:not(.dark) .bg-blue-600.text-white {
   color: #ffffff;
 }
 html:not(.dark) .bg-blue-600.text-white {
-  background-color: #2563eb;
+  background-color: #6d47f0;
 }
 
 /* ——— Semantic: sky ——— */
@@ -259,22 +426,22 @@ html:not(.dark) .backdrop-blur {
 
 /* ——— Active nav (keep contrast) ——— */
 html:not(.dark) .bg-slate-800.text-white {
-  background-color: #dbeafe;
-  color: #1e3a8a;
+  background-color: #ece9fe;
+  color: #4c2dbd;
 }
 
-/* Primary buttons stay white-on-blue */
+/* Primary buttons stay white-on-iris */
 html:not(.dark) .bg-blue-600.text-white,
 html:not(.dark) .bg-blue-700.text-white,
 html:not(.dark) .border-blue-600.bg-blue-700.text-white {
   color: #ffffff;
 }
 html:not(.dark) .bg-blue-700 {
-  background-color: #1d4ed8;
+  background-color: #5c36d6;
 }
 html:not(.dark) .hover\:bg-blue-600:hover,
 html:not(.dark) .hover\:bg-blue-500:hover {
-  background-color: #2563eb;
+  background-color: #7d5cf4;
 }
 
 /* Legacy console layout — migrated incrementally to Tailwind utilities */

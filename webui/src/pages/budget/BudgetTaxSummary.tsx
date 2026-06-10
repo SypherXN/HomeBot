@@ -30,7 +30,7 @@ export default function BudgetTaxSummary({ token }: Props) {
   const total = lines.reduce((s, l) => s + l.total, 0);
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+    <section className="hb-card p-4">
       <h2 className="mb-3 text-lg font-medium text-white">Tax-deductible summary</h2>
       <p className="mb-3 text-xs text-slate-500">
         Totals expenses in categories marked tax-deductible for the selected year.
@@ -42,13 +42,13 @@ export default function BudgetTaxSummary({ token }: Props) {
             type="number"
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
-            className="ml-1 w-24 rounded border border-slate-600 bg-slate-950 px-2 py-1 text-slate-100"
+            className="ml-1 w-24 hb-input px-2 py-1 text-slate-100"
           />
         </label>
         <button
           type="button"
           onClick={() => void load()}
-          className="rounded bg-blue-600 px-3 py-1 text-sm text-white"
+          className="rounded bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-1 text-sm text-white"
         >
           Load
         </button>

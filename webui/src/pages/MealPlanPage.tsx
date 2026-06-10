@@ -97,7 +97,7 @@ export default function MealPlanPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Meal planning</h1>
+        <h1 className="text-3xl font-semibold text-white">Meal planning</h1>
         <p className="mt-1 text-sm text-slate-400">
           Recipes, weekly plan, and one-click add ingredients to the{" "}
           <Link to="/buy" className="text-blue-400 hover:underline">
@@ -117,7 +117,7 @@ export default function MealPlanPage() {
 
       {canAuth && (
         <>
-          <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+          <section className="hb-card p-4">
             <h2 className="text-lg font-semibold text-white">Recipes</h2>
             <ul className="mt-3 space-y-2 text-sm text-slate-300">
               {recipes.map((r) => (
@@ -139,26 +139,26 @@ export default function MealPlanPage() {
                 value={recipeName}
                 onChange={(e) => setRecipeName(e.target.value)}
                 placeholder="Recipe name"
-                className="w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+                className="w-full hb-input px-3 py-2 text-slate-100"
               />
               <textarea
                 value={ingredientsText}
                 onChange={(e) => setIngredientsText(e.target.value)}
                 placeholder={"Ingredients (one per line, optional qty first)\ne.g. 2 cups milk\nonions"}
                 rows={4}
-                className="w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                className="w-full hb-input px-3 py-2 text-sm text-slate-100"
               />
               <button
                 type="button"
                 onClick={() => void addRecipe()}
-                className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm text-white hover:bg-slate-700"
+                className="rounded-lg hb-btn-soft px-4 py-2 text-sm text-white hover:bg-slate-700"
               >
                 Add recipe
               </button>
             </div>
           </section>
 
-          <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+          <section className="hb-card p-4">
             <h2 className="text-lg font-semibold text-white">
               Plan ({range.from} → {range.to})
             </h2>
@@ -192,12 +192,12 @@ export default function MealPlanPage() {
                 type="date"
                 value={planDate}
                 onChange={(e) => setPlanDate(e.target.value)}
-                className="rounded border border-slate-600 bg-slate-950 px-2 py-2 text-slate-100"
+                className="hb-input px-2 py-2 text-slate-100"
               />
               <select
                 value={planSlot}
                 onChange={(e) => setPlanSlot(e.target.value)}
-                className="rounded border border-slate-600 bg-slate-950 px-2 py-2 text-slate-100"
+                className="hb-input px-2 py-2 text-slate-100"
               >
                 <option value="breakfast">Breakfast</option>
                 <option value="lunch">Lunch</option>
@@ -206,7 +206,7 @@ export default function MealPlanPage() {
               <select
                 value={planRecipeId}
                 onChange={(e) => setPlanRecipeId(e.target.value)}
-                className="min-w-[10rem] rounded border border-slate-600 bg-slate-950 px-2 py-2 text-slate-100"
+                className="min-w-[10rem] hb-input px-2 py-2 text-slate-100"
               >
                 <option value="">Recipe…</option>
                 {recipes.map((r) => (
@@ -228,7 +228,7 @@ export default function MealPlanPage() {
               <button
                 type="button"
                 onClick={() => void addPlanEntry()}
-                className="rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm text-white"
+                className="rounded-lg hb-btn-soft px-4 py-2 text-sm text-white"
               >
                 Add to plan
               </button>

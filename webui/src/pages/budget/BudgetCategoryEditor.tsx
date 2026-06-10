@@ -36,13 +36,13 @@ export default function BudgetCategoryEditor({ token, actor, categories, onSaved
               <input
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
-                className="mb-2 w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-slate-100"
+                className="mb-2 w-full hb-input px-2 py-1 text-slate-100"
               />
               <div className="mb-2 flex flex-wrap gap-2">
                 <select
                   value={editVisibility}
                   onChange={(e) => setEditVisibility(e.target.value)}
-                  className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-slate-100"
+                  className="hb-input px-2 py-1 text-slate-100"
                 >
                   <option value="household">Household</option>
                   <option value="personal">Personal</option>
@@ -118,7 +118,7 @@ export default function BudgetCategoryEditor({ token, actor, categories, onSaved
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="New category"
-            className="flex-1 rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+            className="flex-1 hb-input px-3 py-2 text-slate-100"
           />
           <button type="submit" className="rounded-lg bg-slate-700 px-4 py-2 text-white">
             Add

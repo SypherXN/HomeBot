@@ -34,7 +34,7 @@ export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent
   });
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/40">
+    <div className="overflow-hidden hb-card">
       <div
         className="grid border-b border-slate-800 bg-slate-900/60 text-center text-xs"
         style={{ gridTemplateColumns: `64px repeat(${dayYmds.length}, minmax(0, 1fr))` }}

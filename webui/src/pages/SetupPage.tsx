@@ -156,9 +156,9 @@ export default function SetupPage() {
     password.length >= 8;
 
   return (
-    <div className="mx-auto max-w-lg space-y-6">
+    <div className="mx-auto max-w-lg space-y-6 pt-4 sm:pt-8">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Household accounts</h1>
+        <h1 className="text-3xl font-semibold text-white">Household accounts</h1>
         <p className="mt-1 text-sm text-slate-400">
           The server still needs <code className="rounded bg-slate-900 px-1">HOMEBOT_WEB_JWT_SECRET</code> (32+ bytes)
           to sign sessions — that value never goes on your phone; only the signed token is stored in the browser (same
@@ -223,7 +223,7 @@ export default function SetupPage() {
               type="button"
               disabled={busy}
               onClick={() => void startDiscord()}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+              className="rounded-md bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
             >
               {busy ? "…" : "Get verification code"}
             </button>
@@ -275,7 +275,7 @@ export default function SetupPage() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   autoComplete="username"
-                  className="mt-1 w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-slate-100"
+                  className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
                 />
               </div>
               <div>
@@ -285,7 +285,7 @@ export default function SetupPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="new-password"
-                  className="mt-1 w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-slate-100"
+                  className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
                 />
               </div>
               <button
@@ -310,7 +310,7 @@ export default function SetupPage() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
-              className="mt-1 w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-slate-100"
+              className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
             />
           </div>
           <div>
@@ -320,7 +320,7 @@ export default function SetupPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
-              className="mt-1 w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-slate-100"
+              className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
             />
           </div>
           <div>
@@ -330,7 +330,7 @@ export default function SetupPage() {
               onChange={(e) => setDiscordUserId(e.target.value)}
               inputMode="numeric"
               placeholder="e.g. from Discord developer mode"
-              className="mt-1 w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-slate-100"
+              className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
             />
           </div>
           <div>
@@ -340,13 +340,13 @@ export default function SetupPage() {
               onChange={(e) => setSetupToken(e.target.value)}
               type="password"
               autoComplete="off"
-              className="mt-1 w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-slate-100"
+              className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
             />
           </div>
           <button
             type="submit"
             disabled={busy}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+            className="rounded-md bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
           >
             {busy ? "Creating…" : "Create first user"}
           </button>
@@ -363,7 +363,7 @@ export default function SetupPage() {
               onChange={(e) => setInviteToken(e.target.value)}
               type="password"
               autoComplete="off"
-              className="mt-1 w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-slate-100"
+              className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
             />
           </div>
           <div>
@@ -372,7 +372,7 @@ export default function SetupPage() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
-              className="mt-1 w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-slate-100"
+              className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
             />
           </div>
           <div>
@@ -382,7 +382,7 @@ export default function SetupPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
-              className="mt-1 w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-slate-100"
+              className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
             />
           </div>
           <div>
@@ -391,13 +391,13 @@ export default function SetupPage() {
               value={discordUserId}
               onChange={(e) => setDiscordUserId(e.target.value)}
               inputMode="numeric"
-              className="mt-1 w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-slate-100"
+              className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
             />
           </div>
           <button
             type="submit"
             disabled={busy}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+            className="rounded-md bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
           >
             {busy ? "Creating…" : "Register"}
           </button>

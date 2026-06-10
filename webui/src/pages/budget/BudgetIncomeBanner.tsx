@@ -20,7 +20,7 @@ export default function BudgetIncomeBanner({ token, actor, month, plan, onSaved 
   const overAllocated = plan != null && plan.availableToBudget < 0;
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+    <section className="hb-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-medium text-white">Income plan — {month}</h2>
@@ -72,10 +72,10 @@ export default function BudgetIncomeBanner({ token, actor, month, plan, onSaved 
             <input
               value={planned}
               onChange={(e) => setPlanned(e.target.value)}
-              className="w-32 rounded border border-slate-600 bg-slate-950 px-2 py-1 text-slate-100"
+              className="w-32 hb-input px-2 py-1 text-slate-100"
             />
           </label>
-          <button type="submit" className="rounded bg-blue-600 px-3 py-1 text-sm text-white">
+          <button type="submit" className="rounded bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-1 text-sm text-white">
             Save
           </button>
         </form>

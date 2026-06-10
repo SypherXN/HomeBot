@@ -1,5 +1,5 @@
 /* Offline shell + Web Push for HomeBot PWA */
-const CACHE = "homebot-static-v4";
+const CACHE = "homebot-static-v5";
 
 function appUrl(path) {
   return new URL(path || "/", self.registration.scope).href;

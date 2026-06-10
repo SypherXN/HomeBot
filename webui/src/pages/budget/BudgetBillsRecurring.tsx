@@ -82,7 +82,7 @@ export default function BudgetBillsRecurring({
   }
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+    <section className="hb-card p-4">
       <h2 className="mb-4 text-lg font-medium text-white">Bills & recurring</h2>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -99,26 +99,26 @@ export default function BudgetBillsRecurring({
                       <input
                         value={editBillName}
                         onChange={(e) => setEditBillName(e.target.value)}
-                        className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-slate-100"
+                        className="w-full hb-input px-2 py-1 text-slate-100"
                       />
                       <div className="flex gap-2">
                         <input
                           value={editBillAmount}
                           onChange={(e) => setEditBillAmount(e.target.value)}
                           placeholder="Amount"
-                          className="flex-1 rounded border border-slate-600 bg-slate-950 px-2 py-1 text-slate-100"
+                          className="flex-1 hb-input px-2 py-1 text-slate-100"
                         />
                         <input
                           value={editBillDueDay}
                           onChange={(e) => setEditBillDueDay(e.target.value)}
                           placeholder="Due day"
-                          className="w-20 rounded border border-slate-600 bg-slate-950 px-2 py-1 text-slate-100"
+                          className="w-20 hb-input px-2 py-1 text-slate-100"
                         />
                       </div>
                       <select
                         value={editBillCategory}
                         onChange={(e) => setEditBillCategory(e.target.value)}
-                        className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-slate-100"
+                        className="w-full hb-input px-2 py-1 text-slate-100"
                       >
                         <option value="">Category</option>
                         {categories.map((c) => (
@@ -185,7 +185,7 @@ export default function BudgetBillsRecurring({
                                 min="0"
                                 value={payAmount}
                                 onChange={(e) => setPayAmount(e.target.value)}
-                                className="w-24 rounded border border-slate-600 bg-slate-950 px-2 py-1 text-xs text-slate-100"
+                                className="w-24 hb-input px-2 py-1 text-xs text-slate-100"
                               />
                               <button
                                 type="button"
@@ -265,26 +265,26 @@ export default function BudgetBillsRecurring({
                 onChange={(e) => setBillName(e.target.value)}
                 placeholder="Name"
                 required
-                className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+                className="w-full hb-input px-2 py-1 text-sm text-slate-100"
               />
               <div className="flex gap-2">
                 <input
                   value={billAmount}
                   onChange={(e) => setBillAmount(e.target.value)}
                   placeholder="Amount"
-                  className="flex-1 rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+                  className="flex-1 hb-input px-2 py-1 text-sm text-slate-100"
                 />
                 <input
                   value={billDueDay}
                   onChange={(e) => setBillDueDay(e.target.value)}
                   placeholder="Due day"
-                  className="w-20 rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+                  className="w-20 hb-input px-2 py-1 text-sm text-slate-100"
                 />
               </div>
               <select
                 value={billCategory}
                 onChange={(e) => setBillCategory(e.target.value)}
-                className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+                className="w-full hb-input px-2 py-1 text-sm text-slate-100"
               >
                 <option value="">Category</option>
                 {categories.map((c) => (
@@ -322,13 +322,13 @@ export default function BudgetBillsRecurring({
                         value={editRecAmount}
                         onChange={(e) => setEditRecAmount(e.target.value)}
                         placeholder="Amount"
-                        className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-slate-100"
+                        className="w-full hb-input px-2 py-1 text-slate-100"
                       />
                       <div className="flex gap-2">
                         <select
                           value={editRecCadence}
                           onChange={(e) => setEditRecCadence(e.target.value)}
-                          className="flex-1 rounded border border-slate-600 bg-slate-950 px-2 py-1 text-slate-100"
+                          className="flex-1 hb-input px-2 py-1 text-slate-100"
                         >
                           <option value="monthly">Monthly</option>
                           <option value="weekly">Weekly</option>
@@ -338,13 +338,13 @@ export default function BudgetBillsRecurring({
                           type="date"
                           value={editRecNext}
                           onChange={(e) => setEditRecNext(e.target.value)}
-                          className="flex-1 rounded border border-slate-600 bg-slate-950 px-2 py-1 text-slate-100"
+                          className="flex-1 hb-input px-2 py-1 text-slate-100"
                         />
                       </div>
                       <select
                         value={editRecCategory}
                         onChange={(e) => setEditRecCategory(e.target.value)}
-                        className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-slate-100"
+                        className="w-full hb-input px-2 py-1 text-slate-100"
                       >
                         <option value="">Category (optional)</option>
                         {categories.map((c) => (
@@ -426,7 +426,7 @@ export default function BudgetBillsRecurring({
                 onChange={(e) => setRecAmount(e.target.value)}
                 placeholder="Amount"
                 required
-                className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+                className="w-full hb-input px-2 py-1 text-sm text-slate-100"
               />
               <DiscordMemberSelect
                 token={token}
@@ -439,7 +439,7 @@ export default function BudgetBillsRecurring({
                 <select
                   value={recCadence}
                   onChange={(e) => setRecCadence(e.target.value)}
-                  className="flex-1 rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+                  className="flex-1 hb-input px-2 py-1 text-sm text-slate-100"
                 >
                   <option value="monthly">Monthly</option>
                   <option value="weekly">Weekly</option>
@@ -449,13 +449,13 @@ export default function BudgetBillsRecurring({
                   type="date"
                   value={recNext}
                   onChange={(e) => setRecNext(e.target.value)}
-                  className="flex-1 rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+                  className="flex-1 hb-input px-2 py-1 text-sm text-slate-100"
                 />
               </div>
               <select
                 value={recCategory}
                 onChange={(e) => setRecCategory(e.target.value)}
-                className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+                className="w-full hb-input px-2 py-1 text-sm text-slate-100"
               >
                 <option value="">Category</option>
                 {categories.map((c) => (

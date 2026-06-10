@@ -23,7 +23,8 @@ function renderRoute(path: string) {
 }
 
 const routes: { path: string; heading: RegExp }[] = [
-  { path: "/", heading: /^dashboard$/i },
+  // Dashboard heading is a time-of-day greeting ("Good morning", "Up late?", …).
+  { path: "/", heading: /^(good (morning|afternoon|evening)|up late\?)/i },
   { path: "/buy", heading: /^buy list$/i },
   { path: "/wishlist", heading: /^wishlist$/i },
   { path: "/money", heading: /^money$/i },
@@ -31,7 +32,7 @@ const routes: { path: string; heading: RegExp }[] = [
   { path: "/calendar", heading: /^calendar$/i },
   { path: "/meals", heading: /^meal planning$/i },
   { path: "/settings", heading: /^settings$/i },
-  { path: "/login", heading: /^sign in$/i },
+  { path: "/login", heading: /^welcome back$/i },
   { path: "/setup", heading: /^household accounts$/i },
   { path: "/health", heading: /^ops & diagnostics$/i },
 ];

@@ -105,7 +105,7 @@ export default function BudgetTransactionForm({ token, actor, categories, accoun
         placeholder="Amount"
         value={formAmount}
         onChange={(e) => setFormAmount(e.target.value)}
-        className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+        className="w-full hb-input px-3 py-2 text-slate-100"
       />
       {formType === "expense" && (
         <label className="flex items-center gap-2 text-sm text-slate-400">
@@ -117,7 +117,7 @@ export default function BudgetTransactionForm({ token, actor, categories, accoun
         <select
           value={formCategoryId}
           onChange={(e) => setFormCategoryId(e.target.value)}
-          className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+          className="w-full hb-input px-3 py-2 text-slate-100"
         >
           <option value="">Category (optional)</option>
           {categories.map((c) => (
@@ -141,7 +141,7 @@ export default function BudgetTransactionForm({ token, actor, categories, accoun
                   next[i] = { ...next[i], amount: e.target.value };
                   setSplits(next);
                 }}
-                className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+                className="hb-input px-2 py-1 text-sm text-slate-100"
               />
               <select
                 value={row.categoryId}
@@ -150,7 +150,7 @@ export default function BudgetTransactionForm({ token, actor, categories, accoun
                   next[i] = { ...next[i], categoryId: e.target.value };
                   setSplits(next);
                 }}
-                className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+                className="hb-input px-2 py-1 text-sm text-slate-100"
               >
                 <option value="">Category</option>
                 {categories.map((c) => (
@@ -166,7 +166,7 @@ export default function BudgetTransactionForm({ token, actor, categories, accoun
                   next[i] = { ...next[i], spentByUserId: e.target.value };
                   setSplits(next);
                 }}
-                className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+                className="hb-input px-2 py-1 text-sm text-slate-100"
               >
                 <option value="">Spender</option>
                 {roster.data?.members.map((m) => (
@@ -186,7 +186,7 @@ export default function BudgetTransactionForm({ token, actor, categories, accoun
         <select
           value={formAccountId}
           onChange={(e) => setFormAccountId(e.target.value)}
-          className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+          className="w-full hb-input px-3 py-2 text-slate-100"
         >
           <option value="">Account (default)</option>
           {accounts.map((a) => (
@@ -207,26 +207,26 @@ export default function BudgetTransactionForm({ token, actor, categories, accoun
         placeholder="Merchant"
         value={formMerchant}
         onChange={(e) => setFormMerchant(e.target.value)}
-        className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+        className="w-full hb-input px-3 py-2 text-slate-100"
       />
       <input
         type="url"
         placeholder="Receipt URL (optional)"
         value={formReceiptUrl}
         onChange={(e) => setFormReceiptUrl(e.target.value)}
-        className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+        className="w-full hb-input px-3 py-2 text-slate-100"
       />
       <input
         placeholder="Note"
         value={formNote}
         onChange={(e) => setFormNote(e.target.value)}
-        className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+        className="w-full hb-input px-3 py-2 text-slate-100"
       />
       <input
         placeholder="Tags (comma-separated)"
         value={formTags}
         onChange={(e) => setFormTags(e.target.value)}
-        className="w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+        className="w-full hb-input px-3 py-2 text-slate-100"
       />
       <label className="block text-xs text-slate-400">
         Currency (3-letter)
@@ -234,13 +234,13 @@ export default function BudgetTransactionForm({ token, actor, categories, accoun
           value={formCurrency}
           onChange={(e) => setFormCurrency(e.target.value.toUpperCase())}
           maxLength={3}
-          className="mt-1 w-24 rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 uppercase"
+          className="mt-1 w-24 hb-input px-3 py-2 text-slate-100 uppercase"
         />
       </label>
       <button
         type="submit"
         disabled={!actor || !formSpender}
-        className="w-full rounded-lg bg-blue-600 py-2 font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+        className="w-full rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 py-2 font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
       >
         Save
       </button>

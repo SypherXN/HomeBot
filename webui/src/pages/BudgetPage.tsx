@@ -63,7 +63,7 @@ import BudgetTaxSummary from "./budget/BudgetTaxSummary";
 import BudgetTransactionForm from "./budget/BudgetTransactionForm";
 import BudgetTrendChart from "./budget/BudgetTrendChart";
 
-const CHART_COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "#ec4899", "#84cc16"];
+const CHART_COLORS = ["#8161fb", "#22d3ee", "#34d399", "#fbbf24", "#fb7185", "#38bdf8", "#e879f9", "#a3e635"];
 
 const EMPTY_FILTERS: BudgetFilters = {
   merchant: "",
@@ -273,7 +273,7 @@ export default function BudgetPage() {
 
   if (!tok) {
     return (
-      <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 text-slate-300">
+      <div className="hb-card p-6 text-slate-300">
         Sign in via Settings to use Budget.
       </div>
     );
@@ -282,7 +282,7 @@ export default function BudgetPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold text-white">Budget</h1>
+        <h1 className="text-3xl font-semibold text-white">Budget</h1>
         <p className="mt-1 text-sm text-slate-400">
           Household spending by category and person. Money page is for splits between people.
         </p>
@@ -304,7 +304,7 @@ export default function BudgetPage() {
               setListPage(0);
               setMonth(e.target.value);
             }}
-            className="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+            className="hb-input px-3 py-2 text-slate-100"
           />
         </div>
         <div>
@@ -315,7 +315,7 @@ export default function BudgetPage() {
               setListPage(0);
               setScope(e.target.value as "household" | "all");
             }}
-            className="rounded-lg border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+            className="hb-input px-3 py-2 text-slate-100"
           >
             <option value="household">Household</option>
             <option value="all">Include Personal</option>
@@ -351,7 +351,7 @@ export default function BudgetPage() {
             type="button"
             onClick={() => setTab(id)}
             className={`rounded-lg px-4 py-2 text-sm font-medium ${
-              tab === id ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-300"
+              tab === id ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white" : "bg-slate-800 text-slate-300"
             }`}
           >
             {label}
@@ -378,15 +378,15 @@ export default function BudgetPage() {
 
       {(tab === "overview" || tab === "ledger") && summary && (
         <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+          <div className="hb-card p-4">
             <div className="text-xs text-slate-400">Income</div>
             <div className="text-xl font-semibold text-emerald-400">${formatMoney(summary.totalIncome)}</div>
           </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+          <div className="hb-card p-4">
             <div className="text-xs text-slate-400">Expenses</div>
             <div className="text-xl font-semibold text-amber-300">${formatMoney(summary.totalExpenses)}</div>
           </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+          <div className="hb-card p-4">
             <div className="text-xs text-slate-400">Net</div>
             <div className="text-xl font-semibold text-white">${formatMoney(summary.net)}</div>
           </div>
@@ -395,21 +395,21 @@ export default function BudgetPage() {
 
       {tab === "overview" && (
         <>
-          <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+          <section className="hb-card p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-lg font-medium text-white">Charts</h2>
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => setChartMode("category")}
-                  className={`rounded-lg px-3 py-1 text-sm ${chartMode === "category" ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-300"}`}
+                  className={`rounded-lg px-3 py-1 text-sm ${chartMode === "category" ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white" : "bg-slate-800 text-slate-300"}`}
                 >
                   By Category
                 </button>
                 <button
                   type="button"
                   onClick={() => setChartMode("user")}
-                  className={`rounded-lg px-3 py-1 text-sm ${chartMode === "user" ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-300"}`}
+                  className={`rounded-lg px-3 py-1 text-sm ${chartMode === "user" ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white" : "bg-slate-800 text-slate-300"}`}
                 >
                   By Spender
                 </button>
@@ -445,14 +445,14 @@ export default function BudgetPage() {
             )}
           </section>
 
-          <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+          <section className="hb-card p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-lg font-medium text-white">Spending trends</h2>
               <div className="flex flex-wrap gap-2">
                 <select
                   value={trendMonths}
                   onChange={(e) => setTrendMonths(Number(e.target.value))}
-                  className="rounded-lg border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+                  className="hb-input px-2 py-1 text-sm text-slate-100"
                 >
                   {[3, 6, 9, 12].map((n) => (
                     <option key={n} value={n}>
@@ -463,7 +463,7 @@ export default function BudgetPage() {
                 <select
                   value={trendGroupBy}
                   onChange={(e) => setTrendGroupBy(e.target.value as "category" | "user")}
-                  className="rounded-lg border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+                  className="hb-input px-2 py-1 text-sm text-slate-100"
                 >
                   <option value="category">By Category</option>
                   <option value="user">By Spender</option>
@@ -487,7 +487,7 @@ export default function BudgetPage() {
       {tab === "ledger" && (
         <>
           <div className="grid gap-6 lg:grid-cols-2">
-            <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+            <section className="hb-card p-4">
               <h2 className="mb-3 text-lg font-medium text-white">Add transaction</h2>
               <BudgetTransactionForm
                 token={tok}
@@ -499,13 +499,13 @@ export default function BudgetPage() {
               />
             </section>
 
-            <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+            <section className="hb-card p-4">
               <h2 className="mb-3 text-lg font-medium text-white">Categories</h2>
               <BudgetCategoryEditor token={tok} actor={actor} categories={categories} onSaved={load} />
             </section>
           </div>
 
-          <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+          <section className="hb-card p-4">
             <h2 className="mb-3 text-lg font-medium text-white">Transactions</h2>
             {!txData ? (
               <p className="text-slate-500">Loading…</p>
@@ -625,7 +625,7 @@ export default function BudgetPage() {
 
           <BudgetAccountsPanel token={tok} actor={actor} accounts={accounts} onSaved={load} />
 
-          <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+          <section className="hb-card p-4">
             <h2 className="mb-3 text-lg font-medium text-white">Envelope budgets — {month}</h2>
             {actor ? (
               <BudgetEnvelopeEditor
@@ -648,7 +648,7 @@ export default function BudgetPage() {
             <BudgetAuditLog entries={audit} />
           </div>
 
-          <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+          <section className="hb-card p-4">
             <h2 className="mb-3 text-lg font-medium text-white">Tax summary snapshot</h2>
             {taxSummary.length === 0 ? (
               <p className="text-sm text-slate-500">
@@ -668,7 +668,7 @@ export default function BudgetPage() {
 
           <BudgetTaxSummary token={tok} />
 
-          <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+          <section className="hb-card p-4">
             <h2 className="mb-3 text-lg font-medium text-white">Import & export</h2>
             <div className="grid gap-4 md:grid-cols-2">
               <BudgetCsvImport

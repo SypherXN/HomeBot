@@ -19,7 +19,7 @@ export default function BudgetAlertsPanel({ forecast, notifications, onDismiss, 
 
   if (paceWarnings.length === 0 && notifications.length === 0) {
     return (
-      <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+      <section className="hb-card p-4">
         <h2 className="text-lg font-medium text-white">Forecast & alerts</h2>
         <p className="mt-2 text-sm text-slate-500">No pace warnings or pending alerts right now.</p>
       </section>
@@ -27,7 +27,7 @@ export default function BudgetAlertsPanel({ forecast, notifications, onDismiss, 
   }
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+    <section className="hb-card p-4">
       <h2 className="mb-3 text-lg font-medium text-white">Forecast & alerts</h2>
 
       {paceWarnings.length > 0 && (

@@ -123,7 +123,7 @@ export default function BudgetTransactionEditModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center hb-overlay p-4">
       <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-xl">
         <h3 className="mb-3 text-lg font-medium text-white">Edit transaction</h3>
         <form onSubmit={(e) => void handleSave(e)} className="space-y-3">
@@ -132,13 +132,13 @@ export default function BudgetTransactionEditModal({
             onChange={(e) => setAmount(e.target.value)}
             placeholder="Amount"
             required
-            className="w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+            className="w-full hb-input px-3 py-2 text-slate-100"
           />
           <input
             type="date"
             value={txDate}
             onChange={(e) => setTxDate(e.target.value)}
-            className="w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+            className="w-full hb-input px-3 py-2 text-slate-100"
           />
           <MemberIdField
             token={token}
@@ -151,7 +151,7 @@ export default function BudgetTransactionEditModal({
           <select
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
-            className="w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+            className="w-full hb-input px-3 py-2 text-slate-100"
           >
             <option value="">Category</option>
             {categories.map((c) => (
@@ -164,7 +164,7 @@ export default function BudgetTransactionEditModal({
             <select
               value={accountId}
               onChange={(e) => setAccountId(e.target.value)}
-              className="w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+              className="w-full hb-input px-3 py-2 text-slate-100"
             >
               <option value="">Account (default)</option>
               {accounts.map((a) => (
@@ -178,26 +178,26 @@ export default function BudgetTransactionEditModal({
             value={merchant}
             onChange={(e) => setMerchant(e.target.value)}
             placeholder="Merchant"
-            className="w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+            className="w-full hb-input px-3 py-2 text-slate-100"
           />
           <input
             type="url"
             value={receiptUrl}
             onChange={(e) => setReceiptUrl(e.target.value)}
             placeholder="Receipt URL"
-            className="w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+            className="w-full hb-input px-3 py-2 text-slate-100"
           />
           <input
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="Note"
-            className="w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+            className="w-full hb-input px-3 py-2 text-slate-100"
           />
           <input
             value={tags}
             onChange={(e) => setTags(e.target.value)}
             placeholder="Tags (comma-separated)"
-            className="w-full rounded border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100"
+            className="w-full hb-input px-3 py-2 text-slate-100"
           />
           {row.type === "expense" && (
             <label className="flex items-center gap-2 text-sm text-slate-400">
@@ -214,7 +214,7 @@ export default function BudgetTransactionEditModal({
                     onChange={(e) =>
                       setSplits((prev) => prev.map((x, j) => (j === i ? { ...x, categoryId: e.target.value } : x)))
                     }
-                    className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-xs text-slate-100"
+                    className="hb-input px-2 py-1 text-xs text-slate-100"
                   >
                     <option value="">Cat</option>
                     {categories.map((c) => (
@@ -229,7 +229,7 @@ export default function BudgetTransactionEditModal({
                       setSplits((prev) => prev.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))
                     }
                     placeholder="Amt"
-                    className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-xs text-slate-100"
+                    className="hb-input px-2 py-1 text-xs text-slate-100"
                   />
                   <input
                     value={s.spentByUserId}
@@ -240,7 +240,7 @@ export default function BudgetTransactionEditModal({
                     }
                     placeholder="Spender"
                     list={roster.data?.available ? `split-spenders-${i}` : undefined}
-                    className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-xs text-slate-100"
+                    className="hb-input px-2 py-1 text-xs text-slate-100"
                   />
                   {roster.data?.available && (
                     <datalist id={`split-spenders-${i}`}>
@@ -274,7 +274,7 @@ export default function BudgetTransactionEditModal({
             <button
               type="submit"
               disabled={busy || !actor}
-              className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50"
+              className="rounded bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-1 text-sm text-white disabled:opacity-50"
             >
               {busy ? "Saving…" : "Save"}
             </button>

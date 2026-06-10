@@ -45,7 +45,7 @@ export default function BudgetGoalsPanel({ token, actor, categories, goals, onSa
   }
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+    <section className="hb-card p-4">
       <h2 className="mb-3 text-lg font-medium text-white">Savings goals</h2>
 
       {goals.length === 0 ? (
@@ -72,7 +72,7 @@ export default function BudgetGoalsPanel({ token, actor, categories, goals, onSa
               </div>
               <div className="mb-2 h-2.5 overflow-hidden rounded-full bg-slate-800">
                 <div
-                  className="h-full bg-blue-600 transition-all"
+                  className="h-full bg-gradient-to-r from-blue-600 to-blue-700 transition-all"
                   style={{ width: `${Math.min(100, g.percentComplete)}%` }}
                 />
               </div>
@@ -86,7 +86,7 @@ export default function BudgetGoalsPanel({ token, actor, categories, goals, onSa
                         min="0"
                         value={progressDraft}
                         onChange={(e) => setProgressDraft(e.target.value)}
-                        className="w-28 rounded border border-slate-600 bg-slate-950 px-2 py-1 text-xs text-slate-100"
+                        className="w-28 hb-input px-2 py-1 text-xs text-slate-100"
                       />
                       <button
                         type="button"
@@ -146,32 +146,32 @@ export default function BudgetGoalsPanel({ token, actor, categories, goals, onSa
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Goal name"
-            className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+            className="w-full hb-input px-2 py-1 text-sm text-slate-100"
           />
           <div className="grid gap-2 sm:grid-cols-3">
             <input
               value={target}
               onChange={(e) => setTarget(e.target.value)}
               placeholder="Target $"
-              className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+              className="hb-input px-2 py-1 text-sm text-slate-100"
             />
             <input
               value={current}
               onChange={(e) => setCurrent(e.target.value)}
               placeholder="Current $"
-              className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+              className="hb-input px-2 py-1 text-sm text-slate-100"
             />
             <input
               type="date"
               value={targetDate}
               onChange={(e) => setTargetDate(e.target.value)}
-              className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+              className="hb-input px-2 py-1 text-sm text-slate-100"
             />
           </div>
           <select
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
-            className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-slate-100"
+            className="w-full hb-input px-2 py-1 text-sm text-slate-100"
           >
             <option value="">Linked category (optional)</option>
             {categories.map((c) => (
@@ -180,7 +180,7 @@ export default function BudgetGoalsPanel({ token, actor, categories, goals, onSa
               </option>
             ))}
           </select>
-          <button type="submit" className="rounded bg-blue-600 px-3 py-1 text-sm text-white">
+          <button type="submit" className="rounded bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-1 text-sm text-white">
             Add goal
           </button>
         </form>

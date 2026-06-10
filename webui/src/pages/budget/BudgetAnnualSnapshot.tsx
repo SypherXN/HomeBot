@@ -71,7 +71,7 @@ export default function BudgetAnnualSnapshot({ token, year }: Props) {
   const trendMonths = [...trendByMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+    <section className="hb-card p-4">
       <h2 className="mb-1 text-lg font-medium text-white">Annual snapshot — {year}</h2>
       <p className="mb-4 text-xs text-slate-500">Year-to-date totals, tax-tagged spending, savings goals, and monthly spend trend.</p>
 
@@ -130,7 +130,7 @@ export default function BudgetAnnualSnapshot({ token, year }: Props) {
                       </div>
                       <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-800">
                         <div
-                          className="h-full bg-blue-600"
+                          className="h-full bg-gradient-to-r from-blue-600 to-blue-700"
                           style={{ width: `${Math.min(100, g.percentComplete)}%` }}
                         />
                       </div>

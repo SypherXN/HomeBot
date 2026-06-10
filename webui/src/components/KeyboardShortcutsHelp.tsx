@@ -21,7 +21,7 @@ export default function KeyboardShortcutsHelp({ open, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-start justify-center bg-black/50 p-4 pt-[10vh]"
+      className="fixed inset-0 z-[100] flex items-start justify-center hb-overlay p-4 pt-[10vh]"
       role="dialog"
       aria-modal="true"
       aria-labelledby="kbd-help-title"
@@ -46,7 +46,7 @@ export default function KeyboardShortcutsHelp({ open, onClose }: Props) {
         <ul className="space-y-2 text-sm">
           {rows.map((row) => (
             <li key={row.keys} className="flex items-center justify-between gap-4">
-              <kbd className="shrink-0 rounded border border-slate-600 bg-slate-950 px-2 py-0.5 font-mono text-xs text-slate-200">
+              <kbd className="shrink-0 hb-input px-2 py-0.5 font-mono text-xs text-slate-200">
                 {row.keys}
               </kbd>
               <span className="text-right text-slate-400">{row.action}</span>

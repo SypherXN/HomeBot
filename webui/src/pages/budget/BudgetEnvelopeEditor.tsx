@@ -98,7 +98,7 @@ export default function BudgetEnvelopeEditor({ token, actor, month, categories, 
             type="button"
             disabled={copyBusy}
             onClick={() => void copyFromPreviousMonth()}
-            className="rounded border border-slate-600 bg-slate-800 px-3 py-1 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+            className="rounded hb-btn-soft px-3 py-1 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-50"
           >
             {copyBusy ? "Loading…" : `Copy from ${priorMonth(month)} (draft)`}
           </button>
@@ -137,7 +137,7 @@ export default function BudgetEnvelopeEditor({ token, actor, month, categories, 
               <input
                 value={targetVal}
                 onChange={(e) => setDrafts((d) => ({ ...d, [cat.id]: e.target.value }))}
-                className="w-24 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-sm text-slate-100"
+                className="w-24 hb-input px-2 py-1 text-sm text-slate-100"
               />
             </label>
           </div>
@@ -146,7 +146,7 @@ export default function BudgetEnvelopeEditor({ token, actor, month, categories, 
       <button
         type="submit"
         disabled={saving || !actor}
-        className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+        className="rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
       >
         {saving ? "Saving…" : "Save envelope targets"}
       </button>
