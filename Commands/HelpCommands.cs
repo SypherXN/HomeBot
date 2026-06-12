@@ -120,7 +120,7 @@ public class HelpCommands : InteractionModuleBase<SocketInteractionContext>
 
     Natural-language dates (examples): tomorrow 6pm, in 2 hours, next monday, 5/1/2026 6pm
 
-    Extras on add: reminder **10m** / **2h** / **1d**; recurrence **daily** / **weekly** / **monthly**";
+    Extras on add: reminder **10m** / **2h** / **1d**; recurrence **daily** / **weekly** / **monthly** / **yearly** (annual)";
                 break;
 
             // ================= BUDGET =================

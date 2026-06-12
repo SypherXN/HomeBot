@@ -46,6 +46,7 @@ public class CalendarService
         bool syncToGoogle = true
     )
     {
+        recurrence = ValidationHelper.NormalizeRecurrence(recurrence);
         using var conn = _db.GetConnection();
         conn.Open();
 
@@ -157,6 +158,7 @@ public class CalendarService
                 "daily" => "🔁 daily",
                 "weekly" => "🔁 weekly",
                 "monthly" => "🔁 monthly",
+                "yearly" => "🔁 annual",
                 "" => "",
                 _ => $"🔁 {recurrence}"
             };
@@ -370,7 +372,7 @@ public class CalendarService
         if (applyRecurrence)
         {
             updates.Add("Recurrence = $recurrence");
-            cmd.Parameters.AddWithValue("$recurrence", recurrence ?? "");
+            cmd.Parameters.AddWithValue("$recurrence", ValidationHelper.NormalizeRecurrence(recurrence ?? ""));
         }
 
         if (applyAssignedTo)
@@ -754,6 +756,7 @@ public class CalendarService
                 "daily" => "🔁 daily",
                 "weekly" => "🔁 weekly",
                 "monthly" => "🔁 monthly",
+                "yearly" => "🔁 annual",
                 "" => "",
                 _ => $"🔁 {recurrence}"
             };
@@ -947,6 +950,30 @@ public class CalendarService
 
                         break;
                     }
+                case "yearly":
+                    {
+                        var anchorMonth = startLocalRow.Month;
+                        var anchorDay = startLocalRow.Day;
+                        var cursor = startLocalRow.Date;
+                        while (cursor < winStartDate)
+                            cursor = NextYearlyOccurrenceDate(cursor, anchorMonth, anchorDay);
+                        while (cursor <= winEndDateInclusive)
+                        {
+                            EmitInstance(
+                                output,
+                                meta,
+                                cursor.Add(startLocalRow.TimeOfDay),
+                                duration,
+                                rowTz,
+                                true,
+                                fromUtc,
+                                toUtcExclusive,
+                                recurrenceExceptions);
+                            cursor = NextYearlyOccurrenceDate(cursor, anchorMonth, anchorDay);
+                        }
+
+                        break;
+                    }
                 default:
                     EmitInstance(
                         output,
@@ -974,6 +1001,13 @@ public class CalendarService
         var next = fromDate.AddMonths(1);
         var day = Math.Min(anchorDay, DateTime.DaysInMonth(next.Year, next.Month));
         return new DateTime(next.Year, next.Month, day);
+    }
+
+    private static DateTime NextYearlyOccurrenceDate(DateTime fromDate, int anchorMonth, int anchorDay)
+    {
+        var nextYear = fromDate.Year + 1;
+        var day = Math.Min(anchorDay, DateTime.DaysInMonth(nextYear, anchorMonth));
+        return new DateTime(nextYear, anchorMonth, day);
     }
 
     /// <summary>
@@ -1597,6 +1631,7 @@ public class CalendarService
             "daily" => "🔁 daily",
             "weekly" => "🔁 weekly",
             "monthly" => "🔁 monthly",
+            "yearly" => "🔁 annual",
             "" => "",
             _ => $"🔁 {meta.Recurrence}",
         };

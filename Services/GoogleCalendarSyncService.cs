@@ -312,6 +312,7 @@ public sealed class GoogleCalendarSyncService
             "daily" => "RRULE:FREQ=DAILY",
             "weekly" => "RRULE:FREQ=WEEKLY",
             "monthly" => "RRULE:FREQ=MONTHLY",
+            "yearly" => "RRULE:FREQ=YEARLY",
             _ => null,
         };
 

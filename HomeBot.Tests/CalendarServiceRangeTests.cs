@@ -144,6 +144,32 @@ public sealed class CalendarServiceRangeTests : IDisposable
     }
 
     [Fact]
+    public void Yearly_recurrence_emits_same_month_day_each_year()
+    {
+        _calendar.AddItem("Birthday", "event", "2024-03-15 09:00", "", false, "", null, "", "", "", "yearly", "UTC");
+
+        var instances = _calendar.GetRange(
+            new DateTime(2024, 1, 1),
+            new DateTime(2027, 1, 1),
+            null);
+
+        Assert.Equal(3, instances.Count);
+        Assert.Equal("2024-03-15T09:00:00Z", instances[0].InstanceStartUtc);
+        Assert.Equal("2025-03-15T09:00:00Z", instances[1].InstanceStartUtc);
+        Assert.Equal("2026-03-15T09:00:00Z", instances[2].InstanceStartUtc);
+        Assert.All(instances, i => Assert.True(i.IsRecurringInstance));
+        Assert.All(instances, i => Assert.Equal("🔁 annual", i.RecurrenceText));
+    }
+
+    [Fact]
+    public void AddItem_normalizes_annual_recurrence_to_yearly()
+    {
+        var id = _calendar.AddItem("Anniversary", "event", "2026-06-01 12:00", "", false, "", null, "", "", "", "annual", "UTC");
+        var item = _calendar.GetItem(id);
+        Assert.Equal("yearly", item.Recurrence);
+    }
+
+    [Fact]
     public void Tasks_are_excluded_from_range()
     {
         _calendar.AddItem("A task", "task", "", "", false, "", null, "", "", "", "", "UTC");

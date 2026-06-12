@@ -789,6 +789,7 @@ function Toolbar({
               token={token}
               sharedRoster={guildRoster}
               label="Pick person"
+              value={filterUser}
               onPickUserId={setFilterUser}
               className="min-w-0"
             />
