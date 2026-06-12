@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isPresetReminder, reminderOptionLabel, reminderRawToToken } from "./calendarReminder";
+import {
+  reminderPartsToToken,
+  reminderRawToToken,
+  reminderTokenToParts,
+} from "./calendarReminder";
 
 describe("reminderRawToToken", () => {
   it("passes through shorthand tokens", () => {
@@ -19,19 +23,31 @@ describe("reminderRawToToken", () => {
   });
 });
 
-describe("reminderOptionLabel", () => {
-  it("uses preset labels", () => {
-    expect(reminderOptionLabel("10m")).toBe("10 minutes before");
+describe("reminderTokenToParts", () => {
+  it("splits tokens into amount and unit", () => {
+    expect(reminderTokenToParts("10m")).toEqual({ amount: "10", unit: "m" });
+    expect(reminderTokenToParts("2h")).toEqual({ amount: "2", unit: "h" });
+    expect(reminderTokenToParts("1d")).toEqual({ amount: "1", unit: "d" });
   });
 
-  it("falls back for custom offsets", () => {
-    expect(reminderOptionLabel("45m")).toBe("45m before");
+  it("normalizes stored seconds before splitting", () => {
+    expect(reminderTokenToParts("600")).toEqual({ amount: "10", unit: "m" });
+  });
+
+  it("returns empty amount for no reminder", () => {
+    expect(reminderTokenToParts("")).toEqual({ amount: "", unit: "m" });
   });
 });
 
-describe("isPresetReminder", () => {
-  it("knows preset tokens", () => {
-    expect(isPresetReminder("10m")).toBe(true);
-    expect(isPresetReminder("45m")).toBe(false);
+describe("reminderPartsToToken", () => {
+  it("builds API tokens from fields", () => {
+    expect(reminderPartsToToken({ amount: "15", unit: "m" })).toBe("15m");
+    expect(reminderPartsToToken({ amount: "3", unit: "h" })).toBe("3h");
+    expect(reminderPartsToToken({ amount: "2", unit: "d" })).toBe("2d");
+  });
+
+  it("returns empty when amount is blank or zero", () => {
+    expect(reminderPartsToToken({ amount: "", unit: "h" })).toBe("");
+    expect(reminderPartsToToken({ amount: "0", unit: "h" })).toBe("");
   });
 });
