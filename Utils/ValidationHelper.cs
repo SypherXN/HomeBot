@@ -60,13 +60,23 @@ public static class ValidationHelper
             return true;
         }
 
-        if (input != "daily" && input != "weekly" && input != "monthly")
+        var normalized = NormalizeRecurrence(input);
+        if (normalized != "daily" && normalized != "weekly" && normalized != "monthly" && normalized != "yearly")
         {
-            error = "❌ Recurrence must be 'daily', 'weekly', or 'monthly'";
+            error = "❌ Recurrence must be 'daily', 'weekly', 'monthly', or 'yearly' (annual)";
             return false;
         }
 
         error = "";
         return true;
+    }
+
+    /// <summary>Maps client tokens (e.g. annual) to the stored recurrence value.</summary>
+    public static string NormalizeRecurrence(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return "";
+        var n = input.Trim().ToLowerInvariant();
+        return n == "annual" ? "yearly" : n;
     }
 }

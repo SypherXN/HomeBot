@@ -62,7 +62,7 @@ export default function ItemDetailModal({
   const [link, setLink] = useState("");
   const [allDay, setAllDay] = useState(false);
   const [reminder, setReminder] = useState("");
-  const [seriesRecurrence, setSeriesRecurrence] = useState<"" | "daily" | "weekly" | "monthly">("");
+  const [seriesRecurrence, setSeriesRecurrence] = useState<"" | "daily" | "weekly" | "monthly" | "yearly">("");
   const [assignedTo, setAssignedTo] = useState("");
   const [busy, setBusy] = useState<"save" | "complete" | "completeOne" | "delete" | "omit" | "clear" | null>(null);
   const guildRoster = useDiscordGuildRoster(token);
@@ -147,7 +147,7 @@ export default function ItemDetailModal({
         setReminder(d.reminder ?? "");
         const rec = (d.recurrence ?? "").trim();
         setSeriesRecurrence(
-          rec === "daily" || rec === "weekly" || rec === "monthly" ? rec : ""
+          rec === "daily" || rec === "weekly" || rec === "monthly" || rec === "yearly" ? rec : ""
         );
         setAssignedTo(d.assignedTo ?? "");
       })
@@ -522,7 +522,7 @@ export default function ItemDetailModal({
                   <select
                     value={seriesRecurrence}
                     onChange={(e) =>
-                      setSeriesRecurrence(e.target.value as "" | "daily" | "weekly" | "monthly")
+                      setSeriesRecurrence(e.target.value as "" | "daily" | "weekly" | "monthly" | "yearly")
                     }
                     className={inputClass}
                   >
@@ -530,6 +530,7 @@ export default function ItemDetailModal({
                     <option value="daily">Daily</option>
                     <option value="weekly">Weekly</option>
                     <option value="monthly">Monthly</option>
+                    <option value="yearly">Annual</option>
                   </select>
                 </Field>
                 <Field label="Assignee (Discord user id)">
@@ -543,6 +544,7 @@ export default function ItemDetailModal({
                       token={token}
                       sharedRoster={guildRoster}
                       label="Pick from server"
+                      value={assignedTo}
                       onPickUserId={setAssignedTo}
                     />
                   </div>

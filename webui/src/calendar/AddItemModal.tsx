@@ -41,7 +41,7 @@ export default function AddItemModal({
   const [eventTz, setEventTz] = useState(eventTimeZoneDefault);
   const [allDay, setAllDay] = useState(false);
   const [reminder, setReminder] = useState("");
-  const [recurrence, setRecurrence] = useState<"" | "daily" | "weekly" | "monthly">("");
+  const [recurrence, setRecurrence] = useState<"" | "daily" | "weekly" | "monthly" | "yearly">("");
   const [assignToEveryone, setAssignToEveryone] = useState(false);
   const [assignedTo, setAssignedTo] = useState("");
   const [description, setDescription] = useState("");
@@ -211,13 +211,14 @@ export default function AddItemModal({
               <Field label="Recurrence">
                 <select
                   value={recurrence}
-                  onChange={(e) => setRecurrence(e.target.value as "" | "daily" | "weekly" | "monthly")}
+                  onChange={(e) => setRecurrence(e.target.value as "" | "daily" | "weekly" | "monthly" | "yearly")}
                   className={inputClass}
                 >
                   <option value="">None</option>
                   <option value="daily">Daily</option>
                   <option value="weekly">Weekly</option>
                   <option value="monthly">Monthly</option>
+                  <option value="yearly">Annual</option>
                 </select>
               </Field>
             </div>
@@ -256,6 +257,7 @@ export default function AddItemModal({
               token={token}
               sharedRoster={guildRoster}
               label="Pick from server"
+              value={assignedTo}
               onPickUserId={setAssignedTo}
               disabled={mode === "event" && assignToEveryone}
               className="min-w-0"
