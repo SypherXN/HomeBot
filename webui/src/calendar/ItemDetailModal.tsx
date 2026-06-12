@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { DateTime } from "luxon";
 import DiscordMemberSelect from "../components/DiscordMemberSelect";
+import CalendarReminderSelect from "./CalendarReminderSelect";
+import { reminderRawToToken } from "../lib/calendarReminder";
 import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
 import {
   deleteCalendarInstanceOverrides,
@@ -144,7 +146,7 @@ export default function ItemDetailModal({
         setNotes(d.notes);
         setLink(d.link);
         setAllDay(d.allDay);
-        setReminder(d.reminder ?? "");
+        setReminder(reminderRawToToken(d.reminder ?? ""));
         const rec = (d.recurrence ?? "").trim();
         setSeriesRecurrence(
           rec === "daily" || rec === "weekly" || rec === "monthly" || rec === "yearly" ? rec : ""
@@ -511,12 +513,7 @@ export default function ItemDetailModal({
                   All-day
                 </label>
                 <Field label="Reminder">
-                  <input
-                    value={reminder}
-                    onChange={(e) => setReminder(e.target.value)}
-                    placeholder="10m, 2h, 1d"
-                    className={inputClass}
-                  />
+                  <CalendarReminderSelect value={reminder} onChange={setReminder} className={inputClass} />
                 </Field>
                 <Field label="Recurrence">
                   <select
