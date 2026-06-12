@@ -1,19 +1,15 @@
-/** Preset reminder offsets accepted by the API (ReminderParser). */
-export const CALENDAR_REMINDER_OPTIONS = [
-  { value: "", label: "None" },
-  { value: "5m", label: "5 minutes before" },
-  { value: "10m", label: "10 minutes before" },
-  { value: "15m", label: "15 minutes before" },
-  { value: "30m", label: "30 minutes before" },
-  { value: "1h", label: "1 hour before" },
-  { value: "2h", label: "2 hours before" },
-  { value: "4h", label: "4 hours before" },
-  { value: "1d", label: "1 day before" },
-] as const;
+export type ReminderUnit = "m" | "h" | "d";
 
-const PRESET_VALUES = new Set<string>(
-  CALENDAR_REMINDER_OPTIONS.map((o) => o.value).filter((v) => v !== "")
-);
+export type ReminderParts = {
+  amount: string;
+  unit: ReminderUnit;
+};
+
+export const REMINDER_UNIT_OPTIONS: { value: ReminderUnit; label: string }[] = [
+  { value: "m", label: "Minutes" },
+  { value: "h", label: "Hours" },
+  { value: "d", label: "Days" },
+];
 
 /** DB stores seconds; API writes accept shorthand tokens (10m, 2h, 1d). */
 export function reminderRawToToken(raw: string): string {
@@ -34,13 +30,21 @@ export function reminderRawToToken(raw: string): string {
   return "";
 }
 
-export function reminderOptionLabel(token: string): string {
-  const preset = CALENDAR_REMINDER_OPTIONS.find((o) => o.value === token);
-  if (preset) return preset.label;
-  if (!token) return "None";
-  return `${token} before`;
+export function reminderTokenToParts(token: string): ReminderParts {
+  const normalized = reminderRawToToken(token);
+  if (!normalized) return { amount: "", unit: "m" };
+
+  const match = /^(\d+)(m|h|d)$/.exec(normalized);
+  if (!match) return { amount: "", unit: "m" };
+
+  return {
+    amount: match[1],
+    unit: match[2] as ReminderUnit,
+  };
 }
 
-export function isPresetReminder(token: string): boolean {
-  return PRESET_VALUES.has(token);
+export function reminderPartsToToken(parts: ReminderParts): string {
+  const amount = parts.amount.trim();
+  if (!amount || !/^\d+$/.test(amount) || Number(amount) <= 0) return "";
+  return `${amount}${parts.unit}`;
 }
