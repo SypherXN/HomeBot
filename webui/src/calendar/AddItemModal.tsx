@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { DateTime } from "luxon";
 import DiscordMemberSelect from "../components/DiscordMemberSelect";
+import CalendarReminderSelect from "./CalendarReminderSelect";
 import type { DiscordGuildRosterState } from "../hooks/useDiscordGuildRoster";
 import { postCalendarItem } from "../api";
 import { CALENDAR_TIME_ZONE_OPTIONS } from "./timeZoneOptions";
@@ -201,12 +202,7 @@ export default function AddItemModal({
                 />
               </Field>
               <Field label="Reminder">
-                <input
-                  value={reminder}
-                  onChange={(e) => setReminder(e.target.value)}
-                  className={inputClass}
-                  placeholder="10m, 2h, 1d"
-                />
+                <CalendarReminderSelect value={reminder} onChange={setReminder} className={inputClass} />
               </Field>
               <Field label="Recurrence">
                 <select
