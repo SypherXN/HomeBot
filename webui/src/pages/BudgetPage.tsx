@@ -492,6 +492,7 @@ export default function BudgetPage() {
               <BudgetTransactionForm
                 token={tok}
                 actor={actor}
+                month={month}
                 categories={categories}
                 accounts={accounts}
                 roster={roster}
@@ -623,7 +624,7 @@ export default function BudgetPage() {
             onSaved={load}
           />
 
-          <BudgetAccountsPanel token={tok} actor={actor} accounts={accounts} onSaved={load} />
+          <BudgetAccountsPanel token={tok} actor={actor} month={month} accounts={accounts} onSaved={load} />
 
           <section className="hb-card p-4">
             <h2 className="mb-3 text-lg font-medium text-white">Envelope budgets — {month}</h2>

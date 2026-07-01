@@ -134,12 +134,16 @@ export default function BudgetTransactionEditModal({
             required
             className="w-full hb-input px-3 py-2 text-slate-100"
           />
-          <input
-            type="date"
-            value={txDate}
-            onChange={(e) => setTxDate(e.target.value)}
-            className="w-full hb-input px-3 py-2 text-slate-100"
-          />
+          <label className="block text-xs text-slate-400">
+            Date
+            <span className="ml-1 font-normal text-slate-500">(which month this counts toward)</span>
+            <input
+              type="date"
+              value={txDate}
+              onChange={(e) => setTxDate(e.target.value)}
+              className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
+            />
+          </label>
           <MemberIdField
             token={token}
             value={spender}

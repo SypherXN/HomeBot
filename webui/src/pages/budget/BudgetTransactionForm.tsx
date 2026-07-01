@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DiscordMemberSelect from "../../components/DiscordMemberSelect";
 import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster";
+import { defaultTransactionDateForMonth } from "../../lib/budgetTransactionDate";
 import {
   postBudgetTransaction,
   type BudgetAccount,
@@ -13,15 +14,26 @@ type SplitRow = { categoryId: string; spentByUserId: string; amount: string };
 type Props = {
   token: string;
   actor: string;
+  /** Budget month being viewed (YYYY-MM) — used to default the transaction date. */
+  month: string;
   categories: BudgetCategory[];
   accounts: BudgetAccount[];
   roster: DiscordGuildRosterState;
   onSaved: () => Promise<void>;
 };
 
-export default function BudgetTransactionForm({ token, actor, categories, accounts, roster, onSaved }: Props) {
+export default function BudgetTransactionForm({
+  token,
+  actor,
+  month,
+  categories,
+  accounts,
+  roster,
+  onSaved,
+}: Props) {
   const [formType, setFormType] = useState<"expense" | "income">("expense");
   const [formAmount, setFormAmount] = useState("");
+  const [formDate, setFormDate] = useState(() => defaultTransactionDateForMonth(month));
   const [formCategoryId, setFormCategoryId] = useState("");
   const [formSpender, setFormSpender] = useState(actor);
   const [formNote, setFormNote] = useState("");
@@ -34,6 +46,10 @@ export default function BudgetTransactionForm({ token, actor, categories, accoun
   const [splits, setSplits] = useState<SplitRow[]>([
     { categoryId: "", spentByUserId: actor, amount: "" },
   ]);
+
+  useEffect(() => {
+    setFormDate(defaultTransactionDateForMonth(month));
+  }, [month]);
 
   function addSplitRow() {
     setSplits((s) => [...s, { categoryId: "", spentByUserId: actor, amount: "" }]);
@@ -70,6 +86,7 @@ export default function BudgetTransactionForm({ token, actor, categories, accoun
       splits: splitPayload,
       currency: formCurrency.trim() || "USD",
       accountId: formAccountId ? Number(formAccountId) : undefined,
+      transactionDate: formDate || undefined,
     });
 
     setFormAmount("");
@@ -107,6 +124,17 @@ export default function BudgetTransactionForm({ token, actor, categories, accoun
         onChange={(e) => setFormAmount(e.target.value)}
         className="w-full hb-input px-3 py-2 text-slate-100"
       />
+      <label className="block text-xs text-slate-400">
+        Date
+        <span className="ml-1 font-normal text-slate-500">(which month this counts toward)</span>
+        <input
+          type="date"
+          required
+          value={formDate}
+          onChange={(e) => setFormDate(e.target.value)}
+          className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
+        />
+      </label>
       {formType === "expense" && (
         <label className="flex items-center gap-2 text-sm text-slate-400">
           <input type="checkbox" checked={useSplits} onChange={(e) => setUseSplits(e.target.checked)} />

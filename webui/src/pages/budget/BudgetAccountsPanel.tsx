@@ -6,6 +6,7 @@ import {
   postBudgetTransfer,
   type BudgetAccount,
 } from "../../api";
+import { defaultTransactionDateForMonth } from "../../lib/budgetTransactionDate";
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -14,11 +15,18 @@ function formatMoney(n: number): string {
 type Props = {
   token: string;
   actor: string;
+  month: string;
   accounts: BudgetAccount[];
   onSaved: () => Promise<void>;
 };
 
-export default function BudgetAccountsPanel({ token, actor, accounts: accountsProp, onSaved }: Props) {
+export default function BudgetAccountsPanel({
+  token,
+  actor,
+  month,
+  accounts: accountsProp,
+  onSaved,
+}: Props) {
   const [showArchived, setShowArchived] = useState(false);
   const [accounts, setAccounts] = useState(accountsProp);
   const [newName, setNewName] = useState("");
@@ -27,6 +35,7 @@ export default function BudgetAccountsPanel({ token, actor, accounts: accountsPr
   const [xferTo, setXferTo] = useState("");
   const [xferAmount, setXferAmount] = useState("");
   const [xferNote, setXferNote] = useState("");
+  const [xferDate, setXferDate] = useState(() => defaultTransactionDateForMonth(month));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,6 +51,10 @@ export default function BudgetAccountsPanel({ token, actor, accounts: accountsPr
   useEffect(() => {
     void reloadAccounts();
   }, [reloadAccounts]);
+
+  useEffect(() => {
+    setXferDate(defaultTransactionDateForMonth(month));
+  }, [month]);
 
   const activeAccounts = accounts.filter((a) => a.isActive !== false);
 
@@ -77,6 +90,7 @@ export default function BudgetAccountsPanel({ token, actor, accounts: accountsPr
         fromAccountId: Number(xferFrom),
         toAccountId: Number(xferTo),
         note: xferNote.trim() || undefined,
+        transactionDate: xferDate || undefined,
       });
       setXferAmount("");
       setXferNote("");
@@ -252,6 +266,16 @@ export default function BudgetAccountsPanel({ token, actor, accounts: accountsPr
               required
               className="w-full hb-input px-2 py-1 text-sm text-slate-100"
             />
+            <label className="block text-xs text-slate-400">
+              Date
+              <input
+                type="date"
+                required
+                value={xferDate}
+                onChange={(e) => setXferDate(e.target.value)}
+                className="mt-1 w-full hb-input px-2 py-1 text-sm text-slate-100"
+              />
+            </label>
             <input
               value={xferNote}
               onChange={(e) => setXferNote(e.target.value)}
