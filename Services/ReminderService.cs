@@ -55,22 +55,35 @@ public class ReminderService
             "true",
             StringComparison.OrdinalIgnoreCase);
 
-    private static void AdvanceRecurringStart(SqliteConnection conn, int id, DateTime currentStart, string recurrence)
+    private static void WriteSeriesStart(SqliteConnection conn, int id, DateTime nextStart)
     {
-        DateTime next = currentStart;
-        if (recurrence == "daily")
-            next = currentStart.AddDays(1);
-        else if (recurrence == "weekly")
-            next = currentStart.AddDays(7);
-
         var updateCmd = conn.CreateCommand();
         updateCmd.CommandText = @"
             UPDATE CalendarItems
             SET StartDateTime = $next, ReminderSent = 0
             WHERE Id = $id";
-        updateCmd.Parameters.AddWithValue("$next", next.ToString("yyyy-MM-dd HH:mm"));
+        updateCmd.Parameters.AddWithValue("$next", nextStart.ToString("yyyy-MM-dd HH:mm"));
         updateCmd.Parameters.AddWithValue("$id", id);
         updateCmd.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Moves a recurring series start forward one step after a reminder (or skipped instance).
+    /// </summary>
+    private static void AdvanceRecurringStart(SqliteConnection conn, int id, DateTime currentStart, string recurrence)
+    {
+        var next = CalendarRecurrenceAdvance.NextStart(currentStart, recurrence);
+        if (next <= currentStart)
+        {
+            // Unknown recurrence — mark sent so we do not spam every poll.
+            var mark = conn.CreateCommand();
+            mark.CommandText = "UPDATE CalendarItems SET ReminderSent = 1 WHERE Id = $id";
+            mark.Parameters.AddWithValue("$id", id);
+            mark.ExecuteNonQuery();
+            return;
+        }
+
+        WriteSeriesStart(conn, id, next);
     }
 
     /// <summary>
@@ -130,11 +143,29 @@ public class ReminderService
             var eventTimeForReminder = start;
             var suppressSend = false;
 
+            // Heal stuck monthly/yearly rows that never advanced (constant re-fire).
+            // If the reminder became due more than ~2 minutes ago, advance without notifying again.
+            if (!string.IsNullOrWhiteSpace(recurrence) && reminderSent == 0)
+            {
+                var healed = CalendarRecurrenceAdvance.AdvancePastStaleReminders(
+                    start,
+                    recurrence,
+                    TimeSpan.FromSeconds(seconds),
+                    now);
+                if (healed > start)
+                {
+                    WriteSeriesStart(conn, id, healed);
+                    start = healed;
+                    eventTimeForReminder = healed;
+                }
+            }
+
             if (!string.IsNullOrWhiteSpace(recurrence))
             {
                 try
                 {
-                    var instanceKey = CalendarService.NormalizeDbStartToInstanceKeyUtc(startStr);
+                    var instanceKey = CalendarService.NormalizeDbStartToInstanceKeyUtc(
+                        start.ToString("yyyy-MM-dd HH:mm"));
                     if (CalendarService.TryLoadRecurrenceExceptionForReminder(
                             conn,
                             id,
