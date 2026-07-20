@@ -35,6 +35,7 @@ import {
   ymdListForDays,
 } from "../calendar/calendarZoned";
 import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
+import { useHorizontalSwipe } from "../hooks/useHorizontalSwipe";
 import { useSearchHighlightId } from "../lib/searchHighlight";
 import { validActorId } from "../lib/validation";
 import AddItemModal from "../calendar/AddItemModal";
@@ -274,6 +275,14 @@ export default function CalendarPage() {
     setParams(p, { replace: true });
   }
 
+  /** Open day view on a specific date (single URL update so date is not lost). */
+  function openDay(ymd: string) {
+    const p = new URLSearchParams(params);
+    p.set("date", ymd);
+    p.set("view", "day");
+    setParams(p, { replace: true });
+  }
+
   function gotoToday() {
     setAnchorYmd(todayYmd(effectiveViewerZone));
   }
@@ -284,6 +293,8 @@ export default function CalendarPage() {
     else if (view === "day") setAnchorYmd(addDaysYmd(anchorYmd, direction));
     else setAnchorYmd(addDaysYmd(anchorYmd, AGENDA_DAYS * direction));
   }
+
+  const calendarSwipe = useHorizontalSwipe(step);
 
   async function handleUndo() {
     if (!canActor) {
@@ -488,16 +499,13 @@ export default function CalendarPage() {
       )}
 
       <div className="mt-4 flex flex-col gap-6 lg:flex-row lg:items-start">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 touch-pan-y" {...calendarSwipe}>
           {view === "month" && (
             <MonthView
               anchorYmd={anchorYmd}
               displayZone={effectiveViewerZone}
               events={range ?? []}
-              onPickDay={(ymd) => {
-                setAnchorYmd(ymd);
-                setView("day");
-              }}
+              onPickDay={openDay}
               onPickEvent={(ev) =>
                 setModal({
                   kind: "detail",
@@ -515,6 +523,7 @@ export default function CalendarPage() {
               dayYmds={weekDayYmds}
               displayZone={effectiveViewerZone}
               events={range ?? []}
+              onPickDay={openDay}
               onPickEvent={(ev) =>
                 setModal({
                   kind: "detail",
@@ -711,22 +720,24 @@ function Toolbar({
               {importBusy ? "Importing…" : "Import .ics"}
             </button>
           )}
-          <button
-            type="button"
-            onClick={onPrev}
-            aria-label="Previous"
-            className="shrink-0 rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
-          >
-            ‹
-          </button>
-          <button
-            type="button"
-            onClick={onNext}
-            aria-label="Next"
-            className="shrink-0 rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
-          >
-            ›
-          </button>
+          <div className="inline-flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={onPrev}
+              aria-label="Previous"
+              className="rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              onClick={onNext}
+              aria-label="Next"
+              className="rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
+            >
+              ›
+            </button>
+          </div>
         </div>
         <div className="grid min-w-0 w-full grid-cols-4 gap-0.5 rounded-lg border border-slate-700 bg-slate-900/60 p-0.5 text-xs sm:ml-1 sm:w-auto sm:max-w-sm sm:shrink-0 sm:text-sm">
           {ALL_VIEWS.map((v) => (

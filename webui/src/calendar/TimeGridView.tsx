@@ -9,13 +9,15 @@ type Props = {
   displayZone: string;
   events: CalendarRangeItem[];
   onPickEvent: (event: CalendarRangeItem) => void;
+  /** When set (e.g. week view), day headers open that day. */
+  onPickDay?: (ymd: string) => void;
 };
 
 const HOUR_START = 6;
 const HOUR_END = 23;
 const HOUR_HEIGHT_PX = 44;
 
-export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent }: Props) {
+export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent, onPickDay }: Props) {
   const partition = useMemo(
     () => splitAllDayAndTimed(events, dayYmds, displayZone),
     [events, dayYmds, displayZone]
@@ -41,15 +43,18 @@ export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent
       >
         <div className="border-r border-slate-800 px-2 py-2 text-slate-500">All-day</div>
         {dayLabels.map((d) => (
-          <div
+          <button
             key={d.ymd}
+            type="button"
+            disabled={!onPickDay}
+            onClick={() => onPickDay?.(d.ymd)}
             className={`border-r border-slate-800 px-2 py-2 ${
-              d.isToday ? "bg-blue-950/40 text-blue-100" : "text-slate-300"
-            }`}
+              onPickDay ? "cursor-pointer hover:bg-slate-800/60" : "cursor-default"
+            } ${d.isToday ? "bg-blue-950/40 text-blue-100" : "text-slate-300"}`}
           >
             <div className="text-[10px] uppercase tracking-wide text-slate-500">{d.label}</div>
             <div className="text-base font-medium">{d.dayNum}</div>
-          </div>
+          </button>
         ))}
       </div>
 
