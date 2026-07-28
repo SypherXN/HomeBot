@@ -42,6 +42,9 @@ fi
 echo "==> git pull (${APP_DIR})"
 sudo -u homebot bash -c "cd '${APP_DIR}' && git pull --ff-only"
 
+echo "==> script permissions"
+ensure_script_executables "${APP_DIR}"
+
 echo "==> dotnet publish"
 publish_homebot "${APP_DIR}"
 

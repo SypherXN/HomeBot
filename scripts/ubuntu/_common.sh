@@ -96,3 +96,9 @@ publish_homebot() {
   local app_dir="$1"
   sudo -u homebot bash -c "cd '${app_dir}' && dotnet publish -c Release -o '${app_dir}/publish'"
 }
+
+# Git does not track the executable bit on these scripts; systemd units invoke them directly.
+ensure_script_executables() {
+  local app_dir="$1"
+  find "${app_dir}/scripts" -type f -name '*.sh' -exec chmod +x {} \;
+}
