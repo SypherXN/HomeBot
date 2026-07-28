@@ -4,6 +4,7 @@ type Props = {
 };
 
 const rows: { keys: string; action: string }[] = [
+  { keys: "Ctrl/⌘ K", action: "Quick add (one-line composer)" },
   { keys: "/", action: "Focus global search" },
   { keys: "?", action: "Show this help" },
   { keys: "Esc", action: "Close help / blur search" },

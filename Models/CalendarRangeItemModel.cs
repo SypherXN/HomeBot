@@ -39,6 +39,9 @@ public class CalendarRangeItemModel
     /// <summary>True when this occurrence was marked complete without completing the whole series.</summary>
     public bool IsInstanceCompleted { get; set; }
 
+    /// <summary>True when the whole series/item was marked complete (only returned when includeCompleted is set on the range query).</summary>
+    public bool IsCompleted { get; set; }
+
     /// <summary>True when title/description/notes/link or time was overridden for this occurrence.</summary>
     public bool HasInstanceOverride { get; set; }
 

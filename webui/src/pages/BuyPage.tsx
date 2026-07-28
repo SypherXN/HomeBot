@@ -5,6 +5,7 @@ import MemberIdField from "../components/MemberIdField";
 import BulkActionBar from "../components/BulkActionBar";
 import { useBulkSelection } from "../hooks/useBulkSelection";
 import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
+import { useUndoToast } from "../hooks/useUndoToast";
 import { validActorId } from "../lib/validation";
 import {
   deleteBuyCompleted,
@@ -223,6 +224,8 @@ export default function BuyPage() {
     window.setTimeout(() => setBanner(null), 5000);
   }
 
+  const undoToast = useUndoToast();
+
   async function handleBulkComplete() {
     if (!canActor || bulk.selectedIds.length === 0) return;
     setBulkBusy(true);
@@ -308,7 +311,7 @@ export default function BuyPage() {
     setActionBusyId(item.id);
     try {
       await postBuyItemComplete(tok, actor, item.id);
-      showBanner("ok", `Completed “${item.name}”.`);
+      undoToast(`Completed “${item.name}”.`, () => void loadList());
       await loadList();
     } catch (err) {
       showBanner("err", err instanceof Error ? err.message : String(err));
@@ -326,7 +329,7 @@ export default function BuyPage() {
     setActionBusyId(item.id);
     try {
       await deleteBuyItem(tok, actor, item.id);
-      showBanner("ok", `Removed “${item.name}”.`);
+      undoToast(`Removed “${item.name}”.`, () => void loadList());
       await loadList();
     } catch (err) {
       showBanner("err", err instanceof Error ? err.message : String(err));

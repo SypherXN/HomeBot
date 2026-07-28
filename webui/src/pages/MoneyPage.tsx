@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import Sheet from "../components/Sheet";
 import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
 import { validActorId } from "../lib/validation";
 import {
@@ -996,10 +997,8 @@ export default function MoneyPage() {
       </section>
 
       {editRow && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center hb-overlay p-4">
-          <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-xl">
-            <h3 className="mb-3 text-lg font-semibold text-white">Edit transaction #{editRow.id}</h3>
-            <form onSubmit={(e) => void handleEditSave(e)} className="space-y-3">
+        <Sheet open title={`Edit transaction #${editRow.id}`} onClose={() => setEditRow(null)}>
+          <form onSubmit={(e) => void handleEditSave(e)} className="space-y-3">
               <div>
                 <label className="mb-1 block text-xs text-slate-400">Name</label>
                 <input
@@ -1052,8 +1051,7 @@ export default function MoneyPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </Sheet>
       )}
     </div>
   );

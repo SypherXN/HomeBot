@@ -5,6 +5,7 @@ import App from "./App";
 import { AuthProvider } from "./auth/AuthContext";
 import { CalendarZoneProvider } from "./calendar/CalendarZoneContext";
 import { ThemeProvider } from "./theme/ThemeProvider";
+import { ToastProvider } from "./components/ToastProvider";
 import { AUTH_STORAGE_ACTOR, AUTH_STORAGE_TOKEN } from "./auth/storageKeys";
 import { createHomeBotFetchMock } from "./test/fetchMock";
 
@@ -14,7 +15,9 @@ function renderRoute(path: string) {
       <AuthProvider>
         <ThemeProvider>
           <CalendarZoneProvider>
-            <App />
+            <ToastProvider>
+              <App />
+            </ToastProvider>
           </CalendarZoneProvider>
         </ThemeProvider>
       </AuthProvider>
@@ -67,7 +70,9 @@ describe("Web UI — route smoke (all feature areas)", () => {
       <MemoryRouter initialEntries={["/oauth/callback?oauth_error=access_denied"]}>
         <AuthProvider>
           <CalendarZoneProvider>
-            <App />
+            <ToastProvider>
+              <App />
+            </ToastProvider>
           </CalendarZoneProvider>
         </AuthProvider>
       </MemoryRouter>

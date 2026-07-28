@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   getBuyItems,
@@ -16,6 +16,9 @@ import {
   getBudgetSummaryByCategory,
   getBudgetGoals,
   getWishlistItems,
+  postCalendarItemComplete,
+  postMealPlanAddToBuy,
+  type CalendarListItem,
   type MealPlanEntry,
   type MoneySummary,
   type PagedBuyList,
@@ -26,7 +29,10 @@ import {
 } from "../api";
 import { useAuth } from "../auth/AuthContext";
 import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
+import { useUndoToast } from "../hooks/useUndoToast";
+import { useToasts } from "../components/toastContext";
 import { titleCase } from "../lib/titleCase";
+import { validActorId } from "../lib/validation";
 import { Icon, type IconName } from "../components/icons";
 
 function formatMoney(n: number): string {
@@ -47,13 +53,12 @@ function balanceLine(s: MoneySummary): string {
   return `${a} and ${b} are even (net).`;
 }
 
-function formatDashboardCalendarLine(item: PagedCalendarList["items"][number], mode: "today" | "upcoming"): string {
+function calendarLine(item: CalendarListItem, mode: "today" | "upcoming"): string {
   const base = item.title.trim() || "(untitled)";
-  const icon = item.type === "task" ? "📝" : "📅";
   if (mode === "upcoming" && item.dateText?.trim()) {
-    return `${icon} ${base} · ${item.dateText}`;
+    return `${base} · ${item.dateText}`;
   }
-  return `${icon} ${base}`;
+  return base;
 }
 
 type DashboardBundle = {
@@ -95,13 +100,20 @@ function greetingLine(): { greeting: string; dateLine: string } {
 }
 
 export default function DashboardPage() {
-  const { token, webUsername } = useAuth();
+  const { token, webUsername, actorUserId } = useAuth();
   const tok = token.trim();
+  const actor = actorUserId.trim();
   const canAuth = tok.length > 0;
+  const canActor = canAuth && validActorId(actor);
   const { greeting, dateLine } = greetingLine();
   const guildRoster = useDiscordGuildRoster(token);
+  const undoToast = useUndoToast();
+  const { showToast } = useToasts();
 
   const [slice, setSlice] = useState<Slice<DashboardBundle>>({ status: "loading" });
+  const [onlyMine, setOnlyMine] = useState(false);
+  const [completingId, setCompletingId] = useState<number | null>(null);
+  const [addingMealId, setAddingMealId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     if (!canAuth) {
@@ -201,6 +213,99 @@ export default function DashboardPage() {
     void load();
   }, [load]);
 
+  const bundle = slice.status === "ready" ? slice.value : null;
+
+  const tonightEntry = useMemo(
+    () => bundle?.mealsToday.find((e) => e.mealSlot.toLowerCase() === "dinner") ?? null,
+    [bundle]
+  );
+
+  const visibleToday = useMemo(() => {
+    if (!bundle) return [];
+    const items = bundle.today.items;
+    if (!onlyMine || !canActor) return items;
+    return items.filter((it) => !it.assignedTo || it.assignedTo === "0" || it.assignedTo === actor);
+  }, [bundle, onlyMine, canActor, actor]);
+
+  const visibleTasks = useMemo(() => {
+    if (!bundle) return [];
+    const items = bundle.tasks.items.slice(0, 5);
+    if (!onlyMine || !canActor) return items;
+    return items.filter((it) => !it.assignedTo || it.assignedTo === "0" || it.assignedTo === actor);
+  }, [bundle, onlyMine, canActor, actor]);
+
+  async function completeCalendarItem(item: CalendarListItem) {
+    if (!canActor) {
+      showToast({ message: "Set your actor (Discord user id) in Settings to complete items.", kind: "error" });
+      return;
+    }
+    setCompletingId(item.id);
+    try {
+      await postCalendarItemComplete(tok, actor, item.id);
+      undoToast(`Completed "${item.title.trim() || "(untitled)"}".`, () => void load());
+      void load();
+    } catch (err) {
+      showToast({ message: err instanceof Error ? err.message : String(err), kind: "error" });
+    } finally {
+      setCompletingId(null);
+    }
+  }
+
+  async function addMealToBuy(entry: MealPlanEntry) {
+    if (!canActor) {
+      showToast({ message: "Set your actor (Discord user id) in Settings first.", kind: "error" });
+      return;
+    }
+    setAddingMealId(entry.id);
+    try {
+      await postMealPlanAddToBuy(tok, entry.id, actor);
+      undoToast("Added tonight's ingredients to the buy list.");
+    } catch (err) {
+      showToast({ message: err instanceof Error ? err.message : String(err), kind: "error" });
+    } finally {
+      setAddingMealId(null);
+    }
+  }
+
+  const attentionRows: { icon: IconName; text: ReactNode; to: string; action: string }[] = [];
+  if (bundle) {
+    if (bundle.budgetAlertCount > 0) {
+      attentionRows.push({
+        icon: "budget",
+        text: `${bundle.budgetAlertCount} budget alert${bundle.budgetAlertCount === 1 ? "" : "s"} pending review`,
+        to: "/budget",
+        action: "Review",
+      });
+    }
+    if (bundle.staleBuy.length > 0) {
+      attentionRows.push({
+        icon: "buy",
+        text: `${bundle.staleBuy.length} item${bundle.staleBuy.length === 1 ? "" : "s"} on the buy list for 14+ days — ${bundle.staleBuy
+          .slice(0, 2)
+          .map((i) => i.name)
+          .join(", ")}${bundle.staleBuy.length > 2 ? "…" : ""}`,
+        to: "/buy",
+        action: "Clean up",
+      });
+    }
+    if (!tonightEntry) {
+      attentionRows.push({
+        icon: "meals",
+        text: "No dinner planned for tonight",
+        to: "/meals",
+        action: "Plan dinner",
+      });
+    }
+    if (bundle.ops.backupWarning) {
+      attentionRows.push({
+        icon: "alert",
+        text: bundle.ops.backupWarning,
+        to: "/health",
+        action: "Diagnostics",
+      });
+    }
+  }
+
   return (
     <div className="space-y-8">
       <div>
@@ -210,51 +315,9 @@ export default function DashboardPage() {
           {webUsername ? `, ${titleCase(webUsername)}` : ""}
         </h1>
         <p className="mt-1.5 text-slate-400">
-          Today at a glance — meals, calendar, lists, budget, and ops. Press{" "}
-          <kbd className="rounded-md bg-slate-800 px-1.5 py-0.5 text-xs text-slate-300">/</kbd> to search.
-          Configure in{" "}
-          <Link to="/settings" className="text-blue-400 hover:underline">
-            Settings
-          </Link>
-          .
+          Here's what needs you today.
         </p>
       </div>
-
-      {slice.status === "ready" && (slice.value.ops.backupWarning || slice.value.budgetAlertCount > 0) ? (
-        <div className="space-y-2">
-          {slice.value.ops.backupWarning ? (
-            <div className="rounded-lg border border-amber-800/50 bg-amber-950/40 px-4 py-2 text-sm text-amber-100">
-              {slice.value.ops.backupWarning}{" "}
-              <Link to="/health" className="font-medium underline">
-                Diagnostics
-              </Link>
-            </div>
-          ) : null}
-          {slice.value.budgetAlertCount > 0 ? (
-            <div className="rounded-lg border border-amber-800/50 bg-amber-950/40 px-4 py-2 text-sm text-amber-100">
-              {slice.value.budgetAlertCount} budget alert{slice.value.budgetAlertCount === 1 ? "" : "s"} pending.{" "}
-              <Link to="/budget" className="font-medium underline">
-                Review budget
-              </Link>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      {slice.status === "ready" && slice.value.ops.googleConnected != null ? (
-        <p className="text-xs text-slate-500">
-          Google Calendar:{" "}
-          {slice.value.ops.googleConnected ? (
-            <span className="text-emerald-400">connected</span>
-          ) : (
-            <span className="text-slate-400">not connected</span>
-          )}{" "}
-          ·{" "}
-          <Link to="/calendar" className="text-blue-400 hover:underline">
-            Calendar settings
-          </Link>
-        </p>
-      ) : null}
 
       {!canAuth && (
         <div className="rounded-lg border border-amber-700/50 bg-amber-950/40 px-4 py-3 text-sm text-amber-100">
@@ -287,225 +350,344 @@ export default function DashboardPage() {
         <p className="text-sm text-slate-500">Loading overview…</p>
       )}
 
-      {slice.status === "ready" && (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <SnapshotCard
-            to="/meals"
-            icon="meals"
-            title="Meals today"
-            subtitle="Plan & dinner"
-            stat={`${slice.value.mealsToday.length} planned`}
-          >
-            <ul className="mt-2 space-y-1 text-sm text-slate-400">
-              {slice.value.mealsToday.length === 0 ? (
-                <li>Nothing on the meal plan today.</li>
-              ) : (
-                slice.value.mealsToday.map((e) => (
-                  <li key={e.id} className="truncate">
-                    <span className="text-slate-500">{titleCase(e.mealSlot)}:</span>{" "}
-                    {e.customLabel || e.recipeName || "TBD"}
-                  </li>
-                ))
-              )}
-            </ul>
-          </SnapshotCard>
-
-          <SnapshotCard
-            to="/buy"
-            icon="buy"
-            title="Buy list"
-            subtitle="Active shopping items"
-            stat={`${slice.value.buy.totalCount} open`}
-          >
-            <ul className="mt-2 space-y-1 text-sm text-slate-400">
-              {slice.value.buy.items.length === 0 ? (
-                <li>Nothing on the list.</li>
-              ) : (
-                slice.value.buy.items.slice(0, 5).map((it) => (
-                  <li key={it.id} className="truncate">
-                    {it.name}
-                    {it.store ? (
-                      <span className="text-slate-500"> · {it.store}</span>
-                    ) : null}
-                  </li>
-                ))
-              )}
-            </ul>
-          </SnapshotCard>
-
-          {slice.value.staleBuy.length > 0 ? (
-            <SnapshotCard
-              to="/buy"
-            icon="alert"
-              title="Stale buy items"
-              subtitle="On the list 14+ days"
-              stat={`${slice.value.staleBuy.length} aging`}
-            >
-              <ul className="mt-2 space-y-1 text-sm text-amber-200/90">
-                {slice.value.staleBuy.map((it) => (
-                  <li key={it.id} className="truncate">
-                    {it.name}
-                    {it.store ? <span className="text-amber-200/60"> · {it.store}</span> : null}
+      {bundle && (
+        <>
+          {/* Catch-up inbox */}
+          {attentionRows.length > 0 && (
+            <section aria-label="Needs attention">
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                Needs attention
+              </h2>
+              <ul className="space-y-2">
+                {attentionRows.map((row, i) => (
+                  <li
+                    key={i}
+                    className="flex items-center gap-3 rounded-2xl border border-amber-800/40 bg-amber-950/25 px-4 py-3"
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-300">
+                      <Icon name={row.icon} className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm text-amber-100/90">{row.text}</span>
+                    <Link
+                      to={row.to}
+                      className="shrink-0 rounded-lg bg-amber-500/20 px-2.5 py-1 text-xs font-semibold text-amber-200 transition-colors hover:bg-amber-500/30"
+                    >
+                      {row.action}
+                    </Link>
                   </li>
                 ))}
               </ul>
-            </SnapshotCard>
-          ) : null}
+            </section>
+          )}
 
-          <SnapshotCard
-            to="/wishlist"
-            icon="wishlist"
-            title="Wishlist"
-            subtitle="Open wishes"
-            stat={`${slice.value.wishlist.totalCount} open`}
-          >
-            <ul className="mt-2 space-y-1 text-sm text-slate-400">
-              {slice.value.wishlist.items.length === 0 ? (
-                <li>No wishlist rows.</li>
-              ) : (
-                slice.value.wishlist.items.slice(0, 5).map((it) => (
-                  <li key={it.id} className="truncate">
-                    {it.name}
-                    {it.priority ? (
-                      <span className="text-slate-500"> · {it.priority}</span>
-                    ) : null}
-                  </li>
-                ))
-              )}
-            </ul>
-          </SnapshotCard>
-
-          <SnapshotCard
-            to="/budget"
-            icon="budget"
-            title="Budget"
-            subtitle="This month"
-            stat={
-              slice.value.budgetMonth
-                ? `$${formatMoney(slice.value.budgetMonth.net)} net`
-                : "—"
-            }
-          >
-            {slice.value.budgetMonth ? (
-              <div className="mt-2 space-y-1 text-sm text-slate-400">
-                <p>
-                  Income ${formatMoney(slice.value.budgetMonth.income)} · spent $
-                  {formatMoney(slice.value.budgetMonth.expenses)}
-                </p>
-                <p>Top category: {titleCase(slice.value.budgetMonth.topCategory)}</p>
-                {slice.value.budgetMonth.goalsCount > 0 && (
-                  <p>
-                    {slice.value.budgetMonth.goalsCount} savings goal
-                    {slice.value.budgetMonth.goalsCount === 1 ? "" : "s"}
-                    {slice.value.budgetMonth.goalsProgress
-                      ? ` · ${slice.value.budgetMonth.goalsProgress}`
-                      : ""}
-                  </p>
+          <div className="grid gap-4 lg:grid-cols-5">
+            {/* Tonight */}
+            <section className="hb-card relative overflow-hidden p-5 lg:col-span-2" aria-label="Tonight">
+              <div
+                className="pointer-events-none absolute inset-0 bg-gradient-to-br from-blue-600/15 via-transparent to-transparent"
+                aria-hidden
+              />
+              <div className="relative">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600/20 text-blue-300">
+                    <Icon name="meals" className="h-4 w-4" />
+                  </span>
+                  <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-blue-300">
+                    Tonight
+                  </h2>
+                </div>
+                {tonightEntry ? (
+                  <>
+                    <p className="mt-3 text-xl font-semibold text-white">
+                      {tonightEntry.customLabel || tonightEntry.recipeName || "Dinner TBD"}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-400">
+                      {bundle.mealsToday.length} meal{bundle.mealsToday.length === 1 ? "" : "s"} planned today
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={addingMealId === tonightEntry.id}
+                        onClick={() => void addMealToBuy(tonightEntry)}
+                        className="rounded-xl bg-blue-600/80 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
+                      >
+                        {addingMealId === tonightEntry.id ? "Adding…" : "Add ingredients to buy list"}
+                      </button>
+                      <Link
+                        to="/meals"
+                        className="rounded-xl hb-btn-soft px-3 py-1.5 text-xs font-semibold text-slate-200"
+                      >
+                        Meal plan
+                      </Link>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-3 text-xl font-semibold text-white">Nothing planned yet</p>
+                    <p className="mt-1 text-sm text-slate-400">
+                      Pick dinner and the ingredients can go straight to the buy list.
+                    </p>
+                    <Link
+                      to="/meals"
+                      className="mt-4 inline-block rounded-xl bg-blue-600/80 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-500"
+                    >
+                      Plan tonight
+                    </Link>
+                  </>
                 )}
               </div>
-            ) : (
-              <p className="mt-2 text-sm text-slate-500">No budget data yet.</p>
-            )}
-          </SnapshotCard>
+            </section>
 
-          <SnapshotCard
-            to="/money"
-            icon="money"
-            title="Money"
-            subtitle="Transactions & balance"
-            stat={`${slice.value.moneyTx.totalCount} transactions`}
-          >
-            {slice.value.moneySummary ? (
-              <p className="mt-2 text-sm leading-relaxed text-slate-300">
-                {balanceLine(slice.value.moneySummary)}
-              </p>
-            ) : (
-              <p className="mt-2 text-sm text-slate-500">
-                {guildRoster.data?.available === false
-                  ? "Discord roster unavailable — open Money to pick two people for net balance."
-                  : (guildRoster.data?.members.length ?? 0) < 2
-                    ? "Need at least two guild members in roster to show a sample net balance here."
-                    : "Could not load sample balance for the first two roster members."}
-              </p>
-            )}
-          </SnapshotCard>
-
-          <SnapshotCard
-            to="/calendar"
-            icon="calendar"
-            title="Calendar"
-            subtitle="Today & upcoming (first page each)"
-            stat={`${slice.value.today.totalCount} today · ${slice.value.upcoming.totalCount} upcoming`}
-          >
-            <div className="mt-2 space-y-3 text-sm">
-              <div>
-                <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Today</div>
-                <ul className="mt-1 space-y-1 text-slate-400">
-                  {slice.value.today.items.length === 0 ? (
-                    <li>Nothing scheduled today.</li>
-                  ) : (
-                    slice.value.today.items.map((it) => (
-                      <li
-                        key={it.instanceStartUtc ? `t-${it.id}-${it.instanceStartUtc}` : `t-${it.id}`}
-                        className="truncate"
-                      >
-                        {formatDashboardCalendarLine(it, "today")}
-                      </li>
-                    ))
-                  )}
-                </ul>
-                {slice.value.today.totalCount > slice.value.today.items.length ? (
-                  <p className="mt-1 text-xs text-slate-500">
-                    +{slice.value.today.totalCount - slice.value.today.items.length} more today — open Calendar for the
-                    full list.
-                  </p>
-                ) : null}
+            {/* Today band */}
+            <section className="hb-card p-5 lg:col-span-3" aria-label="Today">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600/20 text-blue-300">
+                    <Icon name="calendar" className="h-4 w-4" />
+                  </span>
+                  <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-blue-300">
+                    Today
+                  </h2>
+                </div>
+                {canActor && (
+                  <button
+                    type="button"
+                    onClick={() => setOnlyMine((v) => !v)}
+                    aria-pressed={onlyMine}
+                    className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                      onlyMine
+                        ? "border-blue-500/60 bg-blue-950/60 text-blue-200"
+                        : "border-slate-700 text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    <Icon name="user" className="h-3.5 w-3.5" />
+                    Assigned to me
+                  </button>
+                )}
               </div>
-              <div>
-                <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Soon</div>
-                <ul className="mt-1 space-y-1 text-slate-400">
-                  {slice.value.upcoming.items.length === 0 ? (
-                    <li>No upcoming items on this page.</li>
+
+              {visibleToday.length === 0 && visibleTasks.length === 0 ? (
+                <p className="mt-4 text-sm text-slate-500">
+                  Nothing scheduled{onlyMine ? " for you" : ""} — enjoy the quiet.
+                </p>
+              ) : (
+                <ul className="mt-3 divide-y divide-slate-800/70">
+                  {visibleToday.map((it) => (
+                    <li
+                      key={it.instanceStartUtc ? `t-${it.id}-${it.instanceStartUtc}` : `t-${it.id}`}
+                      className="flex items-center gap-3 py-2.5"
+                    >
+                      <button
+                        type="button"
+                        disabled={completingId === it.id}
+                        onClick={() => void completeCalendarItem(it)}
+                        aria-label={`Complete ${it.title}`}
+                        title={canActor ? "Mark complete" : "Set actorUserId in Settings to complete"}
+                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-600 text-transparent transition-colors hover:border-emerald-400 hover:bg-emerald-500/15 hover:text-emerald-300 disabled:opacity-50"
+                      >
+                        <Icon name="check" className="h-3 w-3" />
+                      </button>
+                      <span className="min-w-0 flex-1 truncate text-sm text-slate-200">
+                        {calendarLine(it, "today")}
+                      </span>
+                      {it.assignedToMemberLabel && (
+                        <span className="shrink-0 rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">
+                          {it.assignedToMemberLabel}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                  {visibleTasks.map((it) => (
+                    <li key={`task-${it.id}`} className="flex items-center gap-3 py-2.5">
+                      <button
+                        type="button"
+                        disabled={completingId === it.id}
+                        onClick={() => void completeCalendarItem(it)}
+                        aria-label={`Complete ${it.title}`}
+                        title={canActor ? "Mark complete" : "Set actorUserId in Settings to complete"}
+                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-600 text-transparent transition-colors hover:border-emerald-400 hover:bg-emerald-500/15 hover:text-emerald-300 disabled:opacity-50"
+                      >
+                        <Icon name="check" className="h-3 w-3" />
+                      </button>
+                      <span className="min-w-0 flex-1 truncate text-sm text-slate-300">
+                        {it.title.trim() || "(untitled)"}
+                      </span>
+                      <span className="shrink-0 rounded bg-slate-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-500">
+                        task
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {(bundle.today.totalCount > visibleToday.length || bundle.tasks.totalCount > 5) && (
+                <p className="mt-2 text-xs text-slate-500">
+                  <Link to="/calendar" className="text-blue-400 hover:underline">
+                    Open calendar
+                  </Link>{" "}
+                  for the full list.
+                </p>
+              )}
+            </section>
+          </div>
+
+          {/* Later / at a glance */}
+          <section aria-label="Later">
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Later
+            </h2>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <SnapshotCard
+                to="/calendar"
+                icon="calendar"
+                title="Coming up"
+                subtitle="Next on the calendar"
+                stat={`${bundle.upcoming.totalCount} upcoming`}
+              >
+                <ul className="mt-2 space-y-1 text-sm text-slate-400">
+                  {bundle.upcoming.items.length === 0 ? (
+                    <li>Nothing on the horizon.</li>
                   ) : (
-                    slice.value.upcoming.items.map((it) => (
+                    bundle.upcoming.items.slice(0, 4).map((it) => (
                       <li
                         key={it.instanceStartUtc ? `u-${it.id}-${it.instanceStartUtc}` : `u-${it.id}`}
                         className="truncate"
                       >
-                        {formatDashboardCalendarLine(it, "upcoming")}
+                        {calendarLine(it, "upcoming")}
                       </li>
                     ))
                   )}
                 </ul>
-                {slice.value.upcoming.totalCount > slice.value.upcoming.items.length ? (
-                  <p className="mt-1 text-xs text-slate-500">
-                    +{slice.value.upcoming.totalCount - slice.value.upcoming.items.length} more upcoming — open Calendar.
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          </SnapshotCard>
+              </SnapshotCard>
 
-          <SnapshotCard
-            to="/calendar"
-            icon="tasks"
-            title="Tasks"
-            subtitle="Open calendar tasks"
-            stat={`${slice.value.tasks.totalCount} open`}
-          >
-            <ul className="mt-2 space-y-1 text-sm text-slate-400">
-              {slice.value.tasks.items.length === 0 ? (
-                <li>No open tasks.</li>
+              <SnapshotCard
+                to="/buy"
+                icon="buy"
+                title="Buy list"
+                subtitle="Active shopping items"
+                stat={`${bundle.buy.totalCount} open`}
+              >
+                <ul className="mt-2 space-y-1 text-sm text-slate-400">
+                  {bundle.buy.items.length === 0 ? (
+                    <li>Nothing on the list.</li>
+                  ) : (
+                    bundle.buy.items.slice(0, 5).map((it) => (
+                      <li key={it.id} className="truncate">
+                        {it.name}
+                        {it.store ? <span className="text-slate-500"> · {it.store}</span> : null}
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </SnapshotCard>
+
+              <SnapshotCard
+                to="/budget"
+                icon="budget"
+                title="Budget"
+                subtitle="This month"
+                stat={bundle.budgetMonth ? `$${formatMoney(bundle.budgetMonth.net)} net` : "—"}
+              >
+                {bundle.budgetMonth ? (
+                  <div className="mt-2 space-y-1 text-sm text-slate-400">
+                    <p>
+                      Income ${formatMoney(bundle.budgetMonth.income)} · spent $
+                      {formatMoney(bundle.budgetMonth.expenses)}
+                    </p>
+                    <p>Top category: {titleCase(bundle.budgetMonth.topCategory)}</p>
+                    {bundle.budgetMonth.goalsCount > 0 && (
+                      <p>
+                        {bundle.budgetMonth.goalsCount} savings goal
+                        {bundle.budgetMonth.goalsCount === 1 ? "" : "s"}
+                        {bundle.budgetMonth.goalsProgress ? ` · ${bundle.budgetMonth.goalsProgress}` : ""}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-500">No budget data yet.</p>
+                )}
+              </SnapshotCard>
+
+              <SnapshotCard
+                to="/wishlist"
+                icon="wishlist"
+                title="Wishlist"
+                subtitle="Open wishes"
+                stat={`${bundle.wishlist.totalCount} open`}
+              >
+                <ul className="mt-2 space-y-1 text-sm text-slate-400">
+                  {bundle.wishlist.items.length === 0 ? (
+                    <li>No wishlist rows.</li>
+                  ) : (
+                    bundle.wishlist.items.slice(0, 5).map((it) => (
+                      <li key={it.id} className="truncate">
+                        {it.name}
+                        {it.priority ? <span className="text-slate-500"> · {it.priority}</span> : null}
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </SnapshotCard>
+
+              <SnapshotCard
+                to="/money"
+                icon="money"
+                title="Money"
+                subtitle="Transactions & balance"
+                stat={`${bundle.moneyTx.totalCount} transactions`}
+              >
+                {bundle.moneySummary ? (
+                  <p className="mt-2 text-sm leading-relaxed text-slate-300">
+                    {balanceLine(bundle.moneySummary)}
+                  </p>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-500">
+                    {guildRoster.data?.available === false
+                      ? "Discord roster unavailable — open Money to pick two people for net balance."
+                      : (guildRoster.data?.members.length ?? 0) < 2
+                        ? "Need at least two guild members in roster to show a sample net balance here."
+                        : "Could not load sample balance for the first two roster members."}
+                  </p>
+                )}
+              </SnapshotCard>
+
+              <SnapshotCard
+                to="/calendar"
+                icon="tasks"
+                title="Tasks"
+                subtitle="Open calendar tasks"
+                stat={`${bundle.tasks.totalCount} open`}
+              >
+                <ul className="mt-2 space-y-1 text-sm text-slate-400">
+                  {bundle.tasks.items.length === 0 ? (
+                    <li>No open tasks.</li>
+                  ) : (
+                    bundle.tasks.items.slice(0, 5).map((it) => (
+                      <li key={it.id} className="truncate">
+                        {it.title.trim() || "(untitled)"}
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </SnapshotCard>
+            </div>
+          </section>
+
+          {bundle.ops.googleConnected != null && (
+            <p className="text-xs text-slate-500">
+              Google Calendar:{" "}
+              {bundle.ops.googleConnected ? (
+                <span className="text-emerald-400">connected</span>
               ) : (
-                slice.value.tasks.items.slice(0, 5).map((it) => (
-                  <li key={it.id} className="truncate">
-                    {it.title.trim() || "(untitled)"}
-                  </li>
-                ))
-              )}
-            </ul>
-          </SnapshotCard>
-        </div>
+                <span className="text-slate-400">not connected</span>
+              )}{" "}
+              ·{" "}
+              <Link to="/calendar" className="text-blue-400 hover:underline">
+                Calendar settings
+              </Link>
+            </p>
+          )}
+        </>
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { DateTime } from "luxon";
 import DiscordMemberSelect from "../components/DiscordMemberSelect";
+import Sheet from "../components/Sheet";
 import CalendarReminderSelect from "./CalendarReminderSelect";
 import type { DiscordGuildRosterState } from "../hooks/useDiscordGuildRoster";
 import { postCalendarItem } from "../api";
@@ -127,7 +128,12 @@ export default function AddItemModal({
   }
 
   return (
-    <ModalShell title={mode === "event" ? "New event" : "New task"} onClose={onClose}>
+    <Sheet
+      open={open}
+      title={mode === "event" ? "New event" : "New task"}
+      onClose={onClose}
+      panelClassName="md:max-w-2xl"
+    >
       <div className="mb-4 flex w-full max-w-full flex-wrap rounded-lg border border-slate-700 bg-slate-900/60 p-1 text-sm sm:inline-flex sm:w-auto">
         <button
           type="button"
@@ -293,7 +299,7 @@ export default function AddItemModal({
           </button>
         </div>
       </form>
-    </ModalShell>
+    </Sheet>
   );
 }
 
@@ -324,45 +330,5 @@ function Field({
       </span>
       {children}
     </label>
-  );
-}
-
-function ModalShell({
-  title,
-  onClose,
-  children,
-}: {
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modal-heading"
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overflow-x-hidden hb-overlay p-3 sm:p-4"
-      onClick={onClose}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="my-4 w-[min(100%,42rem)] min-w-0 max-w-[calc(100vw-1.5rem)] rounded-2xl border border-slate-800 bg-slate-950 p-4 shadow-2xl sm:my-10 sm:p-6"
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 id="modal-heading" className="text-lg font-semibold text-white">
-            {title}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
-            aria-label="Close"
-          >
-            ×
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
   );
 }

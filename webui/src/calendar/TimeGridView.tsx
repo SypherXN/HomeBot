@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { DateTime } from "luxon";
 import type { CalendarRangeItem } from "../api";
 import { formatTimeInZone, rangeInstanceEndUtc, rangeInstanceStartUtc, wallMinutesInZone, ymdInZone } from "./calendarZoned";
+import { isGreyedOccurrence } from "./occurrenceStyle";
 
 type Props = {
   /** Calendar columns as `YYYY-MM-DD` in <see cref="displayZone"/>. */
@@ -75,11 +76,15 @@ export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent
                     key={`${ev.id}@${ev.instanceStartUtc}`}
                     type="button"
                     onClick={() => onPickEvent(ev)}
-                    className={`truncate rounded bg-amber-900/60 px-2 py-0.5 text-left text-[11px] font-medium text-amber-100 hover:bg-amber-800/70 ${ev.isInstanceCompleted ? "opacity-70 line-through" : ""}`}
+                    className={`truncate rounded px-2 py-0.5 text-left text-[11px] font-medium ${
+                      isGreyedOccurrence(ev)
+                        ? "bg-slate-800/60 text-slate-500 line-through hover:bg-slate-800"
+                        : "bg-amber-900/60 text-amber-100 hover:bg-amber-800/70"
+                    }`}
                     title={ev.title}
                   >
                     {ev.title}
-                    {ev.isRecurringInstance && <span className="ml-1 text-amber-300">↻</span>}
+                    {ev.isRecurringInstance && !isGreyedOccurrence(ev) && <span className="ml-1 text-amber-300">↻</span>}
                   </button>
                 ))}
               </div>
@@ -134,7 +139,11 @@ export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent
                     key={`${ev.id}@${ev.instanceStartUtc}`}
                     type="button"
                     onClick={() => onPickEvent(ev)}
-                    className={`absolute left-1 right-1 overflow-hidden rounded bg-blue-700/70 px-2 py-1 text-left text-xs text-white shadow-sm hover:bg-blue-600/80 ${ev.isInstanceCompleted ? "opacity-70 line-through" : ""}`}
+                    className={`absolute left-1 right-1 overflow-hidden rounded px-2 py-1 text-left text-xs shadow-sm ${
+                      isGreyedOccurrence(ev)
+                        ? "bg-slate-700/60 text-slate-400 line-through hover:bg-slate-700/80"
+                        : "bg-blue-700/70 text-white hover:bg-blue-600/80"
+                    }`}
                     style={{ top: `${top}px`, height: `${height}px` }}
                     title={ev.title}
                   >

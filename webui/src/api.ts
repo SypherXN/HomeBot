@@ -755,6 +755,8 @@ export type CalendarRangeItem = {
   displayInstanceEndUtc?: string | null;
   isRecurringInstance: boolean;
   isInstanceCompleted?: boolean;
+  /** Whole item/series completed — only present when range requested with includeCompleted. */
+  isCompleted?: boolean;
   hasInstanceOverride?: boolean;
   /** IANA / Windows id for the event row (recurrence expansion used this zone). */
   timeZoneId?: string;
@@ -814,11 +816,13 @@ export function getCalendarRange(
   fromYmd: string,
   toYmd: string,
   userFilter?: string,
-  windowTimeZone?: string
+  windowTimeZone?: string,
+  includeCompleted?: boolean
 ) {
   const q = new URLSearchParams({ from: fromYmd, to: toYmd });
   if (userFilter) q.set("userFilter", userFilter);
   if (windowTimeZone?.trim()) q.set("timeZone", windowTimeZone.trim());
+  if (includeCompleted) q.set("includeCompleted", "true");
   return apiJson<CalendarRangeItem[]>(`/api/calendar/range?${q.toString()}`, { token });
 }
 

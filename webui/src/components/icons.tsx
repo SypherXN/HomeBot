@@ -15,7 +15,16 @@ export type IconName =
   | "alert"
   | "login"
   | "user-plus"
-  | "health";
+  | "health"
+  | "plus"
+  | "x"
+  | "bell"
+  | "search"
+  | "check"
+  | "undo"
+  | "sun"
+  | "moon"
+  | "user";
 
 const PATHS: Record<IconName, React.ReactNode> = {
   home: (
@@ -104,6 +113,56 @@ const PATHS: Record<IconName, React.ReactNode> = {
   health: (
     <>
       <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+    </>
+  ),
+  plus: (
+    <>
+      <path d="M12 5v14M5 12h14" />
+    </>
+  ),
+  x: (
+    <>
+      <path d="M18 6 6 18M6 6l12 12" />
+    </>
+  ),
+  bell: (
+    <>
+      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m21 21-4.35-4.35" />
+    </>
+  ),
+  check: (
+    <>
+      <path d="M20 6 9 17l-5-5" />
+    </>
+  ),
+  undo: (
+    <>
+      <path d="M3 7v6h6" />
+      <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+    </>
+  ),
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+    </>
+  ),
+  moon: (
+    <>
+      <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+    </>
+  ),
+  user: (
+    <>
+      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
     </>
   ),
 };

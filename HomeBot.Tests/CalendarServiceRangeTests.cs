@@ -388,6 +388,75 @@ public sealed class CalendarServiceRangeTests : IDisposable
         Assert.Equal("X", d.Title);
     }
 
+    [Fact]
+    public void Completed_item_is_excluded_from_range_by_default()
+    {
+        _calendar.AddItem("Done", "event", "2026-04-15 10:00", "", false, "", null, "", "", "", "", "UTC");
+        var id = QueryLastCalendarItemId();
+        _calendar.CompleteItem(id, 1UL);
+
+        var instances = _calendar.GetRange(
+            new DateTime(2026, 4, 15),
+            new DateTime(2026, 4, 18),
+            null);
+
+        Assert.Empty(instances);
+    }
+
+    [Fact]
+    public void Completed_item_is_included_and_flagged_when_requested()
+    {
+        _calendar.AddItem("Done", "event", "2026-04-15 10:00", "", false, "", null, "", "", "", "", "UTC");
+        var id = QueryLastCalendarItemId();
+        _calendar.CompleteItem(id, 1UL);
+
+        var instances = _calendar.GetRange(
+            new DateTime(2026, 4, 15),
+            new DateTime(2026, 4, 18),
+            null,
+            null,
+            includeCompleted: true);
+
+        var row = Assert.Single(instances);
+        Assert.True(row.IsCompleted);
+        Assert.False(row.IsRecurringInstance);
+        Assert.Equal("2026-04-15T10:00:00Z", row.InstanceStartUtc);
+    }
+
+    [Fact]
+    public void Completed_recurring_series_emits_no_future_occurrences()
+    {
+        var today = DateTime.UtcNow.Date;
+        var start = today.AddDays(-20);
+        _calendar.AddItem(
+            "Daily done",
+            "event",
+            start.ToString("yyyy-MM-dd") + " 09:00",
+            "",
+            false,
+            "",
+            null,
+            "",
+            "",
+            "",
+            "daily",
+            "UTC");
+        var id = QueryLastCalendarItemId();
+        _calendar.CompleteItem(id, 1UL);
+
+        var instances = _calendar.GetRange(
+            today.AddDays(-5),
+            today.AddDays(6),
+            null,
+            "UTC",
+            includeCompleted: true);
+
+        Assert.NotEmpty(instances);
+        Assert.All(instances, i => Assert.True(i.IsCompleted));
+        Assert.All(instances, i => Assert.True(DateTime.Parse(i.InstanceStartUtc) <= DateTime.UtcNow.AddDays(1)));
+        Assert.DoesNotContain(instances, i => DateTime.Parse(i.InstanceStartUtc).Date > today);
+    }
+
     private int QueryLastCalendarItemId()
     {
         using var conn = new SqliteConnection($"Data Source={_dbPath}");

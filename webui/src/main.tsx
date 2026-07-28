@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
 import { CalendarZoneProvider } from "./calendar/CalendarZoneContext";
 import { ThemeProvider } from "./theme/ThemeProvider";
+import { ToastProvider } from "./components/ToastProvider";
 import "./index.css";
 import App from "./App.tsx";
 
@@ -15,7 +16,9 @@ createRoot(document.getElementById("root")!).render(
       <AuthProvider>
         <ThemeProvider>
           <CalendarZoneProvider>
-            <App />
+            <ToastProvider>
+              <App />
+            </ToastProvider>
           </CalendarZoneProvider>
         </ThemeProvider>
       </AuthProvider>

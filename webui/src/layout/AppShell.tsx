@@ -6,6 +6,9 @@ import { useApiConnectionStatus } from "../hooks/useApiConnectionStatus";
 import { useBudgetAlertCount } from "../hooks/useBudgetAlertCount";
 import GlobalSearch from "../components/GlobalSearch";
 import KeyboardShortcutsHelp from "../components/KeyboardShortcutsHelp";
+import NotificationCenter from "../components/NotificationCenter";
+import QuickAddSheet from "../components/QuickAddSheet";
+import Sheet from "../components/Sheet";
 import { useGlobalKeyboardShortcuts } from "../hooks/useGlobalKeyboardShortcuts";
 import { useTheme } from "../theme/ThemeProvider";
 import { Icon, type IconName } from "../components/icons";
@@ -40,6 +43,19 @@ const navGroups: { label: string | null; items: NavItem[] }[] = [
 ];
 
 const flatNav: NavItem[] = navGroups.flatMap((g) => g.items);
+
+/** Primary mobile tab-bar destinations (in display order around the FAB). */
+const TAB_ITEMS: NavItem[] = [
+  { to: "/", label: "Home", icon: "home", end: true },
+  { to: "/buy", label: "Buy", icon: "buy" },
+  { to: "/calendar", label: "Calendar", icon: "calendar" },
+  { to: "/budget", label: "Budget", icon: "budget" },
+];
+
+/** Destinations that live in the mobile "More" sheet (everything not on the tab bar). */
+const MORE_ITEMS: NavItem[] = flatNav.filter(
+  (i) => !TAB_ITEMS.some((t) => t.to === i.to)
+);
 
 function navClass({ isActive }: { isActive: boolean }) {
   return [
@@ -136,7 +152,22 @@ export default function AppShell() {
   const [backupWarning, setBackupWarning] = useState<string | null>(null);
   const { helpOpen, setHelpOpen } = useGlobalKeyboardShortcuts();
   const { theme, toggleTheme } = useTheme();
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   useEffect(() => subscribeApiBaseUrl(() => setApiBaseDisplay(getApiBaseUrl())), []);
+
+  // Ctrl/Cmd-K opens quick add from anywhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setQuickAddOpen(true);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     if (status.phase !== "up" || status.auth !== "ok" || !hasToken) {
@@ -176,10 +207,48 @@ export default function AppShell() {
     );
   }
 
+  const shellAlerts: { key: string; message: string; to?: string; linkLabel?: string }[] = [
+    ...(status.phase === "down"
+      ? [
+          {
+            key: "api-down",
+            message: looksLikeBrowserNetworkFailure(status.detail)
+              ? "Cannot reach the API at the current base URL."
+              : "The API returned an error while checking health.",
+            to: "/settings",
+            linkLabel: "Settings",
+          },
+        ]
+      : []),
+    ...(backupWarning
+      ? [{ key: "backup", message: backupWarning, to: "/health", linkLabel: "Diagnostics" }]
+      : []),
+  ];
+  const bellCount = budgetAlertCount + shellAlerts.length;
+
+  function bellButton(className = "") {
+    return (
+      <button
+        type="button"
+        onClick={() => setNotifOpen(true)}
+        aria-label={bellCount > 0 ? `Notifications (${bellCount})` : "Notifications"}
+        className={`relative shrink-0 rounded-full border border-slate-700/70 bg-slate-900/60 p-2 text-slate-300 transition-colors hover:bg-slate-800 hover:text-white ${className}`}
+      >
+        <Icon name="bell" className="h-4 w-4" />
+        {bellCount > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold text-amber-950">
+            {bellCount > 9 ? "9+" : bellCount}
+          </span>
+        )}
+      </button>
+    );
+  }
+
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
-      <aside className="border-b border-slate-800/70 bg-slate-900/40 backdrop-blur md:flex md:w-60 md:shrink-0 md:flex-col md:border-b-0 md:border-r">
-        <div className="flex items-center gap-3 px-4 pb-2 pt-4 md:pb-4">
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex md:w-60 md:shrink-0 md:flex-col md:border-r md:border-slate-800/70 md:bg-slate-900/40 md:backdrop-blur">
+        <div className="flex items-center gap-3 px-4 pb-4 pt-4">
           <BrandMark />
           <div className="min-w-0">
             <div className="font-display text-lg font-semibold tracking-tight text-white">
@@ -201,26 +270,23 @@ export default function AppShell() {
           </div>
         </div>
 
-        {/* Mobile: horizontal icon strip. Desktop: grouped vertical nav. */}
-        <nav className="no-scrollbar flex flex-nowrap gap-1 overflow-x-auto px-3 pb-3 md:hidden">
-          {flatNav.map(({ to, label, icon, end }) => (
-            <NavLink key={to} to={to} end={end ?? false} className={navClass}>
-              <Icon name={icon} className="h-4 w-4 shrink-0" />
-              {label}
-              {budgetBadge(to)}
-            </NavLink>
-          ))}
-          <NavLink to="/login" className={authNavClass}>
-            <Icon name="login" className="h-4 w-4 shrink-0" />
-            Sign in
-          </NavLink>
-          <NavLink to="/setup" className={authNavClass}>
-            <Icon name="user-plus" className="h-4 w-4 shrink-0" />
-            New account
-          </NavLink>
-        </nav>
+        <div className="px-3 pb-2">
+          <button
+            type="button"
+            onClick={() => setQuickAddOpen(true)}
+            className="flex w-full items-center justify-between gap-2 rounded-xl border border-blue-600/40 bg-blue-950/40 px-3 py-2.5 text-sm font-medium text-blue-200 transition-colors hover:bg-blue-950/70"
+          >
+            <span className="flex items-center gap-2">
+              <Icon name="plus" className="h-4 w-4" />
+              Quick add
+            </span>
+            <kbd className="rounded-md bg-slate-900/80 px-1.5 py-0.5 text-[10px] text-slate-400">
+              Ctrl K
+            </kbd>
+          </button>
+        </div>
 
-        <nav className="hidden flex-1 flex-col gap-0.5 px-3 pb-4 md:flex">
+        <nav className="flex-1 flex flex-col gap-0.5 px-3 pb-4">
           {navGroups.map((group) => (
             <div key={group.label ?? "root"} className="flex flex-col gap-0.5">
               {group.label ? (
@@ -269,36 +335,40 @@ export default function AppShell() {
       </aside>
 
       <div className="min-w-0 flex-1">
-        <header className="top-0 z-40 border-b border-slate-800/70 bg-slate-950/50 px-4 py-3 backdrop-blur md:sticky">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex min-w-0 items-center gap-2 sm:flex-1 sm:max-w-xs">
+        {/* Mobile top bar: brand + search + bell. Desktop: search + status. */}
+        <header className="top-0 z-40 border-b border-slate-800/70 bg-slate-950/50 px-3 py-2.5 backdrop-blur sm:px-4 sm:py-3 md:sticky">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link to="/" className="flex shrink-0 items-center gap-2 md:hidden" aria-label="HomeBot home">
+              <BrandMark />
+            </Link>
+            <div className="min-w-0 flex-1 sm:max-w-xs">
               <GlobalSearch token={token} />
+            </div>
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              {bellButton()}
+              <button
+                type="button"
+                onClick={toggleTheme}
+                aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+                className="shrink-0 rounded-full border border-slate-700/70 bg-slate-900/60 p-2 text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
+              >
+                <Icon name={theme === "dark" ? "sun" : "moon"} className="h-4 w-4" />
+              </button>
               <div
-                className="flex shrink-0 items-center gap-2 rounded-full border border-slate-700/70 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-300 sm:hidden"
+                className="hidden shrink-0 items-center gap-2 rounded-full border border-slate-700/70 bg-slate-900/60 px-3 py-1 text-xs text-slate-300 sm:flex"
                 title={conn.title}
               >
-                <span
-                  className={`inline-block h-2 w-2 rounded-full ${conn.dotClass}`}
-                  aria-hidden
-                />
+                <span className={`inline-block h-2 w-2 rounded-full ${conn.dotClass}`} aria-hidden />
                 <span className="font-medium text-slate-200">{conn.text}</span>
               </div>
-            </div>
-            <p className="min-w-0 truncate text-xs text-slate-500 sm:max-w-[45%]">
-              <span className="text-slate-400">Base URL</span>{" "}
-              <code className="rounded-md bg-slate-900 px-1.5 py-0.5 text-slate-300">
-                {apiBaseDisplay}
-              </code>{" "}
-              <Link to="/health" className="shrink-0 text-blue-400 hover:underline">
-                Diagnostics
-              </Link>
-            </p>
-            <div
-              className="hidden shrink-0 items-center gap-2 rounded-full border border-slate-700/70 bg-slate-900/60 px-3 py-1 text-xs text-slate-300 sm:flex"
-              title={conn.title}
-            >
-              <span className={`inline-block h-2 w-2 rounded-full ${conn.dotClass}`} aria-hidden />
-              <span className="font-medium text-slate-200">{conn.text}</span>
+              <p className="hidden min-w-0 truncate text-xs text-slate-500 lg:block lg:max-w-[40%]">
+                <code className="rounded-md bg-slate-900 px-1.5 py-0.5 text-slate-300">
+                  {apiBaseDisplay}
+                </code>{" "}
+                <Link to="/health" className="shrink-0 text-blue-400 hover:underline">
+                  Diagnostics
+                </Link>
+              </p>
             </div>
           </div>
         </header>
@@ -338,10 +408,124 @@ export default function AppShell() {
             </Link>
           </div>
         ) : null}
-        <main className="mx-auto min-w-0 max-w-6xl px-3 py-6 sm:px-5 sm:py-8">
+        <main className="mx-auto min-w-0 max-w-6xl px-3 pb-28 pt-6 sm:px-5 md:pb-10 md:pt-8">
           <Outlet />
         </main>
       </div>
+
+      {/* Mobile bottom tab bar */}
+      <nav className="hb-tabbar md:hidden" aria-label="Primary">
+        <div className="grid grid-cols-5">
+          {TAB_ITEMS.map(({ to, label, icon, end }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={end ?? false}
+              className={({ isActive }) =>
+                `relative flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition-colors ${
+                  isActive ? "text-blue-300" : "text-slate-500 hover:text-slate-300"
+                }`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  {isActive && (
+                    <span className="absolute -top-px h-0.5 w-8 rounded-full bg-gradient-to-r from-blue-500 to-blue-400" />
+                  )}
+                  <Icon name={icon} className="h-5 w-5" />
+                  {label}
+                  {to === "/budget" && budgetAlertCount > 0 && (
+                    <span className="absolute right-1/2 top-1 h-1.5 w-1.5 translate-x-4 rounded-full bg-amber-500" />
+                  )}
+                </>
+              )}
+            </NavLink>
+          ))}
+          <button
+            type="button"
+            onClick={() => setMoreOpen(true)}
+            className="flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium text-slate-500 transition-colors hover:text-slate-300"
+          >
+            <Icon name="settings" className="h-5 w-5" />
+            More
+          </button>
+        </div>
+      </nav>
+
+      {/* Floating quick-add button (mobile) */}
+      <button
+        type="button"
+        onClick={() => setQuickAddOpen(true)}
+        aria-label="Quick add"
+        className="hb-fab fixed bottom-[calc(4.25rem+env(safe-area-inset-bottom))] right-4 z-40 md:hidden"
+      >
+        <Icon name="plus" className="h-6 w-6" />
+      </button>
+
+      {/* Mobile "More" sheet */}
+      <Sheet open={moreOpen} title="More" onClose={() => setMoreOpen(false)}>
+        <nav className="grid grid-cols-2 gap-2">
+          {MORE_ITEMS.map(({ to, label, icon, end }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={end ?? false}
+              onClick={() => setMoreOpen(false)}
+              className="flex items-center gap-2.5 rounded-xl hb-card px-3.5 py-3 text-sm font-medium text-slate-200 transition-colors hover:border-blue-500/40"
+            >
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600/15 text-blue-400">
+                <Icon name={icon} className="h-4 w-4" />
+              </span>
+              {label}
+            </NavLink>
+          ))}
+          <NavLink
+            to="/health"
+            onClick={() => setMoreOpen(false)}
+            className="flex items-center gap-2.5 rounded-xl hb-card px-3.5 py-3 text-sm font-medium text-slate-200 transition-colors hover:border-blue-500/40"
+          >
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600/15 text-blue-400">
+              <Icon name="health" className="h-4 w-4" />
+            </span>
+            Diagnostics
+          </NavLink>
+        </nav>
+        <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-800/70 pt-4">
+          <NavLink
+            to="/login"
+            onClick={() => setMoreOpen(false)}
+            className="flex items-center justify-center gap-2 rounded-xl hb-btn-soft px-3 py-2.5 text-sm text-slate-300"
+          >
+            <Icon name="login" className="h-4 w-4" />
+            Sign in
+          </NavLink>
+          <NavLink
+            to="/setup"
+            onClick={() => setMoreOpen(false)}
+            className="flex items-center justify-center gap-2 rounded-xl hb-btn-soft px-3 py-2.5 text-sm text-slate-300"
+          >
+            <Icon name="user-plus" className="h-4 w-4" />
+            New account
+          </NavLink>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setMoreOpen(false);
+            setHelpOpen(true);
+          }}
+          className="mt-2 w-full rounded-xl hb-btn-soft px-3 py-2.5 text-sm text-slate-400"
+        >
+          Keyboard shortcuts
+        </button>
+      </Sheet>
+
+      <QuickAddSheet open={quickAddOpen} onClose={() => setQuickAddOpen(false)} />
+      <NotificationCenter
+        open={notifOpen}
+        onClose={() => setNotifOpen(false)}
+        shellAlerts={shellAlerts}
+      />
       <KeyboardShortcutsHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );

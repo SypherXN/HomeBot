@@ -286,7 +286,10 @@ public static class HomeBotApiRegistration
             if (string.IsNullOrWhiteSpace(windowTz))
                 windowTz = null;
 
-            return Results.Ok(calendarService.GetRange(fromLocal, toLocal, userFilter, windowTz));
+            var includeCompleted = string.Equals(request.Query["includeCompleted"], "true", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(request.Query["includeCompleted"], "1", StringComparison.OrdinalIgnoreCase);
+
+            return Results.Ok(calendarService.GetRange(fromLocal, toLocal, userFilter, windowTz, includeCompleted));
         });
 
         app.MapGet("/api/calendar/export.ics", (HttpRequest request) =>

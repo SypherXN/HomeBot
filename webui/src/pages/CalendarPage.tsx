@@ -38,6 +38,7 @@ import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
 import { useHorizontalSwipe } from "../hooks/useHorizontalSwipe";
 import { useSearchHighlightId } from "../lib/searchHighlight";
 import { validActorId } from "../lib/validation";
+import { useUndoToast } from "../hooks/useUndoToast";
 import AddItemModal from "../calendar/AddItemModal";
 import AgendaView from "../calendar/AgendaView";
 import ItemDetailModal from "../calendar/ItemDetailModal";
@@ -69,6 +70,16 @@ export default function CalendarPage() {
 
   const [filterMode, setFilterMode] = useState<"all" | "me" | "user">("all");
   const [filterUser, setFilterUser] = useState("");
+  const [showCompleted, setShowCompleted] = useState(() => params.get("completed") === "1");
+
+  function toggleCompleted() {
+    const next = !showCompleted;
+    setShowCompleted(next);
+    const p = new URLSearchParams(params);
+    if (next) p.set("completed", "1");
+    else p.delete("completed");
+    setParams(p, { replace: true });
+  }
 
   const userFilter = useMemo(() => {
     if (filterMode === "me" && canActor) return actor;
@@ -138,7 +149,8 @@ export default function CalendarPage() {
         rangeYmd.fromYmd,
         rangeYmd.toYmd,
         userFilter || undefined,
-        effectiveViewerZone
+        effectiveViewerZone,
+        showCompleted
       );
       setRange(data);
     } catch (err) {
@@ -147,7 +159,7 @@ export default function CalendarPage() {
     } finally {
       setRangeLoading(false);
     }
-  }, [canAuth, tok, rangeYmd.fromYmd, rangeYmd.toYmd, userFilter, effectiveViewerZone]);
+  }, [canAuth, tok, rangeYmd.fromYmd, rangeYmd.toYmd, userFilter, effectiveViewerZone, showCompleted]);
 
   const loadTasks = useCallback(async () => {
     if (!canAuth) {
@@ -262,6 +274,8 @@ export default function CalendarPage() {
     setBanner({ kind, text });
     setTimeout(() => setBanner(null), 5000);
   }
+
+  const undoToast = useUndoToast();
 
   function setView(next: View) {
     const p = new URLSearchParams(params);
@@ -467,6 +481,8 @@ export default function CalendarPage() {
         onFilterMode={setFilterMode}
         filterUser={filterUser}
         setFilterUser={setFilterUser}
+        showCompleted={showCompleted}
+        onToggleCompleted={toggleCompleted}
         token={tok}
         guildRoster={guildRoster}
         canActor={canActor}
@@ -636,7 +652,12 @@ export default function CalendarPage() {
           void loadTasks();
         }}
         onError={(m) => showBanner("err", m)}
-        onSuccess={(m) => showBanner("ok", m)}
+        onSuccess={(m) =>
+          undoToast(m, () => {
+            void loadRange();
+            void loadTasks();
+          })
+        }
       />
     </div>
   );
@@ -654,6 +675,8 @@ function Toolbar({
   onFilterMode,
   filterUser,
   setFilterUser,
+  showCompleted,
+  onToggleCompleted,
   token,
   guildRoster,
   canActor,
@@ -677,6 +700,8 @@ function Toolbar({
   onFilterMode: (m: "all" | "me" | "user") => void;
   filterUser: string;
   setFilterUser: (s: string) => void;
+  showCompleted: boolean;
+  onToggleCompleted: () => void;
   token: string;
   guildRoster: ReturnType<typeof useDiscordGuildRoster>;
   canActor: boolean;
@@ -781,6 +806,23 @@ function Toolbar({
             User…
           </button>
         </div>
+        <button
+          type="button"
+          onClick={onToggleCompleted}
+          aria-pressed={showCompleted}
+          title={showCompleted ? "Hide completed events" : "Show completed events (greyed)"}
+          className={`flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors ${
+            showCompleted
+              ? "border-blue-600/60 bg-blue-950/50 text-blue-200"
+              : "border-slate-700 bg-slate-900/60 text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          <span
+            className={`inline-block h-2 w-2 rounded-full ${showCompleted ? "bg-blue-400" : "bg-slate-600"}`}
+            aria-hidden
+          />
+          Completed
+        </button>
         {filterMode === "user" && (
           <div className="grid min-w-0 w-full max-w-full grid-cols-1 gap-2 sm:grid-cols-2 sm:items-end">
             <div className="min-w-0">

@@ -797,7 +797,8 @@ public class CalendarService
     /// <param name="toLocal">Exclusive end date (calendar components only).</param>
     /// <param name="userFilter">Optional Discord user id; rows assigned to this user or to everyone (0) match.</param>
     /// <param name="windowTimeZoneId">IANA or Windows id used to turn <paramref name="fromLocal"/>/<paramref name="toLocal"/> into a UTC half-open window; null uses household Settings.</param>
-    public List<CalendarRangeItemModel> GetRange(DateTime fromLocal, DateTime toLocal, ulong? userFilter = null, string? windowTimeZoneId = null)
+    /// <param name="includeCompleted">When true, completed items are included (greyed on clients). Completed series do not emit occurrences after today.</param>
+    public List<CalendarRangeItemModel> GetRange(DateTime fromLocal, DateTime toLocal, ulong? userFilter = null, string? windowTimeZoneId = null, bool includeCompleted = false)
     {
         var output = new List<CalendarRangeItemModel>();
         if (toLocal <= fromLocal)
@@ -816,11 +817,12 @@ public class CalendarService
         var recurrenceExceptions = LoadRecurrenceExceptionMap(conn);
 
         var cmd = conn.CreateCommand();
-        cmd.CommandText = @"
+        cmd.CommandText = $@"
             SELECT Id, Title, Type, StartDateTime, EndDateTime, AllDay, AssignedTo, Link, ReminderOffset, Recurrence,
-                   COALESCE(Timezone, '') AS ItemTz, COALESCE(Description, '') AS DescCol, COALESCE(Notes, '') AS NotesCol
+                   COALESCE(Timezone, '') AS ItemTz, COALESCE(Description, '') AS DescCol, COALESCE(Notes, '') AS NotesCol,
+                   COALESCE(Status, 'active') AS StatusCol
             FROM CalendarItems
-            WHERE Status = 'active' AND StartDateTime IS NOT NULL AND StartDateTime != ''";
+            WHERE {(includeCompleted ? "Status IN ('active','completed')" : "Status = 'active'")} AND StartDateTime IS NOT NULL AND StartDateTime != ''";
 
         using var reader = cmd.ExecuteReader();
 
@@ -882,10 +884,20 @@ public class CalendarService
                 TimezoneId = rowTz.Id,
                 Description = seriesDescription,
                 Notes = seriesNotes,
+                Status = reader.GetString(13),
             };
 
             var winStartDate = TimeZoneInfo.ConvertTimeFromUtc(fromUtc, rowTz).Date;
             var winEndDateInclusive = TimeZoneInfo.ConvertTimeFromUtc(toUtcExclusive.AddTicks(-1), rowTz).Date;
+
+            if (meta.Status == "completed")
+            {
+                var todayRow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, rowTz).Date;
+                if (winStartDate > todayRow)
+                    continue;
+                if (winEndDateInclusive > todayRow)
+                    winEndDateInclusive = todayRow;
+            }
 
             switch (meta.Recurrence)
             {
@@ -1512,6 +1524,7 @@ public class CalendarService
         public string TimezoneId;
         public string Description;
         public string Notes;
+        public string Status;
     }
 
     private static void EmitInstance(
@@ -1614,7 +1627,6 @@ public class CalendarService
             (string.Equals(ex.Kind, "modify", StringComparison.OrdinalIgnoreCase) && ex.InstanceCompleted != 0));
 
         var hasOverride = ex != null && string.Equals(ex.Kind, "modify", StringComparison.OrdinalIgnoreCase);
-
         string? displayStart = null;
         string? displayEnd = null;
         if (effectiveStartUtc != instanceUtc)
@@ -1656,6 +1668,7 @@ public class CalendarService
             DisplayInstanceEndUtc = displayEnd,
             IsRecurringInstance = isRecurring,
             IsInstanceCompleted = isCompleted,
+            IsCompleted = meta.Status == "completed",
             HasInstanceOverride = hasOverride,
             TimeZoneId = meta.TimezoneId,
         });

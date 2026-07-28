@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import MemberIdField from "../../components/MemberIdField";
+import Sheet from "../../components/Sheet";
 import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster";
 import {
   patchBudgetTransaction,
@@ -123,10 +124,8 @@ export default function BudgetTransactionEditModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center hb-overlay p-4">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-xl">
-        <h3 className="mb-3 text-lg font-medium text-white">Edit transaction</h3>
-        <form onSubmit={(e) => void handleSave(e)} className="space-y-3">
+    <Sheet open title="Edit transaction" onClose={onClose}>
+      <form onSubmit={(e) => void handleSave(e)} className="space-y-3">
           <input
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
@@ -284,7 +283,6 @@ export default function BudgetTransactionEditModal({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Sheet>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { DateTime } from "luxon";
 import DiscordMemberSelect from "../components/DiscordMemberSelect";
+import Sheet from "../components/Sheet";
 import CalendarReminderSelect from "./CalendarReminderSelect";
 import { reminderRawToToken } from "../lib/calendarReminder";
 import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
@@ -374,32 +375,8 @@ export default function ItemDetailModal({
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="detail-modal-heading"
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overflow-x-hidden hb-overlay p-3 sm:p-4"
-      onClick={onClose}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="my-4 w-[min(100%,42rem)] min-w-0 max-w-[calc(100vw-1.5rem)] overflow-x-hidden rounded-2xl border border-slate-800 bg-slate-950 p-4 shadow-2xl sm:my-10 sm:p-6"
-      >
-        <div className="mb-4 flex min-w-0 items-center justify-between gap-2">
-          <h2 id="detail-modal-heading" className="min-w-0 flex-1 truncate text-lg font-semibold text-white">
-            Item details
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
-            aria-label="Close"
-          >
-            ×
-          </button>
-        </div>
-
-        {isRecurringInstance && (
+    <Sheet open={open} title="Item details" onClose={onClose} panelClassName="md:max-w-2xl">
+      {isRecurringInstance && (
           <p className="mb-4 rounded-lg border border-amber-700/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-100">
             Recurring event opened from the grid. <strong>Save changes</strong> applies to <em>this day only</em>{" "}
             (title, notes, link, start and optional end time). <strong>Hide</strong> removes this day from the
@@ -623,8 +600,7 @@ export default function ItemDetailModal({
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </Sheet>
   );
 }
 

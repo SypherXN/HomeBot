@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { CalendarRangeItem } from "../api";
 import { formatLongDateYmd, formatTimeInZone, rangeInstanceEndUtc, rangeInstanceStartUtc, ymdInZone } from "./calendarZoned";
+import { isGreyedOccurrence } from "./occurrenceStyle";
 
 type Props = {
   events: CalendarRangeItem[];
@@ -34,7 +35,11 @@ export default function AgendaView({ events, displayZone, onPickEvent }: Props) 
                 <button
                   type="button"
                   onClick={() => onPickEvent(ev)}
-                  className={`flex w-full flex-col gap-1 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-3 text-left hover:border-slate-700 hover:bg-slate-900/70 ${ev.isInstanceCompleted ? "opacity-70 line-through" : ""}`}
+                  className={`flex w-full flex-col gap-1 rounded-lg border border-slate-800 px-3 py-3 text-left ${
+                    isGreyedOccurrence(ev)
+                      ? "bg-slate-900/20 text-slate-500 hover:border-slate-800 hover:bg-slate-900/40"
+                      : "bg-slate-900/40 hover:border-slate-700 hover:bg-slate-900/70"
+                  } ${ev.isInstanceCompleted || ev.isCompleted ? "line-through" : ""}`}
                 >
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="truncate text-sm font-medium text-slate-100">
