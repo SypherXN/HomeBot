@@ -1,4 +1,5 @@
 import type { CalendarListItem } from "../api";
+import { Icon } from "../components/icons";
 
 type Props = {
   loading: boolean;
@@ -10,6 +11,9 @@ type Props = {
   onNextPage: () => void;
   onRefresh: () => void;
   canAuth: boolean;
+  /** One-tap complete straight from the list. */
+  onQuickComplete?: (task: CalendarListItem) => void;
+  quickCompletingId?: number | null;
 };
 
 export default function TasksPanel({
@@ -22,6 +26,8 @@ export default function TasksPanel({
   onNextPage,
   onRefresh,
   canAuth,
+  onQuickComplete,
+  quickCompletingId,
 }: Props) {
   return (
     <aside
@@ -71,11 +77,27 @@ export default function TasksPanel({
       {canAuth && data && data.items.length > 0 && (
         <ul className="space-y-2">
           {data.items.map((t) => (
-            <li key={t.id}>
+            <li key={t.id} className="flex items-stretch gap-1.5">
+              {onQuickComplete && (
+                <button
+                  type="button"
+                  aria-label={`Mark "${t.title}" complete`}
+                  title="Mark complete"
+                  disabled={quickCompletingId === t.id}
+                  onClick={() => onQuickComplete(t)}
+                  className="flex w-8 shrink-0 items-center justify-center rounded-md border border-slate-800 bg-slate-950/40 text-slate-500 transition-colors hover:border-emerald-700/60 hover:bg-emerald-950/40 hover:text-emerald-300 disabled:opacity-50"
+                >
+                  {quickCompletingId === t.id ? (
+                    <span className="text-xs">…</span>
+                  ) : (
+                    <Icon name="check" className="h-4 w-4" />
+                  )}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => onPickTask(t)}
-                className="flex w-full flex-col gap-0.5 rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-left hover:border-slate-700 hover:bg-slate-900/60"
+                className="flex min-w-0 flex-1 flex-col gap-0.5 rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-left hover:border-slate-700 hover:bg-slate-900/60"
               >
                 <span className="truncate text-sm font-medium text-slate-100">{t.title}</span>
                 {t.assignedToMemberLabel && (

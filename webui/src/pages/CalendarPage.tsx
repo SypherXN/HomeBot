@@ -8,12 +8,15 @@ import {
   getGoogleCalendarStatus,
   getGoogleCalendars,
   postCalendarImportIcs,
+  postCalendarItemComplete,
+  postCalendarCompleteInstance,
   putGoogleCalendarPick,
   postGoogleCalendarDisconnect,
   postGoogleCalendarSync,
   postUndo,
   type GoogleCalendarStatus,
   type GoogleCalendarListItem,
+  type CalendarListItem,
   type CalendarRangeItem,
   type PagedCalendarList,
 } from "../api";
@@ -38,6 +41,7 @@ import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
 import { useHorizontalSwipe } from "../hooks/useHorizontalSwipe";
 import { useSearchHighlightId } from "../lib/searchHighlight";
 import { validActorId } from "../lib/validation";
+import { defaultEndTimeForSlot, minutesToHm } from "../lib/calendarDefaults";
 import { useUndoToast } from "../hooks/useUndoToast";
 import AddItemModal from "../calendar/AddItemModal";
 import AgendaView from "../calendar/AgendaView";
@@ -107,7 +111,15 @@ export default function CalendarPage() {
 
   type ModalState =
     | { kind: "none" }
-    | { kind: "add"; mode: "event" | "task"; ymd?: string }
+    | {
+        kind: "add";
+        mode: "event" | "task";
+        ymd?: string;
+        /** Pre-filled wall time from a clicked slot. */
+        startTime?: string;
+        endTime?: string;
+        allDay?: boolean;
+      }
     | {
         kind: "detail";
         itemId: number;
@@ -118,6 +130,8 @@ export default function CalendarPage() {
         instanceWallClockUtc?: string;
       };
   const [modal, setModal] = useState<ModalState>({ kind: "none" });
+  const [quickCompletingId, setQuickCompletingId] = useState<number | null>(null);
+  const [quickCompletingKey, setQuickCompletingKey] = useState<string | null>(null);
 
   const rangeYmd = useMemo(
     () => computeRangeQuery(view, anchorYmd, effectiveViewerZone, AGENDA_DAYS),
@@ -308,6 +322,110 @@ export default function CalendarPage() {
 
   const calendarSwipe = useHorizontalSwipe(step);
 
+  /** Click-to-create from a week/day time slot (30-min snapped, 1h default duration). */
+  function handleCreateSlot(ymd: string, startMinutes: number) {
+    if (!canAuth) return;
+    setModal({
+      kind: "add",
+      mode: "event",
+      ymd,
+      startTime: minutesToHm(startMinutes),
+      endTime: defaultEndTimeForSlot(startMinutes),
+    });
+  }
+
+  function handleCreateAllDay(ymd: string) {
+    if (!canAuth) return;
+    setModal({ kind: "add", mode: "event", ymd, allDay: true });
+  }
+
+  function handleCreateDay(ymd: string) {
+    if (!canAuth) return;
+    setModal({ kind: "add", mode: "event", ymd });
+  }
+
+  async function handleQuickCompleteTask(t: CalendarListItem) {
+    if (!canActor) {
+      showBanner("err", "Set actorUserId in Settings to complete tasks.");
+      return;
+    }
+    setQuickCompletingId(t.id);
+    try {
+      await postCalendarItemComplete(tok, actor, t.id);
+      undoToast(`Completed "${t.title}".`, () => void loadTasks());
+      void loadTasks();
+    } catch (err) {
+      showBanner("err", err instanceof Error ? err.message : String(err));
+    } finally {
+      setQuickCompletingId(null);
+    }
+  }
+
+  async function handleQuickCompleteEvent(ev: CalendarRangeItem) {
+    if (!canActor) {
+      showBanner("err", "Set actorUserId in Settings to complete events.");
+      return;
+    }
+    const key = `${ev.id}@${ev.instanceStartUtc}`;
+    setQuickCompletingKey(key);
+    try {
+      if (ev.isRecurringInstance && ev.instanceStartUtc) {
+        await postCalendarCompleteInstance(tok, actor, ev.id, ev.instanceStartUtc);
+      } else {
+        await postCalendarItemComplete(tok, actor, ev.id);
+      }
+      undoToast(`Completed "${ev.title}".`, () => void loadRange());
+      void loadRange();
+    } catch (err) {
+      showBanner("err", err instanceof Error ? err.message : String(err));
+    } finally {
+      setQuickCompletingKey(null);
+    }
+  }
+
+  /* Calendar-page keyboard shortcuts: ←/→ navigate, t today, 1–4 views, n new event. */
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (modal.kind !== "none") return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target;
+      if (
+        t instanceof HTMLElement &&
+        (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        step(-1);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        step(1);
+      } else if (e.key === "t") {
+        e.preventDefault();
+        gotoToday();
+      } else if (e.key === "n" && canAuth) {
+        e.preventDefault();
+        setModal({ kind: "add", mode: "event", ymd: anchorYmd });
+      } else if (e.key === "1") {
+        e.preventDefault();
+        setView("month");
+      } else if (e.key === "2") {
+        e.preventDefault();
+        setView("week");
+      } else if (e.key === "3") {
+        e.preventDefault();
+        setView("day");
+      } else if (e.key === "4") {
+        e.preventDefault();
+        setView("agenda");
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modal.kind, view, anchorYmd, canAuth, effectiveViewerZone]);
+
   async function handleUndo() {
     if (!canActor) {
       showBanner("err", "Set actorUserId in Settings to undo.");
@@ -486,12 +604,14 @@ export default function CalendarPage() {
         canActor={canActor}
         viewerTimeZone={viewerTimeZone}
         onViewerTimeZone={setViewerTimeZone}
-        onExportIcs={() => void handleExportIcs()}
-        exportBusy={exportBusy}
-        canExport={canAuth}
-        onImportIcs={() => importInputRef.current?.click()}
-        importBusy={importBusy}
-        canImport={canAuth && canActor}
+        menuItems={[
+          ...(canAuth
+            ? [{ label: exportBusy ? "Exporting…" : "Export .ics", onClick: () => void handleExportIcs(), busy: exportBusy }]
+            : []),
+          ...(canAuth && canActor
+            ? [{ label: importBusy ? "Importing…" : "Import .ics", onClick: () => importInputRef.current?.click(), busy: importBusy }]
+            : []),
+        ]}
       />
 
       <input
@@ -505,6 +625,14 @@ export default function CalendarPage() {
           e.target.value = "";
         }}
       />
+
+      {canAuth && view !== "agenda" && (
+        <p className="mt-2 text-xs text-slate-600">
+          {view === "month"
+            ? "Tip: click a day to open it, or hover a day and click + to add an event there."
+            : "Tip: click any empty time slot to create an event at that time."}
+        </p>
+      )}
 
       {rangeError && (
         <p className="mb-4 rounded-lg border border-red-800/50 bg-red-950/30 px-3 py-2 text-sm text-red-200">
@@ -520,6 +648,7 @@ export default function CalendarPage() {
               displayZone={effectiveViewerZone}
               events={range ?? []}
               onPickDay={openDay}
+              onCreateDay={handleCreateDay}
               onPickEvent={(ev) =>
                 setModal({
                   kind: "detail",
@@ -538,6 +667,8 @@ export default function CalendarPage() {
               displayZone={effectiveViewerZone}
               events={range ?? []}
               onPickDay={openDay}
+              onCreateSlot={handleCreateSlot}
+              onCreateAllDay={handleCreateAllDay}
               onPickEvent={(ev) =>
                 setModal({
                   kind: "detail",
@@ -555,6 +686,8 @@ export default function CalendarPage() {
               dayYmds={singleDayYmds}
               displayZone={effectiveViewerZone}
               events={range ?? []}
+              onCreateSlot={handleCreateSlot}
+              onCreateAllDay={handleCreateAllDay}
               onPickEvent={(ev) =>
                 setModal({
                   kind: "detail",
@@ -571,6 +704,8 @@ export default function CalendarPage() {
             <AgendaView
               events={range ?? []}
               displayZone={effectiveViewerZone}
+              onQuickComplete={canAuth ? handleQuickCompleteEvent : undefined}
+              quickCompletingKey={quickCompletingKey}
               onPickEvent={(ev) =>
                 setModal({
                   kind: "detail",
@@ -608,6 +743,8 @@ export default function CalendarPage() {
             data={tasksData}
             canAuth={canAuth}
             onAddTask={() => setModal({ kind: "add", mode: "task" })}
+            onQuickComplete={canAuth ? handleQuickCompleteTask : undefined}
+            quickCompletingId={quickCompletingId}
             onPickTask={(t) =>
               setModal({ kind: "detail", itemId: t.id, isRecurring: false, title: t.title })
             }
@@ -622,15 +759,25 @@ export default function CalendarPage() {
         open={modal.kind === "add"}
         initialMode={modal.kind === "add" ? modal.mode : "event"}
         initialYmd={modal.kind === "add" ? modal.ymd ?? null : null}
+        initialStartTime={modal.kind === "add" ? modal.startTime ?? null : null}
+        initialEndTime={modal.kind === "add" ? modal.endTime ?? null : null}
+        initialAllDay={modal.kind === "add" ? modal.allDay === true : false}
         eventTimeZoneDefault={effectiveViewerZone}
         token={tok}
         guildRoster={guildRoster}
         onClose={() => setModal({ kind: "none" })}
         onCreated={(mode) => {
           setModal({ kind: "none" });
-          showBanner("ok", `Added ${mode}.`);
           if (mode === "event") void loadRange();
           else void loadTasks();
+          if (canActor) {
+            undoToast(`Added ${mode}.`, () => {
+              void loadRange();
+              void loadTasks();
+            });
+          } else {
+            showBanner("ok", `Added ${mode}.`);
+          }
         }}
         onError={(m) => showBanner("err", m)}
       />
@@ -680,12 +827,7 @@ function Toolbar({
   canActor,
   viewerTimeZone,
   onViewerTimeZone,
-  onExportIcs,
-  exportBusy,
-  canExport,
-  onImportIcs,
-  importBusy,
-  canImport,
+  menuItems,
 }: {
   view: View;
   onViewChange: (v: View) => void;
@@ -705,12 +847,7 @@ function Toolbar({
   canActor: boolean;
   viewerTimeZone: string;
   onViewerTimeZone: (z: string) => void;
-  onExportIcs: () => void;
-  exportBusy: boolean;
-  canExport: boolean;
-  onImportIcs: () => void;
-  importBusy: boolean;
-  canImport: boolean;
+  menuItems: { label: string; onClick: () => void; busy?: boolean }[];
 }) {
   return (
     <div className="flex min-w-0 w-full flex-col gap-3 hb-card p-3">
@@ -723,26 +860,6 @@ function Toolbar({
           >
             Today
           </button>
-          {canExport && (
-            <button
-              type="button"
-              disabled={exportBusy}
-              onClick={onExportIcs}
-              className="shrink-0 rounded-md hb-btn-soft px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-50"
-            >
-              {exportBusy ? "Exporting…" : "Export .ics"}
-            </button>
-          )}
-          {canImport && (
-            <button
-              type="button"
-              disabled={importBusy}
-              onClick={onImportIcs}
-              className="shrink-0 rounded-md hb-btn-soft px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-50"
-            >
-              {importBusy ? "Importing…" : "Import .ics"}
-            </button>
-          )}
           <div className="inline-flex shrink-0 items-center gap-1">
             <button
               type="button"
@@ -761,6 +878,7 @@ function Toolbar({
               ›
             </button>
           </div>
+          <OverflowMenu items={menuItems} />
         </div>
         <div className="grid min-w-0 w-full grid-cols-4 gap-0.5 rounded-lg border border-slate-700 bg-slate-900/60 p-0.5 text-xs sm:ml-1 sm:w-auto sm:max-w-sm sm:shrink-0 sm:text-sm">
           {ALL_VIEWS.map((v) => (
@@ -875,4 +993,65 @@ function formatRangeLabelYmd(view: View, anchorYmd: string, zone: string): strin
   if (view === "week") return formatWeekRangeYmd(anchorYmd, zone);
   if (view === "day") return formatLongDateYmd(anchorYmd, zone);
   return `${formatLongDateYmd(anchorYmd, zone)} + ${AGENDA_DAYS} days`;
+}
+
+/** "⋯" overflow menu for low-frequency toolbar actions (export/import). */
+function OverflowMenu({ items }: { items: { label: string; onClick: () => void; busy?: boolean }[] }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onEsc(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [open]);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="More actions"
+        onClick={() => setOpen((v) => !v)}
+        className="rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-sm leading-none text-slate-200 hover:bg-slate-800"
+      >
+        ⋯
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute left-0 z-30 mt-1 w-44 rounded-lg border border-slate-700 bg-slate-900 p-1 shadow-xl"
+        >
+          {items.map((it) => (
+            <button
+              key={it.label}
+              type="button"
+              role="menuitem"
+              disabled={it.busy}
+              onClick={() => {
+                setOpen(false);
+                it.onClick();
+              }}
+              className="w-full rounded-md px-3 py-2 text-left text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+            >
+              {it.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }

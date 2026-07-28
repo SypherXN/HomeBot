@@ -10,11 +10,13 @@ type Props = {
   events: CalendarRangeItem[];
   onPickDay: (ymd: string) => void;
   onPickEvent: (event: CalendarRangeItem) => void;
+  /** Hover "+" affordance on a day cell — create an event for that date. */
+  onCreateDay?: (ymd: string) => void;
 };
 
 const MAX_PER_CELL = 3;
 
-export default function MonthView({ anchorYmd, displayZone, events, onPickDay, onPickEvent }: Props) {
+export default function MonthView({ anchorYmd, displayZone, events, onPickDay, onPickEvent, onCreateDay }: Props) {
   const grid = useMemo(() => buildGrid(anchorYmd, displayZone, events), [anchorYmd, displayZone, events]);
   const todayYmd = ymdInZone(new Date(), displayZone);
 
@@ -36,7 +38,7 @@ export default function MonthView({ anchorYmd, displayZone, events, onPickDay, o
               type="button"
               key={cell.ymd}
               onClick={() => onPickDay(cell.ymd)}
-              className={`flex min-h-[110px] flex-col items-stretch gap-1 border-b border-r border-slate-800 p-1.5 text-left transition-colors hover:bg-slate-900/70 ${
+              className={`group flex min-h-[110px] flex-col items-stretch gap-1 border-b border-r border-slate-800 p-1.5 text-left transition-colors hover:bg-slate-900/70 ${
                 inMonth ? "bg-slate-950/40" : "bg-slate-950/10 text-slate-500"
               }`}
             >
@@ -52,11 +54,35 @@ export default function MonthView({ anchorYmd, displayZone, events, onPickDay, o
                 >
                   {cell.dayNum}
                 </span>
-                {cell.events.length > MAX_PER_CELL && (
-                  <span className="text-[10px] font-medium text-slate-400">
-                    +{cell.events.length - MAX_PER_CELL}
-                  </span>
-                )}
+                <span className="flex items-center gap-1.5">
+                  {onCreateDay && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Add event on ${cell.ymd}`}
+                      title={`Add event on ${cell.ymd}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onCreateDay(cell.ymd);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onCreateDay(cell.ymd);
+                        }
+                      }}
+                      className="hidden h-5 w-5 items-center justify-center rounded-md text-sm font-bold leading-none text-blue-300 opacity-0 transition-all hover:bg-blue-900/50 focus:opacity-100 group-hover:opacity-100 sm:inline-flex"
+                    >
+                      +
+                    </span>
+                  )}
+                  {cell.events.length > MAX_PER_CELL && (
+                    <span className="text-[10px] font-medium text-slate-400">
+                      +{cell.events.length - MAX_PER_CELL}
+                    </span>
+                  )}
+                </span>
               </div>
               <div className="flex flex-col gap-0.5">
                 {cell.events.slice(0, MAX_PER_CELL).map((ev) => (

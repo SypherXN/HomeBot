@@ -378,10 +378,8 @@ export default function ItemDetailModal({
     <Sheet open={open} title="Item details" onClose={onClose} panelClassName="md:max-w-2xl">
       {isRecurringInstance && (
           <p className="mb-4 rounded-lg border border-amber-700/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-100">
-            Recurring event opened from the grid. <strong>Save changes</strong> applies to <em>this day only</em>{" "}
-            (title, notes, link, start and optional end time). <strong>Hide</strong> removes this day from the
-            calendar. <strong>Complete this day</strong> keeps it visible but struck through. <strong>Complete series</strong>{" "}
-            / <strong>Delete series</strong> affect the whole series.
+            You're editing <strong>one day</strong> of a recurring series — Save applies to this day only. Series-wide
+            actions are grouped below.
           </p>
         )}
 
@@ -531,71 +529,79 @@ export default function ItemDetailModal({
               </div>
             )}
 
-            <div className="flex flex-col gap-2 border-t border-slate-800 pt-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex flex-wrap gap-2">
-                {canPerInstanceActions ? (
-                  <button
-                    type="button"
-                    disabled={busy !== null}
-                    onClick={() => void handleOmitThisOccurrence()}
-                    className="rounded-lg border border-sky-600 bg-sky-900/40 px-3 py-2 text-sm text-sky-100 hover:bg-sky-900/60 disabled:opacity-50"
-                  >
-                    {busy === "omit" ? "…" : "Hide this occurrence"}
-                  </button>
-                ) : null}
-                {canPerInstanceActions ? (
+            <div className="flex flex-col gap-3 border-t border-slate-800 pt-4">
+              {canPerInstanceActions && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="w-full text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 sm:w-auto sm:min-w-16">
+                    This day
+                  </span>
                   <button
                     type="button"
                     disabled={busy !== null}
                     onClick={() => void handleCompleteThisOccurrence()}
-                    className="rounded-lg border border-emerald-600/80 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-100 hover:bg-emerald-950/60 disabled:opacity-50"
+                    className="rounded-lg border border-emerald-600/80 bg-emerald-950/40 px-2.5 py-1.5 text-xs text-emerald-100 hover:bg-emerald-950/60 disabled:opacity-50"
                   >
                     {busy === "completeOne" ? "…" : "Complete this day"}
                   </button>
-                ) : null}
-                {canPerInstanceActions ? (
+                  <button
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() => void handleOmitThisOccurrence()}
+                    className="rounded-lg border border-sky-600 bg-sky-900/40 px-2.5 py-1.5 text-xs text-sky-100 hover:bg-sky-900/60 disabled:opacity-50"
+                  >
+                    {busy === "omit" ? "…" : "Hide this day"}
+                  </button>
                   <button
                     type="button"
                     disabled={busy !== null}
                     onClick={() => void handleClearInstanceOverrides()}
-                    className="rounded-lg border border-amber-600/80 bg-amber-950/40 px-3 py-2 text-sm text-amber-100 hover:bg-amber-950/60 disabled:opacity-50"
+                    className="rounded-lg border border-amber-600/80 bg-amber-950/40 px-2.5 py-1.5 text-xs text-amber-100 hover:bg-amber-950/60 disabled:opacity-50"
                   >
                     {busy === "clear" ? "…" : "Reset this day"}
                   </button>
-                ) : null}
-                <button
-                  type="button"
-                  disabled={!canActor || busy !== null}
-                  onClick={() => void handleComplete()}
-                  className="rounded-lg border border-emerald-700 bg-emerald-900/40 px-3 py-2 text-sm text-emerald-100 hover:bg-emerald-900/60 disabled:opacity-50"
-                >
-                  {busy === "complete" ? "…" : isRecurringInstance ? "Complete series" : "Complete"}
-                </button>
-                <button
-                  type="button"
-                  disabled={!canActor || busy !== null}
-                  onClick={() => void handleDelete()}
-                  className="rounded-lg border border-red-800/80 bg-red-950/40 px-3 py-2 text-sm text-red-100 hover:bg-red-950/70 disabled:opacity-50"
-                >
-                  {busy === "delete" ? "…" : isRecurringInstance ? "Delete series" : "Delete"}
-                </button>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={busy !== null}
-                  onClick={() => void handleSave()}
-                  className="rounded-lg border border-blue-500/60 bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-2 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
-                >
-                  {busy === "save" ? "Saving…" : "Save changes"}
-                </button>
+                </div>
+              )}
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap items-center gap-2">
+                  {isRecurringInstance && (
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 sm:min-w-16">
+                      Series
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    disabled={!canActor || busy !== null}
+                    onClick={() => void handleComplete()}
+                    className="rounded-lg border border-emerald-700 bg-emerald-900/40 px-3 py-2 text-sm text-emerald-100 hover:bg-emerald-900/60 disabled:opacity-50"
+                  >
+                    {busy === "complete" ? "…" : isRecurringInstance ? "Complete series" : "Complete"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canActor || busy !== null}
+                    onClick={() => void handleDelete()}
+                    className="rounded-lg border border-red-800/80 bg-red-950/40 px-3 py-2 text-sm text-red-100 hover:bg-red-950/70 disabled:opacity-50"
+                  >
+                    {busy === "delete" ? "…" : isRecurringInstance ? "Delete series" : "Delete"}
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() => void handleSave()}
+                    className="rounded-lg border border-blue-500/60 bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-2 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
+                  >
+                    {busy === "save" ? "Saving…" : "Save changes"}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

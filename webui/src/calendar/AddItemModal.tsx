@@ -5,6 +5,7 @@ import Sheet from "../components/Sheet";
 import CalendarReminderSelect from "./CalendarReminderSelect";
 import type { DiscordGuildRosterState } from "../hooks/useDiscordGuildRoster";
 import { postCalendarItem } from "../api";
+import { defaultStartTimeForDate } from "../lib/calendarDefaults";
 import { CALENDAR_TIME_ZONE_OPTIONS } from "./timeZoneOptions";
 
 type Mode = "event" | "task";
@@ -14,6 +15,12 @@ type Props = {
   initialMode: Mode;
   /** Calendar day (`YYYY-MM-DD`) in the viewer zone to pre-fill the event start. */
   initialYmd?: string | null;
+  /** Pre-fill start wall time `HH:mm` (e.g. a clicked time slot). */
+  initialStartTime?: string | null;
+  /** Pre-fill end wall time `HH:mm` (paired with initialStartTime). */
+  initialEndTime?: string | null;
+  /** Pre-check all-day (e.g. clicked the all-day row). */
+  initialAllDay?: boolean;
   /** Default IANA id for new events (usually matches viewer zone). */
   eventTimeZoneDefault: string;
   token: string;
@@ -27,6 +34,9 @@ export default function AddItemModal({
   open,
   initialMode,
   initialYmd,
+  initialStartTime,
+  initialEndTime,
+  initialAllDay,
   eventTimeZoneDefault,
   token,
   guildRoster,
@@ -62,10 +72,19 @@ export default function AddItemModal({
         ? initialYmd
         : DateTime.now().setZone(tz).toISODate()!;
     setStartDate(y);
-    setStartTime("09:00");
-    setEndDate("");
-    setEndTime("");
-    setAllDay(false);
+    const st =
+      initialStartTime && /^\d{2}:\d{2}$/.test(initialStartTime)
+        ? initialStartTime
+        : defaultStartTimeForDate(y, tz);
+    setStartTime(st);
+    if (initialEndTime && /^\d{2}:\d{2}$/.test(initialEndTime)) {
+      setEndDate(y);
+      setEndTime(initialEndTime);
+    } else {
+      setEndDate("");
+      setEndTime("");
+    }
+    setAllDay(initialAllDay === true && initialMode === "event");
     setReminder("");
     setRecurrence("");
     setAssignToEveryone(false);
@@ -74,7 +93,7 @@ export default function AddItemModal({
     setNotes("");
     setLink("");
     setSubmitting(false);
-  }, [open, initialMode, initialYmd, eventTimeZoneDefault]);
+  }, [open, initialMode, initialYmd, initialStartTime, initialEndTime, initialAllDay, eventTimeZoneDefault]);
 
   if (!open) return null;
 
@@ -164,19 +183,6 @@ export default function AddItemModal({
 
         {mode === "event" && (
           <>
-            <Field label="Event timezone (wall times below are in this zone)">
-              <select
-                value={eventTz}
-                onChange={(e) => setEventTz(e.target.value)}
-                className={inputClass}
-              >
-                {CALENDAR_TIME_ZONE_OPTIONS.map((z) => (
-                  <option key={z.id} value={z.id}>
-                    {z.label} ({z.id})
-                  </option>
-                ))}
-              </select>
-            </Field>
             <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="Start date">
                 <input
@@ -207,6 +213,17 @@ export default function AddItemModal({
                   className={`${inputClass} disabled:opacity-50`}
                 />
               </Field>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-slate-300">
+              <input
+                type="checkbox"
+                checked={allDay}
+                onChange={(e) => setAllDay(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-600 bg-slate-900"
+              />
+              All-day event (uses start date at midnight in the event timezone)
+            </label>
+            <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="Reminder">
                 <CalendarReminderSelect value={reminder} onChange={setReminder} className={inputClass} />
               </Field>
@@ -224,63 +241,99 @@ export default function AddItemModal({
                 </select>
               </Field>
             </div>
-            <label className="flex items-center gap-2 text-sm text-slate-300">
-              <input
-                type="checkbox"
-                checked={allDay}
-                onChange={(e) => setAllDay(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-600 bg-slate-900"
-              />
-              All-day event (uses start date at midnight in the event timezone)
-            </label>
-            <label className="flex items-center gap-2 text-sm text-slate-300">
-              <input
-                type="checkbox"
-                checked={assignToEveryone}
-                onChange={(e) => setAssignToEveryone(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-600 bg-slate-900"
-              />
-              Assign to everyone (overrides specific assignee)
-            </label>
           </>
         )}
 
-        <Field label="Assigned user (Discord id)">
-          <input
-            value={assignedTo}
-            onChange={(e) => setAssignedTo(e.target.value)}
-            inputMode="numeric"
-            disabled={mode === "event" && assignToEveryone}
-            className={`${inputClass} disabled:opacity-50`}
-            placeholder="leave blank for unassigned"
-          />
-          <div className="mt-2 min-w-0">
-            <DiscordMemberSelect
-              token={token}
-              sharedRoster={guildRoster}
-              label="Pick from server"
+        {mode === "task" && (
+          <Field label="Assigned user (Discord id)">
+            <input
               value={assignedTo}
-              onPickUserId={setAssignedTo}
-              disabled={mode === "event" && assignToEveryone}
-              className="min-w-0"
+              onChange={(e) => setAssignedTo(e.target.value)}
+              inputMode="numeric"
+              className={inputClass}
+              placeholder="leave blank for unassigned"
             />
-          </div>
-        </Field>
+            <div className="mt-2 min-w-0">
+              <DiscordMemberSelect
+                token={token}
+                sharedRoster={guildRoster}
+                label="Pick from server"
+                value={assignedTo}
+                onPickUserId={setAssignedTo}
+                className="min-w-0"
+              />
+            </div>
+          </Field>
+        )}
 
-        <Field label="Description">
-          <input value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />
-        </Field>
-        <Field label="Notes">
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={2}
-            className={inputClass}
-          />
-        </Field>
-        <Field label="Link">
-          <input value={link} onChange={(e) => setLink(e.target.value)} className={inputClass} />
-        </Field>
+        <details className="group rounded-lg border border-slate-800 bg-slate-900/30 px-3 py-2.5">
+          <summary className="cursor-pointer select-none text-xs font-semibold uppercase tracking-[0.12em] text-slate-400 transition-colors hover:text-slate-200">
+            More options
+          </summary>
+          <div className="mt-4 space-y-4">
+            {mode === "event" && (
+              <>
+                <Field label="Event timezone (wall times above are in this zone)">
+                  <select
+                    value={eventTz}
+                    onChange={(e) => setEventTz(e.target.value)}
+                    className={inputClass}
+                  >
+                    {CALENDAR_TIME_ZONE_OPTIONS.map((z) => (
+                      <option key={z.id} value={z.id}>
+                        {z.label} ({z.id})
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <label className="flex items-center gap-2 text-sm text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={assignToEveryone}
+                    onChange={(e) => setAssignToEveryone(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-600 bg-slate-900"
+                  />
+                  Assign to everyone (overrides specific assignee)
+                </label>
+                <Field label="Assigned user (Discord id)">
+                  <input
+                    value={assignedTo}
+                    onChange={(e) => setAssignedTo(e.target.value)}
+                    inputMode="numeric"
+                    disabled={assignToEveryone}
+                    className={`${inputClass} disabled:opacity-50`}
+                    placeholder="leave blank for unassigned"
+                  />
+                  <div className="mt-2 min-w-0">
+                    <DiscordMemberSelect
+                      token={token}
+                      sharedRoster={guildRoster}
+                      label="Pick from server"
+                      value={assignedTo}
+                      onPickUserId={setAssignedTo}
+                      disabled={assignToEveryone}
+                      className="min-w-0"
+                    />
+                  </div>
+                </Field>
+              </>
+            )}
+            <Field label="Description">
+              <input value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />
+            </Field>
+            <Field label="Notes">
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
+                className={inputClass}
+              />
+            </Field>
+            <Field label="Link">
+              <input value={link} onChange={(e) => setLink(e.target.value)} className={inputClass} />
+            </Field>
+          </div>
+        </details>
 
         <div className="flex items-center justify-end gap-2 border-t border-slate-800 pt-4">
           <button

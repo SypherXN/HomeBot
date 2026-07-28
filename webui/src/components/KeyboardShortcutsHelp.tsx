@@ -13,7 +13,10 @@ const rows: { keys: string; action: string }[] = [
   { keys: "g then m", action: "Go to Money" },
   { keys: "g then c", action: "Go to Calendar" },
   { keys: "g then s", action: "Go to Settings" },
-  { keys: "n", action: "Focus add form (Buy / Wishlist pages)" },
+  { keys: "n", action: "New item (Buy / Wishlist / Calendar)" },
+  { keys: "← / →", action: "Calendar: previous / next period" },
+  { keys: "t", action: "Calendar: jump to today" },
+  { keys: "1 – 4", action: "Calendar: month / week / day / agenda view" },
 ];
 
 export default function KeyboardShortcutsHelp({ open, onClose }: Props) {

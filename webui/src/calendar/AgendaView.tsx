@@ -2,16 +2,20 @@ import { useMemo } from "react";
 import type { CalendarRangeItem } from "../api";
 import { formatLongDateYmd, formatTimeInZone, rangeInstanceEndUtc, rangeInstanceStartUtc, ymdInZone } from "./calendarZoned";
 import { isGreyedOccurrence } from "./occurrenceStyle";
+import { Icon } from "../components/icons";
 
 type Props = {
   events: CalendarRangeItem[];
   displayZone: string;
   onPickEvent: (event: CalendarRangeItem) => void;
+  /** One-tap complete straight from the list (recurring instances complete just that day). */
+  onQuickComplete?: (event: CalendarRangeItem) => void;
+  quickCompletingKey?: string | null;
 };
 
 type DayBucket = { ymd: string; events: CalendarRangeItem[] };
 
-export default function AgendaView({ events, displayZone, onPickEvent }: Props) {
+export default function AgendaView({ events, displayZone, onPickEvent, onQuickComplete, quickCompletingKey }: Props) {
   const buckets = useMemo(() => groupByDay(events, displayZone), [events, displayZone]);
 
   if (buckets.length === 0) {
@@ -30,16 +34,19 @@ export default function AgendaView({ events, displayZone, onPickEvent }: Props) 
             {formatLongDateYmd(bucket.ymd, displayZone)}
           </h3>
           <ul className="mt-2 space-y-2">
-            {bucket.events.map((ev) => (
-              <li key={`${ev.id}@${ev.instanceStartUtc}`}>
+            {bucket.events.map((ev) => {
+              const greyed = isGreyedOccurrence(ev);
+              const evKey = `${ev.id}@${ev.instanceStartUtc}`;
+              return (
+              <li key={evKey} className="group relative">
                 <button
                   type="button"
                   onClick={() => onPickEvent(ev)}
                   className={`flex w-full flex-col gap-1 rounded-lg border border-slate-800 px-3 py-3 text-left ${
-                    isGreyedOccurrence(ev)
+                    greyed
                       ? "bg-slate-900/20 text-slate-500 hover:border-slate-800 hover:bg-slate-900/40"
                       : "bg-slate-900/40 hover:border-slate-700 hover:bg-slate-900/70"
-                  } ${ev.isInstanceCompleted || ev.isCompleted ? "line-through" : ""}`}
+                  } ${ev.isInstanceCompleted || ev.isCompleted ? "line-through" : ""} ${onQuickComplete && !greyed ? "pr-10" : ""}`}
                 >
                   <div className="flex items-baseline justify-between gap-3">
                     <span
@@ -80,8 +87,21 @@ export default function AgendaView({ events, displayZone, onPickEvent }: Props) 
                     <p className="text-[11px] text-slate-600">Event TZ: {ev.timeZoneId}</p>
                   )}
                 </button>
+                {onQuickComplete && !greyed && (
+                  <button
+                    type="button"
+                    aria-label={`Mark "${ev.title}" complete`}
+                    title={ev.isRecurringInstance ? "Mark this day complete" : "Mark complete"}
+                    disabled={quickCompletingKey === evKey}
+                    onClick={() => onQuickComplete(ev)}
+                    className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-md border border-slate-700 bg-slate-900/90 text-slate-400 opacity-100 transition-all hover:border-emerald-600/60 hover:bg-emerald-950/50 hover:text-emerald-300 focus:opacity-100 group-hover:opacity-100 disabled:opacity-50 sm:opacity-0"
+                  >
+                    {quickCompletingKey === evKey ? <span className="text-[10px]">…</span> : <Icon name="check" className="h-3.5 w-3.5" />}
+                  </button>
+                )}
               </li>
-            ))}
+              );
+            })}
           </ul>
         </section>
       ))}
