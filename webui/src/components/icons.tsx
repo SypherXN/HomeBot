@@ -16,12 +16,9 @@ export type IconName =
   | "login"
   | "user-plus"
   | "health"
-  | "plus"
   | "x"
   | "bell"
-  | "search"
   | "check"
-  | "undo"
   | "sun"
   | "moon"
   | "user";
@@ -115,11 +112,6 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
     </>
   ),
-  plus: (
-    <>
-      <path d="M12 5v14M5 12h14" />
-    </>
-  ),
   x: (
     <>
       <path d="M18 6 6 18M6 6l12 12" />
@@ -131,21 +123,9 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
     </>
   ),
-  search: (
-    <>
-      <circle cx="11" cy="11" r="7" />
-      <path d="m21 21-4.35-4.35" />
-    </>
-  ),
   check: (
     <>
       <path d="M20 6 9 17l-5-5" />
-    </>
-  ),
-  undo: (
-    <>
-      <path d="M3 7v6h6" />
-      <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
     </>
   ),
   sun: (

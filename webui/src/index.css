@@ -179,12 +179,6 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
 
-  /* Floating action button */
-  .hb-fab {
-    @apply flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-white transition-transform active:scale-95;
-    box-shadow: 0 10px 28px -8px rgb(109 71 240 / 0.65);
-  }
-
   /* Toast */
   .hb-toast {
     @apply pointer-events-auto flex items-center gap-3 rounded-2xl border border-slate-700/80 bg-slate-900/95 px-4 py-3 shadow-lg backdrop-blur;

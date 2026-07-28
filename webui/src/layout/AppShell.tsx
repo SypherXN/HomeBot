@@ -7,7 +7,6 @@ import { useBudgetAlertCount } from "../hooks/useBudgetAlertCount";
 import GlobalSearch from "../components/GlobalSearch";
 import KeyboardShortcutsHelp from "../components/KeyboardShortcutsHelp";
 import NotificationCenter from "../components/NotificationCenter";
-import QuickAddSheet from "../components/QuickAddSheet";
 import Sheet from "../components/Sheet";
 import { useGlobalKeyboardShortcuts } from "../hooks/useGlobalKeyboardShortcuts";
 import { useTheme } from "../theme/ThemeProvider";
@@ -44,7 +43,7 @@ const navGroups: { label: string | null; items: NavItem[] }[] = [
 
 const flatNav: NavItem[] = navGroups.flatMap((g) => g.items);
 
-/** Primary mobile tab-bar destinations (in display order around the FAB). */
+/** Primary mobile tab-bar destinations. */
 const TAB_ITEMS: NavItem[] = [
   { to: "/", label: "Home", icon: "home", end: true },
   { to: "/buy", label: "Buy", icon: "buy" },
@@ -152,22 +151,9 @@ export default function AppShell() {
   const [backupWarning, setBackupWarning] = useState<string | null>(null);
   const { helpOpen, setHelpOpen } = useGlobalKeyboardShortcuts();
   const { theme, toggleTheme } = useTheme();
-  const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   useEffect(() => subscribeApiBaseUrl(() => setApiBaseDisplay(getApiBaseUrl())), []);
-
-  // Ctrl/Cmd-K opens quick add from anywhere.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setQuickAddOpen(true);
-      }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, []);
 
   useEffect(() => {
     if (status.phase !== "up" || status.auth !== "ok" || !hasToken) {
@@ -268,22 +254,6 @@ export default function AppShell() {
               </div>
             )}
           </div>
-        </div>
-
-        <div className="px-3 pb-2">
-          <button
-            type="button"
-            onClick={() => setQuickAddOpen(true)}
-            className="flex w-full items-center justify-between gap-2 rounded-xl border border-blue-600/40 bg-blue-950/40 px-3 py-2.5 text-sm font-medium text-blue-200 transition-colors hover:bg-blue-950/70"
-          >
-            <span className="flex items-center gap-2">
-              <Icon name="plus" className="h-4 w-4" />
-              Quick add
-            </span>
-            <kbd className="rounded-md bg-slate-900/80 px-1.5 py-0.5 text-[10px] text-slate-400">
-              Ctrl K
-            </kbd>
-          </button>
         </div>
 
         <nav className="flex-1 flex flex-col gap-0.5 px-3 pb-4">
@@ -452,16 +422,6 @@ export default function AppShell() {
         </div>
       </nav>
 
-      {/* Floating quick-add button (mobile) */}
-      <button
-        type="button"
-        onClick={() => setQuickAddOpen(true)}
-        aria-label="Quick add"
-        className="hb-fab fixed bottom-[calc(4.25rem+env(safe-area-inset-bottom))] right-4 z-40 md:hidden"
-      >
-        <Icon name="plus" className="h-6 w-6" />
-      </button>
-
       {/* Mobile "More" sheet */}
       <Sheet open={moreOpen} title="More" onClose={() => setMoreOpen(false)}>
         <nav className="grid grid-cols-2 gap-2">
@@ -520,7 +480,6 @@ export default function AppShell() {
         </button>
       </Sheet>
 
-      <QuickAddSheet open={quickAddOpen} onClose={() => setQuickAddOpen(false)} />
       <NotificationCenter
         open={notifOpen}
         onClose={() => setNotifOpen(false)}
