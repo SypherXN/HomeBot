@@ -306,15 +306,22 @@ public sealed class GoogleCalendarSyncService
         return JsonSerializer.Serialize(obj);
     }
 
-    private static string? ToGoogleRecurrence(string recurrence) =>
-        recurrence.Trim().ToLowerInvariant() switch
-        {
-            "daily" => "RRULE:FREQ=DAILY",
-            "weekly" => "RRULE:FREQ=WEEKLY",
-            "monthly" => "RRULE:FREQ=MONTHLY",
-            "yearly" => "RRULE:FREQ=YEARLY",
-            _ => null,
-        };
+    private static string? ToGoogleRecurrence(string recurrence)
+    {
+        if (!RecurrenceRule.TryParse(recurrence, out var r))
+            return null;
+        var sb = new System.Text.StringBuilder("RRULE:FREQ=");
+        sb.Append(r.Frequency.ToUpperInvariant());
+        if (r.Interval > 1)
+            sb.Append(CultureInfo.InvariantCulture, $";INTERVAL={r.Interval}");
+        if (r.Weekdays.Length > 0)
+            sb.Append(";BYDAY=").Append(string.Join(",", r.Weekdays.Select(RecurrenceRule.DayToCode)));
+        if (r.Until.HasValue)
+            sb.Append(CultureInfo.InvariantCulture, $";UNTIL={r.Until.Value:yyyyMMdd}");
+        if (r.Count.HasValue)
+            sb.Append(CultureInfo.InvariantCulture, $";COUNT={r.Count.Value}");
+        return sb.ToString();
+    }
 
     private void UpsertLocalFromGoogle(string externalId, string title, string desc, string start, string end, string? etag, string? googleUpdated)
     {

@@ -153,15 +153,7 @@ public class CalendarService
             }
 
             var recurrence = reader.IsDBNull(8) ? "" : reader.GetString(8);
-            var recurrenceText = recurrence switch
-            {
-                "daily" => "🔁 daily",
-                "weekly" => "🔁 weekly",
-                "monthly" => "🔁 monthly",
-                "yearly" => "🔁 annual",
-                "" => "",
-                _ => $"🔁 {recurrence}"
-            };
+            var recurrenceText = RecurrenceRule.Describe(recurrence);
 
             var reminderRaw = reader.IsDBNull(7) ? "" : reader.GetString(7);
 
@@ -459,7 +451,7 @@ public class CalendarService
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
             SELECT Title, Description, Notes, Link, StartDateTime, EndDateTime, AllDay, ReminderOffset,
-                   COALESCE(Timezone, '') AS ItemTz, COALESCE(Recurrence, '') AS Recur, AssignedTo
+                   COALESCE(Timezone, '') AS ItemTz, COALESCE(Recurrence, '') AS Recur, AssignedTo, Type
             FROM CalendarItems
             WHERE Id = $id AND Status = 'active'";
 
@@ -478,6 +470,7 @@ public class CalendarService
             detail = new CalendarItemDetailModel
             {
                 Title = reader.GetString(0),
+                Type = reader.IsDBNull(11) ? "event" : reader.GetString(11),
                 Description = reader.IsDBNull(1) ? "" : reader.GetString(1),
                 Notes = reader.IsDBNull(2) ? "" : reader.GetString(2),
                 Link = reader.IsDBNull(3) ? "" : reader.GetString(3),
@@ -751,15 +744,7 @@ public class CalendarService
             }
 
             var recurrence = reader.IsDBNull(8) ? "" : reader.GetString(8);
-            var recurrenceText = recurrence switch
-            {
-                "daily" => "🔁 daily",
-                "weekly" => "🔁 weekly",
-                "monthly" => "🔁 monthly",
-                "yearly" => "🔁 annual",
-                "" => "",
-                _ => $"🔁 {recurrence}"
-            };
+            var recurrenceText = RecurrenceRule.Describe(recurrence);
             var reminderRaw = reader.IsDBNull(7) ? "" : reader.GetString(7);
 
             list.Add(new CalendarListItemModel
@@ -901,91 +886,19 @@ public class CalendarService
 
             switch (meta.Recurrence)
             {
-                case "daily":
-                    {
-                        var firstDay = startLocalRow.Date > winStartDate ? startLocalRow.Date : winStartDate;
-                        for (var d = firstDay; d <= winEndDateInclusive; d = d.AddDays(1))
-                            EmitInstance(
-                                output,
-                                meta,
-                                d.Add(startLocalRow.TimeOfDay),
-                                duration,
-                                rowTz,
-                                true,
-                                fromUtc,
-                                toUtcExclusive,
-                                recurrenceExceptions);
-                        break;
-                    }
-                case "weekly":
-                    {
-                        for (var d = winStartDate; d <= winEndDateInclusive; d = d.AddDays(1))
-                        {
-                            if (d < startLocalRow.Date)
-                                continue;
-                            if ((d - startLocalRow.Date).TotalDays % 7 != 0)
-                                continue;
-                            EmitInstance(
-                                output,
-                                meta,
-                                d.Add(startLocalRow.TimeOfDay),
-                                duration,
-                                rowTz,
-                                true,
-                                fromUtc,
-                                toUtcExclusive,
-                                recurrenceExceptions);
-                        }
-
-                        break;
-                    }
-                case "monthly":
-                    {
-                        var anchorDay = startLocalRow.Day;
-                        var cursor = startLocalRow.Date;
-                        while (cursor < winStartDate)
-                            cursor = NextMonthlyOccurrenceDate(cursor, anchorDay);
-                        while (cursor <= winEndDateInclusive)
-                        {
-                            EmitInstance(
-                                output,
-                                meta,
-                                cursor.Add(startLocalRow.TimeOfDay),
-                                duration,
-                                rowTz,
-                                true,
-                                fromUtc,
-                                toUtcExclusive,
-                                recurrenceExceptions);
-                            cursor = NextMonthlyOccurrenceDate(cursor, anchorDay);
-                        }
-
-                        break;
-                    }
-                case "yearly":
-                    {
-                        var anchorMonth = startLocalRow.Month;
-                        var anchorDay = startLocalRow.Day;
-                        var cursor = startLocalRow.Date;
-                        while (cursor < winStartDate)
-                            cursor = NextYearlyOccurrenceDate(cursor, anchorMonth, anchorDay);
-                        while (cursor <= winEndDateInclusive)
-                        {
-                            EmitInstance(
-                                output,
-                                meta,
-                                cursor.Add(startLocalRow.TimeOfDay),
-                                duration,
-                                rowTz,
-                                true,
-                                fromUtc,
-                                toUtcExclusive,
-                                recurrenceExceptions);
-                            cursor = NextYearlyOccurrenceDate(cursor, anchorMonth, anchorDay);
-                        }
-
-                        break;
-                    }
+                case var s when !string.IsNullOrWhiteSpace(s):
+                    ExpandRecurrence(
+                        output,
+                        meta,
+                        startLocalRow,
+                        duration,
+                        rowTz,
+                        winStartDate,
+                        winEndDateInclusive,
+                        fromUtc,
+                        toUtcExclusive,
+                        recurrenceExceptions);
+                    break;
                 default:
                     EmitInstance(
                         output,
@@ -1005,7 +918,80 @@ public class CalendarService
             string.CompareOrdinal(
                 a.DisplayInstanceStartUtc ?? a.InstanceStartUtc,
                 b.DisplayInstanceStartUtc ?? b.InstanceStartUtc));
+
+        // Due-dated tasks (StartDateTime = due date at midnight in the item zone) render as all-day chips.
+        AppendDueDatedTasks(output, conn, fromUtc, toUtcExclusive, householdTz, userFilter, recurrenceExceptions);
         return output;
+    }
+
+    private void AppendDueDatedTasks(
+        List<CalendarRangeItemModel> output,
+        Microsoft.Data.Sqlite.SqliteConnection conn,
+        DateTime fromUtc,
+        DateTime toUtcExclusive,
+        TimeZoneInfo householdTz,
+        ulong? userFilter,
+        Dictionary<(int CalendarItemId, string InstanceStartUtc), RecurrenceExceptionRow> recurrenceExceptions)
+    {
+        var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT Id, Title, Type, StartDateTime, AllDay, AssignedTo, Link, ReminderOffset, Recurrence,
+                   COALESCE(Timezone, '') AS ItemTz, COALESCE(Description, '') AS DescCol, COALESCE(Notes, '') AS NotesCol
+            FROM CalendarItems
+            WHERE Status = 'active' AND Type = 'task' AND StartDateTime IS NOT NULL AND StartDateTime != ''";
+        using var reader = cmd.ExecuteReader();
+        var due = new List<RangeRowMeta>();
+        var starts = new List<DateTime>();
+        while (reader.Read())
+        {
+            var assigned = reader.IsDBNull(5) ? null : (ulong?)reader.GetInt64(5);
+            if (userFilter.HasValue && assigned.HasValue && assigned.Value != 0 && assigned.Value != userFilter.Value)
+                continue;
+            var startRaw = reader.GetString(3);
+            if (!DateTime.TryParse(startRaw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var startUtc))
+                continue;
+            startUtc = DateTime.SpecifyKind(startUtc, DateTimeKind.Utc);
+            var rowTzId = reader.IsDBNull(9) ? "" : reader.GetString(9);
+            var rowTz = TimeZoneResolver.Resolve(string.IsNullOrWhiteSpace(rowTzId) ? null : rowTzId, householdTz.Id);
+            due.Add(new RangeRowMeta
+            {
+                Id = reader.GetInt32(0),
+                Title = reader.GetString(1),
+                Type = reader.GetString(2),
+                AllDay = true,
+                Assigned = assigned,
+                Link = reader.IsDBNull(6) ? "" : reader.GetString(6),
+                ReminderRaw = reader.IsDBNull(7) ? "" : reader.GetString(7),
+                Recurrence = reader.IsDBNull(8) ? "" : reader.GetString(8),
+                TimezoneId = rowTz.Id,
+                Description = reader.IsDBNull(11) ? "" : reader.GetString(11),
+                Notes = reader.IsDBNull(12) ? "" : reader.GetString(12),
+                Status = "active",
+                IsDueTask = true,
+            });
+            starts.Add(startUtc);
+        }
+
+        for (var i = 0; i < due.Count; i++)
+        {
+            var meta = due[i];
+            var rowTz = TimeZoneResolver.Resolve(meta.TimezoneId, householdTz.Id);
+            DateTime startLocalRow;
+            try { startLocalRow = TimeZoneInfo.ConvertTimeFromUtc(starts[i], rowTz); }
+            catch { continue; }
+
+            // Non-recurring: single all-day occurrence on the due date.
+            if (string.IsNullOrWhiteSpace(meta.Recurrence))
+            {
+                EmitInstance(output, meta, startLocalRow.Date, null, rowTz, false, fromUtc, toUtcExclusive, recurrenceExceptions);
+            }
+            else
+            {
+                var winStartDate = TimeZoneInfo.ConvertTimeFromUtc(fromUtc, rowTz).Date;
+                var winEndDateInclusive = TimeZoneInfo.ConvertTimeFromUtc(toUtcExclusive.AddTicks(-1), rowTz).Date;
+                ExpandRecurrence(output, meta, startLocalRow, null, rowTz, winStartDate, winEndDateInclusive, fromUtc, toUtcExclusive, recurrenceExceptions);
+            }
+        }
     }
 
     private static DateTime NextMonthlyOccurrenceDate(DateTime fromDate, int anchorDay)
@@ -1020,6 +1006,121 @@ public class CalendarService
         var nextYear = fromDate.Year + 1;
         var day = Math.Min(anchorDay, DateTime.DaysInMonth(nextYear, anchorMonth));
         return new DateTime(nextYear, anchorMonth, day);
+    }
+
+    /// <summary>
+    /// Expands one recurring row into occurrences within the window. Handles daily/weekly/biweekly/
+    /// monthly/yearly, optional weekday lists (weekly:MO,WE,…), and optional ;UNTIL=YYYYMMDD / ;COUNT=N bounds.
+    /// </summary>
+    private static void ExpandRecurrence(
+        List<CalendarRangeItemModel> output,
+        RangeRowMeta meta,
+        DateTime startLocalRow,
+        TimeSpan? duration,
+        TimeZoneInfo rowTz,
+        DateTime winStartDate,
+        DateTime winEndDateInclusive,
+        DateTime fromUtc,
+        DateTime toUtcExclusive,
+        Dictionary<(int CalendarItemId, string InstanceStartUtc), RecurrenceExceptionRow> recurrenceExceptions)
+    {
+        if (!RecurrenceRule.TryParse(meta.Recurrence, out var rule))
+        {
+            // Unparseable — fall back to a single emission so the item still shows.
+            EmitInstance(output, meta, startLocalRow, duration, rowTz, false, fromUtc, toUtcExclusive, recurrenceExceptions);
+            return;
+        }
+
+        var occurrenceIndex = 0;
+        void Emit(DateTime day)
+        {
+            if (rule.Until.HasValue && day > rule.Until.Value)
+                return;
+            if (rule.Count.HasValue && occurrenceIndex >= rule.Count.Value)
+                return;
+            occurrenceIndex++;
+            EmitInstance(
+                output,
+                meta,
+                day.Add(startLocalRow.TimeOfDay),
+                duration,
+                rowTz,
+                true,
+                fromUtc,
+                toUtcExclusive,
+                recurrenceExceptions);
+        }
+
+        switch (rule.Frequency)
+        {
+            case "daily":
+            {
+                var first = startLocalRow.Date > winStartDate ? startLocalRow.Date : winStartDate;
+                for (var d = first; d <= winEndDateInclusive; d = d.AddDays(1))
+                    Emit(d);
+                break;
+            }
+            case "weekly" when rule.Weekdays.Length == 0:
+            {
+                var step = 7 * Math.Max(1, rule.Interval);
+                for (var d = winStartDate; d <= winEndDateInclusive; d = d.AddDays(1))
+                {
+                    if (d < startLocalRow.Date) continue;
+                    if ((d - startLocalRow.Date).Days % step != 0) continue;
+                    Emit(d);
+                }
+                break;
+            }
+            case "weekly":
+            {
+                // Multi-day weekly (and biweekly multi-day): emit on matching weekdays,
+                // stepping by the interval from the series start week.
+                var step = 7 * Math.Max(1, rule.Interval);
+                var anchorWeekStart = StartOfWeek(startLocalRow.Date);
+                for (var d = winStartDate; d <= winEndDateInclusive; d = d.AddDays(1))
+                {
+                    if (d < startLocalRow.Date) continue;
+                    var weeksSinceAnchor = (StartOfWeek(d) - anchorWeekStart).Days / 7;
+                    if (weeksSinceAnchor < 0 || (weeksSinceAnchor % rule.Interval) != 0) continue;
+                    if (!rule.Weekdays.Contains(d.DayOfWeek)) continue;
+                    Emit(d);
+                }
+                break;
+            }
+            case "monthly":
+            {
+                var anchorDay = startLocalRow.Day;
+                var cursor = startLocalRow.Date;
+                while (cursor < winStartDate)
+                    cursor = NextMonthlyOccurrenceDate(cursor, anchorDay);
+                while (cursor <= winEndDateInclusive)
+                {
+                    Emit(cursor);
+                    cursor = NextMonthlyOccurrenceDate(cursor, anchorDay);
+                }
+                break;
+            }
+            case "yearly":
+            {
+                var anchorMonth = startLocalRow.Month;
+                var anchorDay = startLocalRow.Day;
+                var cursor = startLocalRow.Date;
+                while (cursor < winStartDate)
+                    cursor = NextYearlyOccurrenceDate(cursor, anchorMonth, anchorDay);
+                while (cursor <= winEndDateInclusive)
+                {
+                    Emit(cursor);
+                    cursor = NextYearlyOccurrenceDate(cursor, anchorMonth, anchorDay);
+                }
+                break;
+            }
+        }
+    }
+
+    private static DateTime StartOfWeek(DateTime d)
+    {
+        var diff = ((int)d.DayOfWeek + 6) % 7; // Monday-first
+        return d.Date.AddDays(-diff);
     }
 
     /// <summary>
@@ -1525,6 +1626,7 @@ public class CalendarService
         public string Description;
         public string Notes;
         public string Status;
+        public bool IsDueTask;
     }
 
     private static void EmitInstance(
@@ -1638,40 +1740,33 @@ public class CalendarService
         if (duration.HasValue || meta.AllDay)
             endIso = effectiveEndUtc.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
 
-        var recurrenceText = meta.Recurrence switch
-        {
-            "daily" => "🔁 daily",
-            "weekly" => "🔁 weekly",
-            "monthly" => "🔁 monthly",
-            "yearly" => "🔁 annual",
-            "" => "",
-            _ => $"🔁 {meta.Recurrence}",
-        };
+        var recurrenceText = RecurrenceRule.Describe(meta.Recurrence);
 
-        output.Add(new CalendarRangeItemModel
-        {
-            Id = meta.Id,
-            Title = title,
-            Description = desc,
-            Notes = notesEff,
-            Type = meta.Type,
-            AllDay = meta.AllDay,
-            AssignedTo = meta.Assigned,
-            AssignedToMemberLabel = HouseholdIdentity.MemberLabel(meta.Assigned),
-            HasLink = !string.IsNullOrWhiteSpace(linkEff),
-            ReminderText = ReminderFormatter.Format(meta.ReminderRaw),
-            RecurrenceText = recurrenceText,
-            Recurrence = meta.Recurrence,
-            InstanceStartUtc = startIso,
-            DisplayInstanceStartUtc = displayStart,
-            InstanceEndUtc = endIso,
-            DisplayInstanceEndUtc = displayEnd,
-            IsRecurringInstance = isRecurring,
-            IsInstanceCompleted = isCompleted,
-            IsCompleted = string.Equals(meta.Status, "completed", StringComparison.OrdinalIgnoreCase),
-            HasInstanceOverride = hasOverride,
-            TimeZoneId = meta.TimezoneId,
-        });
+            output.Add(new CalendarRangeItemModel
+            {
+                Id = meta.Id,
+                Title = title,
+                Description = desc,
+                Notes = notesEff,
+                Type = meta.Type,
+                AllDay = meta.AllDay,
+                AssignedTo = meta.Assigned,
+                AssignedToMemberLabel = HouseholdIdentity.MemberLabel(meta.Assigned),
+                HasLink = !string.IsNullOrWhiteSpace(linkEff),
+                ReminderText = ReminderFormatter.Format(meta.ReminderRaw),
+                RecurrenceText = recurrenceText,
+                Recurrence = meta.Recurrence,
+                InstanceStartUtc = startIso,
+                DisplayInstanceStartUtc = displayStart,
+                InstanceEndUtc = endIso,
+                DisplayInstanceEndUtc = displayEnd,
+                IsRecurringInstance = isRecurring,
+                IsInstanceCompleted = isCompleted,
+                IsCompleted = string.Equals(meta.Status, "completed", StringComparison.OrdinalIgnoreCase),
+                HasInstanceOverride = hasOverride,
+                TimeZoneId = meta.TimezoneId,
+                IsDueTask = meta.IsDueTask,
+            });
     }
 
     private int GetPageSize(SqliteConnection conn)

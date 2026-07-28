@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DateTime } from "luxon";
 import type { CalendarRangeItem } from "../api";
 import { formatTimeInZone, rangeInstanceEndUtc, rangeInstanceStartUtc, wallMinutesInZone, ymdInZone } from "./calendarZoned";
 import { isGreyedOccurrence } from "./occurrenceStyle";
+import { layerForAssignee } from "../lib/personLayers";
+import { Icon } from "../components/icons";
 
 type Props = {
   /** Calendar columns as `YYYY-MM-DD` in <see cref="displayZone"/>. */
@@ -16,14 +18,20 @@ type Props = {
   onCreateSlot?: (ymd: string, startMinutes: number) => void;
   /** Clicking an empty spot in the all-day row. */
   onCreateAllDay?: (ymd: string) => void;
+  /** Person-layer colors keyed by assignee. */
+  colorByPerson?: boolean;
+  /** Drag/commit: event dropped at a new start (and possibly new end). Minutes since midnight. */
+  onDragCommit?: (event: CalendarRangeItem, ymd: string, startMinutes: number, endMinutes: number | null) => void;
 };
 
 const HOUR_START = 6;
 const HOUR_END = 23;
 const HOUR_HEIGHT_PX = 44;
 const NOW_TICK_MS = 60_000;
+const SNAP_MIN = 15;
+const MIN_DURATION_MIN = 15;
 
-export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent, onPickDay, onCreateSlot, onCreateAllDay }: Props) {
+export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent, onPickDay, onCreateSlot, onCreateAllDay, colorByPerson, onDragCommit }: Props) {
   const partition = useMemo(
     () => splitAllDayAndTimed(events, dayYmds, displayZone),
     [events, dayYmds, displayZone]
@@ -37,6 +45,22 @@ export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent
   const nowLineMin = wallMinutesInZone(now.toISOString(), displayZone) - HOUR_START * 60;
   const hours = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => HOUR_START + i);
 
+  // Drag state: which event is being moved/resized and its live preview geometry.
+  const [drag, setDrag] = useState<{
+    ev: CalendarRangeItem;
+    kind: "move" | "resize";
+    originYmd: string;
+    durationMin: number;
+    grabOffsetMin: number;
+    startMin: number;
+    endMin: number;
+  } | null>(null);
+  const dragRef = useRef(drag);
+  useEffect(() => {
+    dragRef.current = drag;
+  }, [drag]);
+  const didDragRef = useRef(false);
+
   const dayLabels = dayYmds.map((ymd) => {
     const d = DateTime.fromISO(ymd, { zone: displayZone });
     return {
@@ -46,6 +70,60 @@ export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent
       isToday: ymd === todayYmd,
     };
   });
+
+  function minutesFromPointer(clientY: number, colEl: HTMLElement): number {
+    const rect = colEl.getBoundingClientRect();
+    const raw = ((clientY - rect.top) / HOUR_HEIGHT_PX) * 60;
+    return Math.max(0, Math.min((HOUR_END - HOUR_START + 1) * 60, raw)) + HOUR_START * 60;
+  }
+
+  function beginDrag(e: React.PointerEvent, ev: CalendarRangeItem, kind: "move" | "resize", colEl: HTMLElement) {
+    if (!onDragCommit || isGreyedOccurrence(ev) || ev.allDay) return;
+    const startIso = rangeInstanceStartUtc(ev);
+    const endIso = rangeInstanceEndUtc(ev);
+    const startMin = wallMinutesInZone(startIso, displayZone);
+    const endMin = endIso ? wallMinutesInZone(endIso, displayZone) : startMin + 60;
+    const durationMin = Math.max(MIN_DURATION_MIN, endMin - startMin);
+    const pointerMin = minutesFromPointer(e.clientY, colEl);
+    setDrag({
+      ev,
+      kind,
+      originYmd: ymdInZone(startIso, displayZone),
+      durationMin,
+      grabOffsetMin: pointerMin - startMin,
+      startMin,
+      endMin,
+    });
+    didDragRef.current = false;
+  }
+
+  function updateDrag(e: React.PointerEvent, colEl: HTMLElement) {
+    const d = dragRef.current;
+    if (!d) return;
+    const pointerMin = minutesFromPointer(e.clientY, colEl);
+    const gridMax = (HOUR_END + 1) * 60;
+    if (d.kind === "move") {
+      const rawStart = pointerMin - d.grabOffsetMin;
+      const snapped = Math.round(rawStart / SNAP_MIN) * SNAP_MIN;
+      const startMin = Math.max(0, Math.min(gridMax - d.durationMin, snapped));
+      setDrag({ ...d, startMin, endMin: startMin + d.durationMin });
+    } else {
+      const snappedEnd = Math.round(pointerMin / SNAP_MIN) * SNAP_MIN;
+      const endMin = Math.max(d.startMin + MIN_DURATION_MIN, Math.min(gridMax, snappedEnd));
+      setDrag({ ...d, endMin });
+    }
+    didDragRef.current = true;
+  }
+
+  function endDrag(ymd: string) {
+    const d = dragRef.current;
+    if (!d) return;
+    setDrag(null);
+    if (didDragRef.current && onDragCommit) {
+      onDragCommit(d.ev, ymd, Math.round(d.startMin), Math.round(d.endMin));
+    }
+    didDragRef.current = false;
+  }
 
   return (
     <div className="overflow-hidden hb-card">
@@ -89,7 +167,16 @@ export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent
               }`}
             >
               <div className="flex flex-col gap-0.5">
-                {all.map((ev) => (
+                {all.map((ev) => {
+                  const greyed = isGreyedOccurrence(ev);
+                  const due = ev.isDueTask === true;
+                  const layer = colorByPerson ? layerForAssignee(ev.assignedTo) : undefined;
+                  const chipClass = greyed
+                    ? "bg-slate-800/60 text-slate-500 line-through hover:bg-slate-800"
+                    : due
+                      ? "border border-amber-500/50 bg-amber-950/40 text-amber-100 hover:bg-amber-950/60"
+                      : (layer?.chip ?? "bg-amber-900/60 text-amber-100 hover:bg-amber-800/70");
+                  return (
                   <button
                     key={`${ev.id}@${ev.instanceStartUtc}`}
                     type="button"
@@ -97,17 +184,15 @@ export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent
                       e.stopPropagation();
                       onPickEvent(ev);
                     }}
-                    className={`truncate rounded px-2 py-0.5 text-left text-[11px] font-medium ${
-                      isGreyedOccurrence(ev)
-                        ? "bg-slate-800/60 text-slate-500 line-through hover:bg-slate-800"
-                        : "bg-amber-900/60 text-amber-100 hover:bg-amber-800/70"
-                    }`}
-                    title={ev.title}
+                    className={`truncate rounded px-2 py-0.5 text-left text-[11px] font-medium ${chipClass}`}
+                    title={`${due ? "Due: " : ""}${ev.title}`}
                   >
+                    {due && <Icon name="check" className="mr-1 inline h-2.5 w-2.5 align-[-1px] text-amber-300" />}
                     {ev.title}
-                    {ev.isRecurringInstance && !isGreyedOccurrence(ev) && <span className="ml-1 text-amber-300">↻</span>}
+                    {ev.isRecurringInstance && !greyed && <span className="ml-1 text-amber-300">↻</span>}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );
@@ -136,11 +221,22 @@ export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent
         {dayYmds.map((ymd) => {
           const timed = partition.timed.get(ymd) ?? [];
           const isToday = ymd === todayYmd;
+          const isDropTarget = drag !== null;
           return (
             <div
               key={ymd}
+              data-day={ymd}
+              onPointerMove={(e) => {
+                if (dragRef.current) updateDrag(e, e.currentTarget);
+              }}
+              onPointerUp={() => {
+                if (dragRef.current) endDrag(ymd);
+              }}
+              onPointerLeave={() => {
+                // Moving across columns: keep drag alive; commit happens on pointerup in a column.
+              }}
               onClick={
-                onCreateSlot
+                onCreateSlot && !drag
                   ? (e) => {
                       const rect = e.currentTarget.getBoundingClientRect();
                       const minutes = ((e.clientY - rect.top) / HOUR_HEIGHT_PX) * 60;
@@ -151,8 +247,8 @@ export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent
               }
               title={onCreateSlot ? "Click to add an event at this time" : undefined}
               className={`relative border-r border-slate-800 ${
-                onCreateSlot ? "cursor-pointer transition-colors hover:bg-slate-900/30" : ""
-              }`}
+                onCreateSlot && !drag ? "cursor-pointer transition-colors hover:bg-slate-900/30" : ""
+              } ${isDropTarget ? "touch-none" : ""}`}
             >
               {hours.map((h) => (
                 <div
@@ -174,27 +270,44 @@ export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent
               {timed.map((ev) => {
                 const startIso = rangeInstanceStartUtc(ev);
                 const endIso = rangeInstanceEndUtc(ev);
-                const startMin = Math.max(0, wallMinutesInZone(startIso, displayZone) - HOUR_START * 60);
-                const endMinRaw = endIso
-                  ? wallMinutesInZone(endIso, displayZone)
-                  : wallMinutesInZone(startIso, displayZone) + 60;
-                const endMin = Math.min((HOUR_END - HOUR_START + 1) * 60, endMinRaw - HOUR_START * 60);
-                const top = (startMin / 60) * HOUR_HEIGHT_PX;
-                const height = Math.max(20, ((endMin - startMin) / 60) * HOUR_HEIGHT_PX - 2);
-                if (endMin <= 0 || startMin >= (HOUR_END - HOUR_START + 1) * 60) return null;
+                const isDragging = drag?.ev === ev;
+                const startMin = isDragging
+                  ? drag.startMin
+                  : wallMinutesInZone(startIso, displayZone);
+                const endMin = isDragging
+                  ? drag.endMin
+                  : endIso
+                    ? wallMinutesInZone(endIso, displayZone)
+                    : wallMinutesInZone(startIso, displayZone) + 60;
+                const relStart = startMin - HOUR_START * 60;
+                const relEnd = Math.min((HOUR_END - HOUR_START + 1) * 60, endMin - HOUR_START * 60);
+                const top = (relStart / 60) * HOUR_HEIGHT_PX;
+                const height = Math.max(20, ((relEnd - relStart) / 60) * HOUR_HEIGHT_PX - 2);
+                if (relEnd <= 0 || relStart >= (HOUR_END - HOUR_START + 1) * 60) return null;
+                const greyed = isGreyedOccurrence(ev);
+                const layer = colorByPerson ? layerForAssignee(ev.assignedTo) : undefined;
+                const blockClass = greyed
+                  ? "bg-slate-700/60 text-slate-400 line-through hover:bg-slate-700/80"
+                  : (layer?.block ?? "bg-blue-700/70 text-white hover:bg-blue-600/80");
+                const canDrag = Boolean(onDragCommit) && !greyed && !ev.allDay;
                 return (
-                  <button
+                  <div
                     key={`${ev.id}@${ev.instanceStartUtc}`}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     onClick={(e) => {
                       e.stopPropagation();
-                      onPickEvent(ev);
+                      if (!didDragRef.current) onPickEvent(ev);
                     }}
-                    className={`absolute left-1 right-1 overflow-hidden rounded px-2 py-1 text-left text-xs shadow-sm ${
-                      isGreyedOccurrence(ev)
-                        ? "bg-slate-700/60 text-slate-400 line-through hover:bg-slate-700/80"
-                        : "bg-blue-700/70 text-white hover:bg-blue-600/80"
-                    }`}
+                    onPointerDown={(e) => {
+                      if (!canDrag) return;
+                      e.stopPropagation();
+                      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+                      beginDrag(e, ev, "move", e.currentTarget.parentElement as HTMLElement);
+                    }}
+                    className={`absolute left-1 right-1 overflow-hidden rounded px-2 py-1 text-left text-xs shadow-sm ${blockClass} ${
+                      canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
+                    } ${isDragging ? "opacity-80 ring-2 ring-cyan-400/70 z-20" : ""}`}
                     style={{ top: `${top}px`, height: `${height}px` }}
                     title={ev.title}
                   >
@@ -208,7 +321,19 @@ export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent
                         ? ` – ${formatTimeInZone(rangeInstanceEndUtc(ev)!, displayZone)}`
                         : ""}
                     </div>
-                  </button>
+                    {canDrag && height >= 28 && (
+                      <div
+                        role="separator"
+                        aria-label={`Resize "${ev.title}"`}
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                          (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+                          beginDrag(e, ev, "resize", (e.currentTarget.parentElement as HTMLElement).parentElement as HTMLElement);
+                        }}
+                        className="absolute inset-x-0 bottom-0 h-2.5 cursor-ns-resize touch-none rounded-b bg-black/20"
+                      />
+                    )}
+                  </div>
                 );
               })}
             </div>

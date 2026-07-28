@@ -16,15 +16,38 @@ public static class CalendarRecurrenceAdvance
     /// </summary>
     public static DateTime NextStart(DateTime currentStart, string recurrence)
     {
-        var r = ValidationHelper.NormalizeRecurrence(recurrence);
-        return r switch
+        if (!RecurrenceRule.TryParse(recurrence, out var rule))
+            return currentStart;
+        return rule.Frequency switch
         {
             "daily" => currentStart.AddDays(1),
-            "weekly" => currentStart.AddDays(7),
+            "weekly" when rule.Weekdays.Length == 0 => currentStart.AddDays(7 * Math.Max(1, rule.Interval)),
+            "weekly" => NextWeeklyMultiDay(currentStart, rule),
             "monthly" => AddMonthsClamped(currentStart, 1),
             "yearly" => AddYearsClamped(currentStart, 1),
             _ => currentStart,
         };
+    }
+
+    private static DateTime NextWeeklyMultiDay(DateTime currentStart, RecurrenceRule.Rule rule)
+    {
+        // Walk forward day-by-day to the next matching weekday, stepping by the interval.
+        var step = 7 * Math.Max(1, rule.Interval);
+        var anchorWeekStart = StartOfWeek(currentStart.Date);
+        for (var d = currentStart.Date.AddDays(1); d <= currentStart.Date.AddDays(step + 7); d = d.AddDays(1))
+        {
+            var weeksSinceAnchor = (StartOfWeek(d) - anchorWeekStart).Days / 7;
+            if (weeksSinceAnchor < 0 || (weeksSinceAnchor % rule.Interval) != 0) continue;
+            if (!rule.Weekdays.Contains(d.DayOfWeek)) continue;
+            return d.Add(currentStart.TimeOfDay);
+        }
+        return currentStart.AddDays(step);
+    }
+
+    private static DateTime StartOfWeek(DateTime d)
+    {
+        var diff = ((int)d.DayOfWeek + 6) % 7;
+        return d.Date.AddDays(-diff);
     }
 
     /// <summary>

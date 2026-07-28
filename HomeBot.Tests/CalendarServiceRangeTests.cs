@@ -183,6 +183,121 @@ public sealed class CalendarServiceRangeTests : IDisposable
     }
 
     [Fact]
+    public void Biweekly_recurrence_emits_every_other_week()
+    {
+        // 2026-04-08 is a Wednesday.
+        _calendar.AddItem("Biweekly", "event", "2026-04-08 09:00", "", false, "", null, "", "", "", "biweekly", "UTC");
+
+        var instances = _calendar.GetRange(
+            new DateTime(2026, 4, 8),
+            new DateTime(2026, 5, 21),
+            null);
+
+        Assert.Equal(3, instances.Count);
+        Assert.Equal("2026-04-08T09:00:00Z", instances[0].InstanceStartUtc);
+        Assert.Equal("2026-04-22T09:00:00Z", instances[1].InstanceStartUtc);
+        Assert.Equal("2026-05-06T09:00:00Z", instances[2].InstanceStartUtc);
+    }
+
+    [Fact]
+    public void Weekly_multi_day_recurrence_emits_only_listed_weekdays()
+    {
+        // Anchor Mon 2026-04-06; emit Mon/Wed/Fri.
+        _calendar.AddItem("MWF", "event", "2026-04-06 09:00", "", false, "", null, "", "", "", "weekly:MO,WE,FR", "UTC");
+
+        var instances = _calendar.GetRange(
+            new DateTime(2026, 4, 6),
+            new DateTime(2026, 4, 13),
+            null);
+
+        Assert.Equal(3, instances.Count);
+        Assert.Equal("2026-04-06T09:00:00Z", instances[0].InstanceStartUtc);
+        Assert.Equal("2026-04-08T09:00:00Z", instances[1].InstanceStartUtc);
+        Assert.Equal("2026-04-10T09:00:00Z", instances[2].InstanceStartUtc);
+    }
+
+    [Fact]
+    public void Weekdays_recurrence_emits_monday_through_friday_only()
+    {
+        _calendar.AddItem("Weekdays", "event", "2026-04-06 09:00", "", false, "", null, "", "", "", "weekly:MO,TU,WE,TH,FR", "UTC");
+
+        // Mon 4/6 .. Sun 4/12 window → Mon-Fri = 5 instances.
+        var instances = _calendar.GetRange(
+            new DateTime(2026, 4, 6),
+            new DateTime(2026, 4, 13),
+            null);
+
+        Assert.Equal(5, instances.Count);
+        Assert.All(instances, i =>
+        {
+            var d = DateTime.Parse(i.InstanceStartUtc).DayOfWeek;
+            Assert.NotEqual(DayOfWeek.Saturday, d);
+            Assert.NotEqual(DayOfWeek.Sunday, d);
+        });
+    }
+
+    [Fact]
+    public void Recurrence_until_stops_after_bound_date()
+    {
+        _calendar.AddItem("Bounded", "event", "2026-04-13 09:00", "", false, "", null, "", "", "", "daily;UNTIL=20260416", "UTC");
+
+        var instances = _calendar.GetRange(
+            new DateTime(2026, 4, 13),
+            new DateTime(2026, 4, 20),
+            null);
+
+        Assert.Equal(4, instances.Count);
+        Assert.Equal("2026-04-16T09:00:00Z", instances[^1].InstanceStartUtc);
+    }
+
+    [Fact]
+    public void Recurrence_count_limits_total_occurrences()
+    {
+        _calendar.AddItem("Count3", "event", "2026-04-13 09:00", "", false, "", null, "", "", "", "daily;COUNT=3", "UTC");
+
+        var instances = _calendar.GetRange(
+            new DateTime(2026, 4, 13),
+            new DateTime(2026, 4, 20),
+            null);
+
+        Assert.Equal(3, instances.Count);
+        Assert.Equal("2026-04-15T09:00:00Z", instances[^1].InstanceStartUtc);
+    }
+
+    [Fact]
+    public void Due_dated_task_emits_all_day_chip_on_due_date()
+    {
+        _calendar.AddItem("Take out trash", "task", "2026-04-16 00:00", "", true, "", null, "", "", "", "", "UTC");
+
+        var instances = _calendar.GetRange(
+            new DateTime(2026, 4, 15),
+            new DateTime(2026, 4, 18),
+            null);
+
+        var chip = Assert.Single(instances);
+        Assert.True(chip.IsDueTask);
+        Assert.True(chip.AllDay);
+        Assert.Equal("task", chip.Type);
+        Assert.Equal("2026-04-16T00:00:00Z", chip.InstanceStartUtc);
+    }
+
+    [Fact]
+    public void Recurring_due_task_expands_across_window()
+    {
+        _calendar.AddItem("Weekly chore", "task", "2026-04-13 00:00", "", true, "", null, "", "", "", "weekly", "UTC");
+
+        var instances = _calendar.GetRange(
+            new DateTime(2026, 4, 13),
+            new DateTime(2026, 4, 28),
+            null);
+
+        Assert.Equal(2, instances.Count);
+        Assert.All(instances, i => Assert.True(i.IsDueTask));
+        Assert.Equal("2026-04-13T00:00:00Z", instances[0].InstanceStartUtc);
+        Assert.Equal("2026-04-20T00:00:00Z", instances[1].InstanceStartUtc);
+    }
+
+    [Fact]
     public void End_time_is_emitted_with_same_offset_per_instance()
     {
         _calendar.AddItem("Daily 1h", "event", "2026-04-10 09:00", "2026-04-10 10:00", false, "", null, "", "", "", "daily", "UTC");

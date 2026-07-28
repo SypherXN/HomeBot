@@ -5,6 +5,8 @@ using System.Text.Json.Serialization;
 /// </summary>
 public class CalendarItemDetailModel{
     public string Title { get; set; } = "";
+    /// <summary>"event" or "task" — clients use this to render due-date fields for tasks.</summary>
+    public string Type { get; set; } = "event";
     public string Description { get; set; } = "";
     public string Notes { get; set; } = "";
     public string Link { get; set; } = "";

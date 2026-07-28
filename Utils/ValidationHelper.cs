@@ -60,10 +60,9 @@ public static class ValidationHelper
             return true;
         }
 
-        var normalized = NormalizeRecurrence(input);
-        if (normalized != "daily" && normalized != "weekly" && normalized != "monthly" && normalized != "yearly")
+        if (!RecurrenceRule.TryParse(input, out _))
         {
-            error = "❌ Recurrence must be 'daily', 'weekly', 'monthly', or 'yearly' (annual)";
+            error = "❌ Recurrence must be daily, weekly, biweekly, monthly, or yearly (annual); weekly may list days (weekly:MO,WE) and any rule may end with ;UNTIL=YYYYMMDD or ;COUNT=N.";
             return false;
         }
 
@@ -77,6 +76,16 @@ public static class ValidationHelper
         if (string.IsNullOrWhiteSpace(input))
             return "";
         var n = input.Trim().ToLowerInvariant();
-        return n == "annual" ? "yearly" : n;
+        if (n == "annual")
+            return "yearly";
+        if (n == "biweekly")
+            return "biweekly";
+        // Preserve weekday lists and until/count suffixes; normalize only the leading token case-insensitively.
+        var semi = n.IndexOf(';');
+        var suffix = semi >= 0 ? n[semi..] : "";
+        var core = semi >= 0 ? n[..semi] : n;
+        if (core.StartsWith("weekly:", StringComparison.Ordinal))
+            return core + suffix;
+        return core == "annual" ? "yearly" : core + suffix;
     }
 }

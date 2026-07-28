@@ -760,10 +760,14 @@ export type CalendarRangeItem = {
   hasInstanceOverride?: boolean;
   /** IANA / Windows id for the event row (recurrence expansion used this zone). */
   timeZoneId?: string;
+  /** True when this all-day row is a task due date (not a timed event). */
+  isDueTask?: boolean;
 };
 
 export type CalendarItemDetail = {
   title: string;
+  /** "event" or "task" — render due-date fields for tasks. */
+  type?: string;
   description: string;
   notes: string;
   link: string;

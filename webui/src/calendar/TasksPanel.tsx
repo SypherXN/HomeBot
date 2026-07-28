@@ -100,9 +100,15 @@ export default function TasksPanel({
                 className="flex min-w-0 flex-1 flex-col gap-0.5 rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-left hover:border-slate-700 hover:bg-slate-900/60"
               >
                 <span className="truncate text-sm font-medium text-slate-100">{t.title}</span>
-                {t.assignedToMemberLabel && (
-                  <span className="text-xs text-slate-500">{t.assignedToMemberLabel}</span>
-                )}
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
+                  {t.dateText && (
+                    <span className="inline-flex items-center gap-1 text-amber-300/90">
+                      <Icon name="calendar" className="h-3 w-3" />
+                      Due {t.dateText.slice(0, 10)}
+                    </span>
+                  )}
+                  {t.assignedToMemberLabel && <span>{t.assignedToMemberLabel}</span>}
+                </span>
               </button>
             </li>
           ))}

@@ -47,4 +47,7 @@ public class CalendarRangeItemModel
 
     /// <summary>IANA or Windows time zone id used when this occurrence was computed (row / event zone).</summary>
     public string TimeZoneId { get; set; } = "";
+
+    /// <summary>True when this all-day row represents a task due date (not a timed event).</summary>
+    public bool IsDueTask { get; set; }
 }

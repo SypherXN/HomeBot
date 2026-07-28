@@ -3,6 +3,8 @@ import type { CalendarRangeItem } from "../api";
 import { SHORT_WEEKDAYS } from "./dateUtils";
 import { formatTimeInZone, monthGridCells, rangeInstanceStartUtc, ymdInZone } from "./calendarZoned";
 import { isGreyedOccurrence } from "./occurrenceStyle";
+import { layerForAssignee } from "../lib/personLayers";
+import { Icon } from "../components/icons";
 
 type Props = {
   anchorYmd: string;
@@ -12,11 +14,13 @@ type Props = {
   onPickEvent: (event: CalendarRangeItem) => void;
   /** Hover "+" affordance on a day cell — create an event for that date. */
   onCreateDay?: (ymd: string) => void;
+  /** Person-layer colors keyed by assignee (empty → neutral layer). */
+  colorByPerson?: boolean;
 };
 
 const MAX_PER_CELL = 3;
 
-export default function MonthView({ anchorYmd, displayZone, events, onPickDay, onPickEvent, onCreateDay }: Props) {
+export default function MonthView({ anchorYmd, displayZone, events, onPickDay, onPickEvent, onCreateDay, colorByPerson }: Props) {
   const grid = useMemo(() => buildGrid(anchorYmd, displayZone, events), [anchorYmd, displayZone, events]);
   const todayYmd = ymdInZone(new Date(), displayZone);
 
@@ -85,7 +89,16 @@ export default function MonthView({ anchorYmd, displayZone, events, onPickDay, o
                 </span>
               </div>
               <div className="flex flex-col gap-0.5">
-                {cell.events.slice(0, MAX_PER_CELL).map((ev) => (
+                {cell.events.slice(0, MAX_PER_CELL).map((ev) => {
+                  const greyed = isGreyedOccurrence(ev);
+                  const due = ev.isDueTask === true;
+                  const layer = colorByPerson ? layerForAssignee(ev.assignedTo) : undefined;
+                  const chipClass = greyed
+                    ? "bg-slate-800/60 text-slate-500 line-through hover:bg-slate-800"
+                    : due
+                      ? "border border-amber-500/50 bg-amber-950/40 text-amber-100 hover:bg-amber-950/60"
+                      : (layer?.chip ?? "bg-blue-900/60 text-blue-100 hover:bg-blue-800/70");
+                  return (
                   <span
                     key={`${ev.id}@${ev.instanceStartUtc}`}
                     role="button"
@@ -101,22 +114,20 @@ export default function MonthView({ anchorYmd, displayZone, events, onPickDay, o
                         onPickEvent(ev);
                       }
                     }}
-                    className={`truncate rounded px-1.5 py-0.5 text-[11px] font-medium ${
-                      isGreyedOccurrence(ev)
-                        ? "bg-slate-800/60 text-slate-500 line-through hover:bg-slate-800"
-                        : "bg-blue-900/60 text-blue-100 hover:bg-blue-800/70"
-                    }`}
-                    title={`${ev.title}${ev.allDay ? "" : ` · ${formatTimeInZone(rangeInstanceStartUtc(ev), displayZone)}`}${isGreyedOccurrence(ev) ? " · completed" : ""}`}
+                    className={`truncate rounded px-1.5 py-0.5 text-[11px] font-medium ${chipClass}`}
+                    title={`${due ? "Due: " : ""}${ev.title}${ev.allDay ? "" : ` · ${formatTimeInZone(rangeInstanceStartUtc(ev), displayZone)}`}${greyed ? " · completed" : ""}`}
                   >
+                    {due && <Icon name="check" className="mr-1 inline h-2.5 w-2.5 align-[-1px] text-amber-300" />}
                     {!ev.allDay && (
-                      <span className={`mr-1 text-[10px] ${isGreyedOccurrence(ev) ? "text-slate-500" : "text-blue-300"}`}>
+                      <span className={`mr-1 text-[10px] ${greyed ? "text-slate-500" : "text-blue-300"}`}>
                         {formatTimeInZone(rangeInstanceStartUtc(ev), displayZone)}
                       </span>
                     )}
                     {ev.title}
-                    {ev.isRecurringInstance && !isGreyedOccurrence(ev) && <span className="ml-1 text-blue-300">↻</span>}
+                    {ev.isRecurringInstance && !greyed && <span className="ml-1 text-blue-300">↻</span>}
                   </span>
-                ))}
+                  );
+                })}
               </div>
             </button>
           );

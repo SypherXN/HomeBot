@@ -3,6 +3,10 @@ import { DateTime } from "luxon";
 import DiscordMemberSelect from "../components/DiscordMemberSelect";
 import Sheet from "../components/Sheet";
 import CalendarReminderSelect from "./CalendarReminderSelect";
+import RecurrenceEditor from "./RecurrenceEditor";
+import { formatRecurrence as recurrenceToString } from "../lib/recurrenceEditor";
+import type { RecurrenceEditorState } from "../lib/recurrenceEditor";
+import { emptyRecurrence } from "../lib/recurrenceEditor";
 import type { DiscordGuildRosterState } from "../hooks/useDiscordGuildRoster";
 import { postCalendarItem } from "../api";
 import { defaultStartTimeForDate } from "../lib/calendarDefaults";
@@ -21,6 +25,8 @@ type Props = {
   initialEndTime?: string | null;
   /** Pre-check all-day (e.g. clicked the all-day row). */
   initialAllDay?: boolean;
+  /** Pre-fill the title (e.g. from the natural-language quick-create field). */
+  initialTitle?: string | null;
   /** Default IANA id for new events (usually matches viewer zone). */
   eventTimeZoneDefault: string;
   token: string;
@@ -37,6 +43,7 @@ export default function AddItemModal({
   initialStartTime,
   initialEndTime,
   initialAllDay,
+  initialTitle,
   eventTimeZoneDefault,
   token,
   guildRoster,
@@ -53,7 +60,8 @@ export default function AddItemModal({
   const [eventTz, setEventTz] = useState(eventTimeZoneDefault);
   const [allDay, setAllDay] = useState(false);
   const [reminder, setReminder] = useState("");
-  const [recurrence, setRecurrence] = useState<"" | "daily" | "weekly" | "monthly" | "yearly">("");
+  const [recurrence, setRecurrence] = useState<RecurrenceEditorState>(emptyRecurrence());
+  const [dueDate, setDueDate] = useState("");
   const [assignToEveryone, setAssignToEveryone] = useState(false);
   const [assignedTo, setAssignedTo] = useState("");
   const [description, setDescription] = useState("");
@@ -64,14 +72,15 @@ export default function AddItemModal({
   useEffect(() => {
     if (!open) return;
     setMode(initialMode);
-    setTitle("");
+    setTitle(initialTitle?.trim() ?? "");
     const tz = eventTimeZoneDefault;
     setEventTz(tz);
     const y =
-      initialMode === "event" && initialYmd && /^\d{4}-\d{2}-\d{2}$/.test(initialYmd)
+      initialYmd && /^\d{4}-\d{2}-\d{2}$/.test(initialYmd)
         ? initialYmd
         : DateTime.now().setZone(tz).toISODate()!;
     setStartDate(y);
+    setDueDate(initialMode === "task" ? y : "");
     const st =
       initialStartTime && /^\d{2}:\d{2}$/.test(initialStartTime)
         ? initialStartTime
@@ -86,14 +95,14 @@ export default function AddItemModal({
     }
     setAllDay(initialAllDay === true && initialMode === "event");
     setReminder("");
-    setRecurrence("");
+    setRecurrence(emptyRecurrence());
     setAssignToEveryone(false);
     setAssignedTo("");
     setDescription("");
     setNotes("");
     setLink("");
     setSubmitting(false);
-  }, [open, initialMode, initialYmd, initialStartTime, initialEndTime, initialAllDay, eventTimeZoneDefault]);
+  }, [open, initialMode, initialYmd, initialStartTime, initialEndTime, initialAllDay, initialTitle, eventTimeZoneDefault]);
 
   if (!open) return null;
 
@@ -121,22 +130,28 @@ export default function AddItemModal({
         onError("Start date must be YYYY-MM-DD.");
         return;
       }
+    } else if (dueDate.trim() && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate.trim())) {
+      onError("Due date must be YYYY-MM-DD.");
+      return;
     }
+    const recurrenceString = recurrenceToString(recurrence);
     setSubmitting(true);
     try {
+      const isTask = mode === "task";
+      const hasDue = isTask && /^\d{4}-\d{2}-\d{2}$/.test(dueDate.trim());
       await postCalendarItem(token, {
         title: t,
-        start: mode === "event" ? wallStartForApi() : "",
-        end: mode === "event" ? wallEndForApi() : undefined,
-        allDay: mode === "event" ? allDay : false,
+        start: isTask ? (hasDue ? `${dueDate.trim()}T00:00:00` : "") : wallStartForApi(),
+        end: isTask ? undefined : wallEndForApi(),
+        allDay: isTask ? hasDue : allDay,
         reminder: reminder.trim() || undefined,
-        recurrence: mode === "event" && recurrence ? recurrence : undefined,
-        assignToEveryone: mode === "event" ? assignToEveryone : false,
+        recurrence: recurrenceString || undefined,
+        assignToEveryone: !isTask && assignToEveryone,
         assignedToUserId: assignedTo.trim() || undefined,
         description: description.trim() || undefined,
         notes: notes.trim() || undefined,
         link: link.trim() || undefined,
-        timezone: mode === "event" ? eventTz.trim() : undefined,
+        timezone: isTask ? (hasDue ? eventTz.trim() : undefined) : eventTz.trim(),
       });
       onCreated(mode);
     } catch (err) {
@@ -227,43 +242,47 @@ export default function AddItemModal({
               <Field label="Reminder">
                 <CalendarReminderSelect value={reminder} onChange={setReminder} className={inputClass} />
               </Field>
-              <Field label="Recurrence">
-                <select
-                  value={recurrence}
-                  onChange={(e) => setRecurrence(e.target.value as "" | "daily" | "weekly" | "monthly" | "yearly")}
-                  className={inputClass}
-                >
-                  <option value="">None</option>
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="yearly">Annual</option>
-                </select>
-              </Field>
             </div>
+            <RecurrenceEditor value={recurrence} onChange={setRecurrence} inputClass={inputClass} idPrefix="add-rec" />
           </>
         )}
 
         {mode === "task" && (
-          <Field label="Assigned user (Discord id)">
-            <input
-              value={assignedTo}
-              onChange={(e) => setAssignedTo(e.target.value)}
-              inputMode="numeric"
-              className={inputClass}
-              placeholder="leave blank for unassigned"
-            />
-            <div className="mt-2 min-w-0">
-              <DiscordMemberSelect
-                token={token}
-                sharedRoster={guildRoster}
-                label="Pick from server"
-                value={assignedTo}
-                onPickUserId={setAssignedTo}
-                className="min-w-0"
-              />
+          <>
+            <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Due date (optional)">
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className={inputClass}
+                />
+              </Field>
+              <Field label="Reminder">
+                <CalendarReminderSelect value={reminder} onChange={setReminder} className={inputClass} />
+              </Field>
             </div>
-          </Field>
+            <RecurrenceEditor value={recurrence} onChange={setRecurrence} inputClass={inputClass} idPrefix="add-task-rec" />
+            <Field label="Assigned user (Discord id)">
+              <input
+                value={assignedTo}
+                onChange={(e) => setAssignedTo(e.target.value)}
+                inputMode="numeric"
+                className={inputClass}
+                placeholder="leave blank for unassigned"
+              />
+              <div className="mt-2 min-w-0">
+                <DiscordMemberSelect
+                  token={token}
+                  sharedRoster={guildRoster}
+                  label="Pick from server"
+                  value={assignedTo}
+                  onPickUserId={setAssignedTo}
+                  className="min-w-0"
+                />
+              </div>
+            </Field>
+          </>
         )}
 
         <details className="group rounded-lg border border-slate-800 bg-slate-900/30 px-3 py-2.5">

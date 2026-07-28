@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { DateTime } from "luxon";
 import {
   downloadCalendarIcs,
   getCalendarItems,
@@ -7,6 +8,8 @@ import {
   getGoogleCalendarOAuthUrl,
   getGoogleCalendarStatus,
   getGoogleCalendars,
+  patchCalendarItem,
+  patchCalendarRecurringInstance,
   postCalendarImportIcs,
   postCalendarItemComplete,
   postCalendarCompleteInstance,
@@ -42,6 +45,8 @@ import { useHorizontalSwipe } from "../hooks/useHorizontalSwipe";
 import { useSearchHighlightId } from "../lib/searchHighlight";
 import { validActorId } from "../lib/validation";
 import { defaultEndTimeForSlot, minutesToHm } from "../lib/calendarDefaults";
+import { parseNaturalCreate } from "../lib/calendarNatural";
+import { everyoneLayer, layerForAssignee } from "../lib/personLayers";
 import { useUndoToast } from "../hooks/useUndoToast";
 import AddItemModal from "../calendar/AddItemModal";
 import AgendaView from "../calendar/AgendaView";
@@ -119,6 +124,8 @@ export default function CalendarPage() {
         startTime?: string;
         endTime?: string;
         allDay?: boolean;
+        /** Pre-filled title from the natural-language quick-create field. */
+        title?: string;
       }
     | {
         kind: "detail";
@@ -132,6 +139,8 @@ export default function CalendarPage() {
   const [modal, setModal] = useState<ModalState>({ kind: "none" });
   const [quickCompletingId, setQuickCompletingId] = useState<number | null>(null);
   const [quickCompletingKey, setQuickCompletingKey] = useState<string | null>(null);
+  const [colorByPerson, setColorByPerson] = useState(true);
+  const [nlText, setNlText] = useState("");
 
   const rangeYmd = useMemo(
     () => computeRangeQuery(view, anchorYmd, effectiveViewerZone, AGENDA_DAYS),
@@ -343,6 +352,76 @@ export default function CalendarPage() {
     if (!canAuth) return;
     setModal({ kind: "add", mode: "event", ymd });
   }
+
+  /** Commit a drag move/resize: PATCH the series or this recurring instance with new UTC times. */
+  async function handleDragCommit(ev: CalendarRangeItem, ymd: string, startMinutes: number, endMinutes: number | null) {
+    if (!canActor) {
+      showBanner("err", "Set actorUserId in Settings to reschedule events.");
+      return;
+    }
+    const startIso = wallMinutesToUtcIsoZ(ymd, startMinutes, effectiveViewerZone);
+    const endIso = endMinutes != null ? wallMinutesToUtcIsoZ(ymd, endMinutes, effectiveViewerZone) : undefined;
+    if (!startIso) {
+      showBanner("err", "Couldn't compute the new time.");
+      return;
+    }
+    try {
+      if (ev.isRecurringInstance && ev.instanceStartUtc) {
+        await patchCalendarRecurringInstance(tok, actor, ev.id, {
+          instanceStartUtc: ev.instanceStartUtc,
+          overrideInstanceStartUtc: startIso,
+          ...(endIso ? { overrideInstanceEndUtc: endIso } : {}),
+        });
+      } else {
+        await patchCalendarItem(tok, ev.id, {
+          start: utcIsoZToWallStorage(startIso, ev.timeZoneId || effectiveViewerZone),
+          ...(endIso ? { end: utcIsoZToWallStorage(endIso, ev.timeZoneId || effectiveViewerZone) } : {}),
+        });
+      }
+      undoToast(`Moved "${ev.title}".`, () => void loadRange());
+      void loadRange();
+    } catch (err) {
+      showBanner("err", err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  /** Natural-language quick create: parse → pre-fill the add sheet. */
+  function handleNlSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canAuth) return;
+    const parsed = parseNaturalCreate(nlText, effectiveViewerZone);
+    if (!parsed) {
+      showBanner("err", "Couldn't parse that — try “dentist thursday 3pm 1h”.");
+      return;
+    }
+    setNlText("");
+    setModal({
+      kind: "add",
+      mode: "event",
+      title: parsed.title,
+      ymd: parsed.ymd ?? anchorYmd,
+      startTime: parsed.startTime,
+      endTime: parsed.endTime,
+    });
+  }
+
+  // Distinct assignees present in the current range — drives the color legend.
+  const personLayers = useMemo(() => {
+    if (!range) return [];
+    const byId = new Map<string, { id: string; label: string; dot: string }>();
+    for (const ev of range) {
+      const id = (ev.assignedTo ?? "").trim();
+      const key = id && id !== "0" ? id : "";
+      if (byId.has(key)) continue;
+      const label =
+        key === ""
+          ? "Everyone"
+          : ev.assignedToMemberLabel?.trim() || `User ${key}`;
+      const layer = key === "" ? everyoneLayer() : layerForAssignee(key);
+      byId.set(key, { id: key, label, dot: layer.dot });
+    }
+    return [...byId.values()];
+  }, [range]);
 
   async function handleQuickCompleteTask(t: CalendarListItem) {
     if (!canActor) {
@@ -599,6 +678,12 @@ export default function CalendarPage() {
         setFilterUser={setFilterUser}
         showCompleted={showCompleted}
         onToggleCompleted={toggleCompleted}
+        colorByPerson={colorByPerson}
+        onToggleColorByPerson={() => setColorByPerson((v) => !v)}
+        personLayers={personLayers}
+        nlText={nlText}
+        onNlText={setNlText}
+        onNlSubmit={handleNlSubmit}
         token={tok}
         guildRoster={guildRoster}
         canActor={canActor}
@@ -649,6 +734,7 @@ export default function CalendarPage() {
               events={range ?? []}
               onPickDay={openDay}
               onCreateDay={handleCreateDay}
+              colorByPerson={colorByPerson}
               onPickEvent={(ev) =>
                 setModal({
                   kind: "detail",
@@ -669,6 +755,8 @@ export default function CalendarPage() {
               onPickDay={openDay}
               onCreateSlot={handleCreateSlot}
               onCreateAllDay={handleCreateAllDay}
+              colorByPerson={colorByPerson}
+              onDragCommit={canActor ? handleDragCommit : undefined}
               onPickEvent={(ev) =>
                 setModal({
                   kind: "detail",
@@ -688,6 +776,8 @@ export default function CalendarPage() {
               events={range ?? []}
               onCreateSlot={handleCreateSlot}
               onCreateAllDay={handleCreateAllDay}
+              colorByPerson={colorByPerson}
+              onDragCommit={canActor ? handleDragCommit : undefined}
               onPickEvent={(ev) =>
                 setModal({
                   kind: "detail",
@@ -762,6 +852,7 @@ export default function CalendarPage() {
         initialStartTime={modal.kind === "add" ? modal.startTime ?? null : null}
         initialEndTime={modal.kind === "add" ? modal.endTime ?? null : null}
         initialAllDay={modal.kind === "add" ? modal.allDay === true : false}
+        initialTitle={modal.kind === "add" ? modal.title ?? null : null}
         eventTimeZoneDefault={effectiveViewerZone}
         token={tok}
         guildRoster={guildRoster}
@@ -822,6 +913,12 @@ function Toolbar({
   setFilterUser,
   showCompleted,
   onToggleCompleted,
+  colorByPerson,
+  onToggleColorByPerson,
+  personLayers,
+  nlText,
+  onNlText,
+  onNlSubmit,
   token,
   guildRoster,
   canActor,
@@ -842,6 +939,12 @@ function Toolbar({
   setFilterUser: (s: string) => void;
   showCompleted: boolean;
   onToggleCompleted: () => void;
+  colorByPerson: boolean;
+  onToggleColorByPerson: () => void;
+  personLayers: { id: string; label: string; dot: string }[];
+  nlText: string;
+  onNlText: (s: string) => void;
+  onNlSubmit: (e: React.FormEvent) => void;
   token: string;
   guildRoster: ReturnType<typeof useDiscordGuildRoster>;
   canActor: boolean;
@@ -895,6 +998,52 @@ function Toolbar({
           ))}
         </div>
       </div>
+
+      {canAuth && (
+        <form onSubmit={onNlSubmit} className="flex min-w-0 items-center gap-2">
+          <input
+            value={nlText}
+            onChange={(e) => onNlText(e.target.value)}
+            placeholder="Quick add: dentist thursday 3pm 1h"
+            aria-label="Quick add event with natural language"
+            className="hb-input h-9 min-w-0 flex-1 px-3 text-sm text-slate-100 placeholder:text-slate-500"
+          />
+          <button
+            type="submit"
+            disabled={!nlText.trim()}
+            className="shrink-0 rounded-md border border-blue-500/60 bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-1.5 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
+          >
+            Parse
+          </button>
+        </form>
+      )}
+
+      {colorByPerson && personLayers.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-400" aria-label="Person color legend">
+          {personLayers.map((p) => (
+            <span key={p.id || "everyone"} className="inline-flex items-center gap-1.5">
+              <span className={`inline-block h-2.5 w-2.5 rounded-full ${p.dot}`} aria-hidden />
+              {p.label}
+            </span>
+          ))}
+          <button
+            type="button"
+            onClick={onToggleColorByPerson}
+            className="ml-auto text-[11px] text-slate-500 underline-offset-2 hover:text-slate-300 hover:underline"
+          >
+            Hide colors
+          </button>
+        </div>
+      )}
+      {!colorByPerson && (
+        <button
+          type="button"
+          onClick={onToggleColorByPerson}
+          className="self-start text-[11px] text-slate-500 underline-offset-2 hover:text-slate-300 hover:underline"
+        >
+          Show person colors
+        </button>
+      )}
 
       <div className="flex min-w-0 w-full flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center lg:gap-3">
         <div className="inline-flex max-w-full shrink-0 flex-wrap rounded-lg border border-slate-700 bg-slate-900/60 p-0.5 text-xs">
@@ -993,6 +1142,21 @@ function formatRangeLabelYmd(view: View, anchorYmd: string, zone: string): strin
   if (view === "week") return formatWeekRangeYmd(anchorYmd, zone);
   if (view === "day") return formatLongDateYmd(anchorYmd, zone);
   return `${formatLongDateYmd(anchorYmd, zone)} + ${AGENDA_DAYS} days`;
+}
+
+/** Convert a calendar day + minutes-since-midnight in `zone` to a UTC ISO Z string. */
+function wallMinutesToUtcIsoZ(ymd: string, minutes: number, zone: string): string | null {
+  const hh = Math.floor(minutes / 60);
+  const mm = minutes % 60;
+  const dt = DateTime.fromISO(`${ymd}T${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00`, { zone });
+  if (!dt.isValid) return null;
+  return dt.toUTC().toFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
+}
+
+/** Convert a UTC ISO Z string to the `yyyy-MM-dd HH:mm` wall storage the API expects for a row's zone. */
+function utcIsoZToWallStorage(isoZ: string, zone: string): string {
+  const dt = DateTime.fromISO(isoZ, { zone: "utc" }).setZone(zone);
+  return dt.isValid ? dt.toFormat("yyyy-MM-dd HH:mm") : isoZ;
 }
 
 /** "⋯" overflow menu for low-frequency toolbar actions (export/import). */

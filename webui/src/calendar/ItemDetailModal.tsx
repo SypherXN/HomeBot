@@ -3,6 +3,10 @@ import { DateTime } from "luxon";
 import DiscordMemberSelect from "../components/DiscordMemberSelect";
 import Sheet from "../components/Sheet";
 import CalendarReminderSelect from "./CalendarReminderSelect";
+import RecurrenceEditor from "./RecurrenceEditor";
+import { formatRecurrence as recurrenceToString, parseRecurrence as stringToRecurrenceState } from "../lib/recurrenceEditor";
+import type { RecurrenceEditorState } from "../lib/recurrenceEditor";
+import { emptyRecurrence } from "../lib/recurrenceEditor";
 import { reminderRawToToken } from "../lib/calendarReminder";
 import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
 import {
@@ -65,7 +69,7 @@ export default function ItemDetailModal({
   const [link, setLink] = useState("");
   const [allDay, setAllDay] = useState(false);
   const [reminder, setReminder] = useState("");
-  const [seriesRecurrence, setSeriesRecurrence] = useState<"" | "daily" | "weekly" | "monthly" | "yearly">("");
+  const [seriesRecurrence, setSeriesRecurrence] = useState<RecurrenceEditorState>(emptyRecurrence());
   const [assignedTo, setAssignedTo] = useState("");
   const [busy, setBusy] = useState<"save" | "complete" | "completeOne" | "delete" | "omit" | "clear" | null>(null);
   const guildRoster = useDiscordGuildRoster(token);
@@ -117,7 +121,7 @@ export default function ItemDetailModal({
             setStartDate(wall.date);
             setStartTime(wall.time);
           } else {
-            setStartDate("");
+            setStartDate(d.type === "task" ? DateTime.now().setZone(tz).toISODate()! : "");
             setStartTime("09:00");
           }
         }
@@ -148,10 +152,7 @@ export default function ItemDetailModal({
         setLink(d.link);
         setAllDay(d.allDay);
         setReminder(reminderRawToToken(d.reminder ?? ""));
-        const rec = (d.recurrence ?? "").trim();
-        setSeriesRecurrence(
-          rec === "daily" || rec === "weekly" || rec === "monthly" || rec === "yearly" ? rec : ""
-        );
+        setSeriesRecurrence(stringToRecurrenceState(d.recurrence ?? ""));
         setAssignedTo(d.assignedTo ?? "");
       })
       .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)))
@@ -228,9 +229,10 @@ export default function ItemDetailModal({
 
     setBusy("save");
     try {
+      const isDueTask = detail?.type === "task";
       const startPayload =
-        detail?.start?.trim() && startDate.trim()
-          ? `${startDate.trim()}T${normalizeHmDetail(startTime)}`
+        (detail?.start?.trim() || isDueTask) && startDate.trim()
+          ? `${startDate.trim()}T${normalizeHmDetail(isDueTask && !startTime.trim() ? "00:00" : startTime)}`
           : undefined;
       let endPayload: string | undefined;
       let clearEnd = false;
@@ -250,7 +252,7 @@ export default function ItemDetailModal({
         timezone: eventTz.trim() || undefined,
         allDay,
         reminder: reminder.trim(),
-        recurrence: seriesRecurrence || "",
+        recurrence: recurrenceToString(seriesRecurrence),
         ...(assignedTo.trim()
           ? { assignedToUserId: assignedTo.trim() }
           : { clearAssignedTo: true }),
@@ -390,7 +392,7 @@ export default function ItemDetailModal({
             <Field label="Title">
               <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
             </Field>
-            {detail.start.trim() ? (
+            {detail.start.trim() || detail.type === "task" ? (
               <>
                 <Field label="Event timezone">
                   <select value={eventTz} onChange={(e) => setEventTz(e.target.value)} className={inputClass}>
@@ -405,7 +407,7 @@ export default function ItemDetailModal({
                   </select>
                 </Field>
                 <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
-                  <Field label="Start date">
+                  <Field label={detail.type === "task" ? "Due date" : "Start date"}>
                     <input
                       type="date"
                       value={startDate}
@@ -413,16 +415,18 @@ export default function ItemDetailModal({
                       className={dateTimeInputClass}
                     />
                   </Field>
-                  <Field label="Start time">
-                    <input
-                      type="time"
-                      value={startTime}
-                      onChange={(e) => setStartTime(e.target.value)}
-                      className={dateTimeInputClass}
-                    />
-                  </Field>
+                  {detail.type !== "task" && (
+                    <Field label="Start time">
+                      <input
+                        type="time"
+                        value={startTime}
+                        onChange={(e) => setStartTime(e.target.value)}
+                        className={dateTimeInputClass}
+                      />
+                    </Field>
+                  )}
                 </div>
-                {isRecurringInstance ? (
+                {detail.type === "task" ? null : isRecurringInstance ? (
                   <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
                     <Field label="End date (this day only, optional)">
                       <input
@@ -490,21 +494,7 @@ export default function ItemDetailModal({
                 <Field label="Reminder">
                   <CalendarReminderSelect value={reminder} onChange={setReminder} className={inputClass} />
                 </Field>
-                <Field label="Recurrence">
-                  <select
-                    value={seriesRecurrence}
-                    onChange={(e) =>
-                      setSeriesRecurrence(e.target.value as "" | "daily" | "weekly" | "monthly" | "yearly")
-                    }
-                    className={inputClass}
-                  >
-                    <option value="">None</option>
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="monthly">Monthly</option>
-                    <option value="yearly">Annual</option>
-                  </select>
-                </Field>
+                <RecurrenceEditor value={seriesRecurrence} onChange={setSeriesRecurrence} inputClass={inputClass} idPrefix="detail-rec" />
                 <Field label="Assignee (Discord user id)">
                   <input
                     value={assignedTo}
