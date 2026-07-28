@@ -259,7 +259,7 @@ export default function DashboardPage() {
     setAddingMealId(entry.id);
     try {
       await postMealPlanAddToBuy(tok, entry.id, actor);
-      undoToast("Added tonight's ingredients to the buy list.");
+      undoToast("Added tonight's ingredients to the buy list.", () => void load());
     } catch (err) {
       showToast({ message: err instanceof Error ? err.message : String(err), kind: "error" });
     } finally {

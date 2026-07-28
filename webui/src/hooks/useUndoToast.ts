@@ -7,6 +7,7 @@ import { validActorId } from "../lib/validation";
 /**
  * Show a success toast with an "Undo" action wired to the backend undo service.
  * Falls back to a plain toast when no valid actor id is configured.
+ * Throws (so ToastProvider can surface an error) when undo finds nothing to revert.
  */
 export function useUndoToast() {
   const { token, actorUserId } = useAuth();
@@ -26,7 +27,10 @@ export function useUndoToast() {
         action: {
           label: "Undo",
           onAction: async () => {
-            await postUndo(tok, actor);
+            const r = await postUndo(tok, actor);
+            if (!r.undone) {
+              throw new Error((r.message && r.message.trim()) || "Nothing to undo for this actor.");
+            }
             onUndone?.();
           },
         },

@@ -34,8 +34,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToasts((ts) => ts.map((x) => (x.id === t.id ? { ...x, busy: true } : x)));
     try {
       await t.action.onAction();
-    } finally {
       dismissToast(t.id);
+    } catch (err) {
+      dismissToast(t.id);
+      showToast(
+        {
+          message: err instanceof Error ? err.message : String(err),
+          kind: "error",
+        },
+        6000
+      );
     }
   }
 

@@ -42,9 +42,13 @@ export default function AgendaView({ events, displayZone, onPickEvent }: Props) 
                   } ${ev.isInstanceCompleted || ev.isCompleted ? "line-through" : ""}`}
                 >
                   <div className="flex items-baseline justify-between gap-3">
-                    <span className="truncate text-sm font-medium text-slate-100">
+                    <span
+                      className={`truncate text-sm font-medium ${
+                        isGreyedOccurrence(ev) ? "text-slate-500" : "text-slate-100"
+                      }`}
+                    >
                       {ev.title}
-                      {ev.isRecurringInstance && (
+                      {ev.isRecurringInstance && !isGreyedOccurrence(ev) && (
                         <span className="ml-2 rounded bg-blue-900/40 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-blue-200">
                           recurring
                         </span>

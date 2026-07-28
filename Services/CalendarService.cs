@@ -890,7 +890,7 @@ public class CalendarService
             var winStartDate = TimeZoneInfo.ConvertTimeFromUtc(fromUtc, rowTz).Date;
             var winEndDateInclusive = TimeZoneInfo.ConvertTimeFromUtc(toUtcExclusive.AddTicks(-1), rowTz).Date;
 
-            if (meta.Status == "completed")
+            if (string.Equals(meta.Status, "completed", StringComparison.OrdinalIgnoreCase))
             {
                 var todayRow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, rowTz).Date;
                 if (winStartDate > todayRow)
@@ -1668,7 +1668,7 @@ public class CalendarService
             DisplayInstanceEndUtc = displayEnd,
             IsRecurringInstance = isRecurring,
             IsInstanceCompleted = isCompleted,
-            IsCompleted = meta.Status == "completed",
+            IsCompleted = string.Equals(meta.Status, "completed", StringComparison.OrdinalIgnoreCase),
             HasInstanceOverride = hasOverride,
             TimeZoneId = meta.TimezoneId,
         });

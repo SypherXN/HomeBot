@@ -67,6 +67,10 @@ export default function QuickAddSheet({ open, onClose }: Props) {
     try {
       switch (kind) {
         case "buy": {
+          if (!validActorId(actor)) {
+            setError("Set your actor (Discord user id) in Settings to add buy items.");
+            return;
+          }
           const name = parsed.kind === "buy" ? parsed.name : text.trim();
           const store = parsed.kind === "buy" ? parsed.store : undefined;
           await postBuyItem(tok, actor, { name, store });
@@ -74,6 +78,10 @@ export default function QuickAddSheet({ open, onClose }: Props) {
           break;
         }
         case "wishlist": {
+          if (!validActorId(actor)) {
+            setError("Set your actor (Discord user id) in Settings to add wishlist items.");
+            return;
+          }
           const name = parsed.kind === "wishlist" ? parsed.name : text.trim();
           await postWishlistItem(tok, actor, { name });
           undoToast(`Added "${name}" to the wishlist.`);

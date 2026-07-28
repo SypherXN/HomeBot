@@ -70,14 +70,12 @@ export default function CalendarPage() {
 
   const [filterMode, setFilterMode] = useState<"all" | "me" | "user">("all");
   const [filterUser, setFilterUser] = useState("");
-  const [showCompleted, setShowCompleted] = useState(() => params.get("completed") === "1");
+  const showCompleted = params.get("completed") === "1";
 
   function toggleCompleted() {
-    const next = !showCompleted;
-    setShowCompleted(next);
     const p = new URLSearchParams(params);
-    if (next) p.set("completed", "1");
-    else p.delete("completed");
+    if (showCompleted) p.delete("completed");
+    else p.set("completed", "1");
     setParams(p, { replace: true });
   }
 

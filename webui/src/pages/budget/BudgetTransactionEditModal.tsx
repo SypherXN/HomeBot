@@ -124,7 +124,7 @@ export default function BudgetTransactionEditModal({
   }
 
   return (
-    <Sheet open title="Edit transaction" onClose={onClose}>
+    <Sheet open={open} title="Edit transaction" onClose={onClose}>
       <form onSubmit={(e) => void handleSave(e)} className="space-y-3">
           <input
             value={amount}
