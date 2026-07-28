@@ -1,39 +1,47 @@
 @import "tailwindcss";
 
 /*
- * HomeBot design system — "ink & iris".
+ * HomeBot design system — "Web3 / neon glass".
  * The whole app is written with slate-* surfaces and blue-* accents, so the
- * identity is defined here by re-pointing those Tailwind ramps at a custom
- * indigo-ink palette (surfaces) and an iris-violet accent ramp.
+ * identity is defined here by re-pointing those Tailwind ramps at an obsidian
+ * ink palette (surfaces) and a cyber-cyan accent ramp (primary actions).
+ * Electric purple and neon green are exposed as custom utilities for
+ * gradients, glows, and status highlights.
  */
 @theme {
   --font-sans: "Figtree", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-display: "Sora", "Figtree", ui-sans-serif, system-ui, sans-serif;
 
-  /* Ink ramp (replaces slate) — deep blue-violet charcoal */
-  --color-slate-950: #070912;
-  --color-slate-900: #0d1120;
-  --color-slate-800: #161b31;
-  --color-slate-700: #242c4d;
-  --color-slate-600: #344068;
-  --color-slate-500: #5d6890;
-  --color-slate-400: #8f97ba;
-  --color-slate-300: #b9bfd8;
-  --color-slate-200: #d7dbeb;
-  --color-slate-100: #eaecf6;
+  /* Ink ramp (replaces slate) — deep obsidian blue-violet */
+  --color-slate-950: #06070d;
+  --color-slate-900: #0b0d17;
+  --color-slate-800: #141827;
+  --color-slate-700: #202741;
+  --color-slate-600: #323d63;
+  --color-slate-500: #54608d;
+  --color-slate-400: #8a94bd;
+  --color-slate-300: #b5bcdb;
+  --color-slate-200: #d5d9ec;
+  --color-slate-100: #e9ebf7;
   --color-slate-50: #f5f6fb;
 
-  /* Iris ramp (replaces blue) — signature violet accent */
-  --color-blue-100: #e7e3ff;
-  --color-blue-200: #d4ccff;
-  --color-blue-300: #b5a6ff;
-  --color-blue-400: #9b85ff;
-  --color-blue-500: #8161fb;
-  --color-blue-600: #6d47f0;
-  --color-blue-700: #5c36d6;
-  --color-blue-800: #4a2caa;
-  --color-blue-900: #3b2581;
-  --color-blue-950: #221650;
+  /* Cyber cyan ramp (replaces blue) — signature neon accent */
+  --color-blue-100: #cffcff;
+  --color-blue-200: #a3f9ff;
+  --color-blue-300: #6ff4ff;
+  --color-blue-400: #35edff;
+  --color-blue-500: #00e0ff;
+  --color-blue-600: #00c8f0;
+  --color-blue-700: #00a3cc;
+  --color-blue-800: #0878a3;
+  --color-blue-900: #0a5578;
+  --color-blue-950: #052f47;
+
+  /* Neon core — exposed for gradients, glows, and status highlights */
+  --color-cyan: #00f0ff;
+  --color-purple: #7000ff;
+  --color-violet: #a855f7;
+  --color-neon: #4ade80;
 }
 
 @layer base {
@@ -41,11 +49,11 @@
     @apply m-0 min-h-screen bg-slate-950 text-slate-100 antialiased;
   }
   html:not(.dark) body {
-    @apply m-0 min-h-screen bg-[#eef0f7] text-slate-900 antialiased;
+    @apply m-0 min-h-screen bg-[#eef0f8] text-slate-900 antialiased;
   }
 
   /*
-   * Aurora atmosphere on a fixed pseudo-element instead of
+   * Ambient neon atmosphere on a fixed pseudo-element instead of
    * `background-attachment: fixed`, which iOS Safari does not support.
    */
   body::before {
@@ -57,13 +65,14 @@
   }
   html.dark body::before {
     background-image:
-      radial-gradient(50rem 28rem at 12% -8%, rgb(109 71 240 / 0.14), transparent 60%),
-      radial-gradient(44rem 26rem at 88% -10%, rgb(34 211 238 / 0.08), transparent 60%);
+      radial-gradient(52rem 30rem at 10% -10%, rgb(0 240 255 / 0.13), transparent 62%),
+      radial-gradient(46rem 28rem at 92% -12%, rgb(112 0 255 / 0.12), transparent 62%),
+      radial-gradient(40rem 24rem at 50% 110%, rgb(0 240 255 / 0.05), transparent 60%);
   }
   html:not(.dark) body::before {
     background-image:
-      radial-gradient(50rem 28rem at 12% -8%, rgb(109 71 240 / 0.07), transparent 60%),
-      radial-gradient(44rem 26rem at 88% -10%, rgb(14 165 233 / 0.06), transparent 60%);
+      radial-gradient(52rem 30rem at 10% -10%, rgb(0 200 240 / 0.08), transparent 62%),
+      radial-gradient(46rem 28rem at 92% -12%, rgb(112 0 255 / 0.07), transparent 62%);
   }
   #root {
     @apply min-h-screen;
@@ -84,16 +93,16 @@
   }
 
   ::selection {
-    background-color: rgb(109 71 240 / 0.35);
+    background-color: rgb(0 240 255 / 0.35);
   }
   html:not(.dark) ::selection {
-    background-color: rgb(109 71 240 / 0.18);
+    background-color: rgb(0 240 255 / 0.22);
   }
 
   /* Slim, palette-matched scrollbars */
   * {
     scrollbar-width: thin;
-    scrollbar-color: rgb(52 64 104 / 0.7) transparent;
+    scrollbar-color: rgb(50 61 99 / 0.7) transparent;
   }
   html:not(.dark) * {
     scrollbar-color: rgb(148 163 184 / 0.7) transparent;
@@ -125,19 +134,25 @@
 }
 
 @layer components {
-  /* Primary surface card — replaces `rounded-xl border border-slate-800 bg-slate-900/*` */
+  /* Primary surface — frosted glass card */
   .hb-card {
-    @apply rounded-2xl border border-slate-800/80 bg-slate-900/55;
-    background-image: linear-gradient(165deg, rgb(255 255 255 / 0.03), transparent 32%);
+    @apply rounded-2xl border border-slate-800/80 bg-slate-900/55 backdrop-blur-md;
+    background-image: linear-gradient(165deg, rgb(255 255 255 / 0.04), transparent 34%);
     box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.04),
-      0 12px 32px -20px rgb(0 0 0 / 0.65);
+      inset 0 1px 0 rgb(255 255 255 / 0.05),
+      0 16px 40px -24px rgb(0 0 0 / 0.8);
+  }
+
+  /* Glass stat chip — small KPI tile used on the dashboard hero */
+  .hb-stat {
+    @apply rounded-2xl border border-slate-800/70 bg-slate-900/45 backdrop-blur-md;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 10px 28px -20px rgb(0 0 0 / 0.7);
   }
 
   /* Form field — replaces `rounded* border border-slate-600 bg-slate-950` */
   .hb-input {
     @apply rounded-lg border border-slate-700 bg-slate-950/70 text-slate-100 placeholder:text-slate-500;
-    @apply outline-none transition-[border-color,box-shadow] focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25;
+    @apply outline-none transition-[border-color,box-shadow] focus:border-blue-400 focus:ring-2 focus:ring-blue-400/25;
   }
 
   /* Soft (secondary) button surface */
@@ -145,18 +160,61 @@
     @apply border border-slate-600/70 bg-slate-800/80 transition-colors hover:bg-slate-700/80;
   }
 
+  /* Primary gradient action — cyan → purple pill with neon glow */
+  .hb-btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition-transform;
+    background-image: linear-gradient(135deg, #00e0ff 0%, #6d28d9 100%);
+    box-shadow:
+      0 8px 24px -10px rgb(0 224 255 / 0.55),
+      0 8px 24px -10px rgb(112 0 255 / 0.45);
+  }
+  .hb-btn-primary:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.06);
+  }
+  .hb-btn-primary:active {
+    transform: translateY(0);
+  }
+  .hb-btn-primary:disabled {
+    opacity: 0.55;
+    transform: none;
+    filter: none;
+  }
+
+  /* Gradient border wrapper — puts a 1px neon border around any glass card */
+  .hb-border-glow {
+    @apply rounded-2xl p-px;
+    background-image: linear-gradient(135deg, rgb(0 240 255 / 0.55), rgb(112 0 255 / 0.45) 55%, rgb(0 240 255 / 0.2));
+  }
+  .hb-border-glow > .hb-card {
+    @apply h-full;
+  }
+
+  /* Accent text gradient */
+  .hb-text-gradient {
+    background-image: linear-gradient(120deg, #35edff 0%, #a855f7 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Soft cyan glow for icon wells / active markers */
+  .hb-glow {
+    box-shadow: 0 0 0 1px rgb(0 240 255 / 0.18), 0 0 24px -6px rgb(0 240 255 / 0.4);
+  }
+
   /* Modal backdrop */
   .hb-overlay {
-    background-color: rgb(7 9 18 / 0.7);
-    -webkit-backdrop-filter: blur(4px);
-    backdrop-filter: blur(4px);
+    background-color: rgb(4 6 11 / 0.72);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
   }
 
   /* Bottom sheet (mobile modals); .hb-dialog centers on md+ */
   .hb-sheet,
   .hb-dialog {
     @apply fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-b-0 border-slate-800 bg-slate-950 pb-[max(1rem,env(safe-area-inset-bottom))];
-    box-shadow: 0 -16px 48px -16px rgb(0 0 0 / 0.7);
+    box-shadow: 0 -16px 48px -16px rgb(0 0 0 / 0.75);
     animation: hb-sheet-in 0.22s ease-out;
   }
   .hb-sheet-handle {
@@ -175,7 +233,7 @@
 
   /* Bottom tab bar (mobile chrome) */
   .hb-tabbar {
-    @apply fixed inset-x-0 bottom-0 z-40 border-t border-slate-800/80 bg-slate-950/85 backdrop-blur;
+    @apply fixed inset-x-0 bottom-0 z-40 border-t border-slate-800/80 bg-slate-950/85 backdrop-blur-md;
     padding-bottom: env(safe-area-inset-bottom);
   }
 
@@ -269,10 +327,14 @@ html:not(.dark) .bg-slate-600 {
 html:not(.dark) .hb-card {
   background-color: #ffffff;
   background-image: none;
-  border-color: #e4e8f1;
+  border-color: #e4e8f2;
   box-shadow:
     0 1px 2px rgb(15 23 42 / 0.04),
-    0 10px 28px -20px rgb(15 23 42 / 0.14);
+    0 12px 30px -20px rgb(15 23 42 / 0.16);
+}
+html:not(.dark) .hb-stat {
+  background-color: #ffffff;
+  border-color: #e4e8f2;
 }
 html:not(.dark) .hb-input {
   background-color: #ffffff;
@@ -286,21 +348,27 @@ html:not(.dark) .hb-btn-soft {
 html:not(.dark) .hb-btn-soft:hover {
   background-color: #e2e8f0;
 }
+html:not(.dark) .hb-border-glow {
+  background-image: linear-gradient(135deg, rgb(0 200 240 / 0.5), rgb(112 0 255 / 0.35) 55%, rgb(0 200 240 / 0.2));
+}
+html:not(.dark) .hb-text-gradient {
+  background-image: linear-gradient(120deg, #0891b2 0%, #7c3aed 100%);
+}
 html:not(.dark) .hb-overlay {
-  background-color: rgb(15 23 42 / 0.35);
+  background-color: rgb(15 23 42 / 0.4);
 }
 html:not(.dark) .hb-sheet,
 html:not(.dark) .hb-dialog {
   background-color: #ffffff;
-  border-color: #e4e8f1;
-  box-shadow: 0 -16px 48px -20px rgb(15 23 42 / 0.25);
+  border-color: #e4e8f2;
+  box-shadow: 0 -16px 48px -20px rgb(15 23 42 / 0.28);
 }
 html:not(.dark) .hb-sheet-handle {
   background-color: #cbd5e1;
 }
 html:not(.dark) .hb-tabbar {
-  background-color: rgb(255 255 255 / 0.88);
-  border-color: #e4e8f1;
+  background-color: rgb(255 255 255 / 0.9);
+  border-color: #e4e8f2;
 }
 html:not(.dark) .hb-toast {
   background-color: #ffffff;
@@ -342,13 +410,13 @@ html:not(.dark) .text-slate-600 {
   color: #94a3b8;
 }
 
-/* ——— Iris accent in light mode (readable on white) ——— */
+/* ——— Cyan accent in light mode (readable on white) ——— */
 html:not(.dark) .text-blue-300,
 html:not(.dark) .text-blue-400 {
-  color: #5b32cc;
+  color: #0e7490;
 }
 html:not(.dark) .hover\:text-blue-300:hover {
-  color: #4a26ad;
+  color: #155e75;
 }
 
 /* ——— Hovers ——— */
@@ -436,91 +504,83 @@ html:not(.dark) .bg-emerald-950\/40,
 html:not(.dark) .bg-emerald-950\/50,
 html:not(.dark) .bg-emerald-950\/60,
 html:not(.dark) .bg-emerald-900\/40,
-html:not(.dark) .bg-emerald-900\/50,
-html:not(.dark) .bg-emerald-900\/60 {
+html:not(.dark) .bg-emerald-900\/50 {
   background-color: #ecfdf5;
 }
+html:not(.dark) .border-emerald-800\/50,
 html:not(.dark) .border-emerald-800\/60,
-html:not(.dark) .border-emerald-700,
+html:not(.dark) .border-emerald-700\/60,
 html:not(.dark) .border-emerald-600\/80 {
   border-color: #6ee7b7;
 }
 html:not(.dark) .text-emerald-100,
+html:not(.dark) .text-emerald-200,
+html:not(.dark) .text-emerald-300,
 html:not(.dark) .text-emerald-400 {
   color: #047857;
 }
-html:not(.dark) .hover\:bg-emerald-800\/50:hover,
-html:not(.dark) .hover\:bg-emerald-900\/60:hover,
-html:not(.dark) .hover\:bg-emerald-950\/60:hover {
+html:not(.dark) .hover\:bg-emerald-950\/60:hover,
+html:not(.dark) .hover\:bg-emerald-900\/60:hover {
   background-color: #d1fae5;
 }
 
-/* ——— Semantic: iris (primary actions, calendar events) ——— */
-html:not(.dark) .bg-blue-950\/40 {
-  background-color: #f3f0ff;
-}
-html:not(.dark) .border-blue-800\/60 {
-  border-color: #c4b5fd;
-}
-html:not(.dark) .text-blue-100,
-html:not(.dark) .text-blue-200 {
-  color: #4c2dbd;
-}
-html:not(.dark) .bg-blue-900\/40,
-html:not(.dark) .bg-blue-900\/60,
-html:not(.dark) .hover\:bg-blue-800\/70:hover {
-  background-color: #ece9fe;
-}
-html:not(.dark) .bg-blue-700\/70,
-html:not(.dark) .hover\:bg-blue-600\/80:hover {
-  background-color: #6d47f0;
-}
-html:not(.dark) .bg-blue-700\/70.text-white,
-html:not(.dark) .bg-blue-600.text-white {
-  color: #ffffff;
-}
-html:not(.dark) .bg-blue-600.text-white {
-  background-color: #6d47f0;
-}
-
-/* ——— Semantic: sky ——— */
+/* ——— Semantic: sky (info) ——— */
+html:not(.dark) .bg-sky-950\/40,
 html:not(.dark) .bg-sky-900\/40,
-html:not(.dark) .hover\:bg-sky-900\/60:hover {
-  background-color: #e0f2fe;
+html:not(.dark) .bg-sky-900\/60 {
+  background-color: #f0f9ff;
 }
-html:not(.dark) .border-sky-600 {
+html:not(.dark) .border-sky-800\/50,
+html:not(.dark) .border-sky-600\/60 {
   border-color: #7dd3fc;
 }
-html:not(.dark) .text-sky-100 {
+html:not(.dark) .text-sky-100,
+html:not(.dark) .text-sky-200,
+html:not(.dark) .text-sky-300 {
   color: #0369a1;
 }
-
-/* ——— Header / sidebar translucency ——— */
-html:not(.dark) .bg-slate-950\/50 {
-  background-color: rgb(255 255 255 / 0.85);
-}
-html:not(.dark) .backdrop-blur {
-  backdrop-filter: blur(8px);
+html:not(.dark) .hover\:bg-sky-900\/60:hover {
+  background-color: #e0f2fe;
 }
 
 /* ——— Active nav (keep contrast) ——— */
 html:not(.dark) .bg-slate-800.text-white {
-  background-color: #ece9fe;
-  color: #4c2dbd;
+  background-color: #ccfbf1;
+  color: #0f766e;
 }
 
-/* Primary buttons stay white-on-iris */
+/* Primary buttons stay white-on-accent */
 html:not(.dark) .bg-blue-600.text-white,
 html:not(.dark) .bg-blue-700.text-white,
 html:not(.dark) .border-blue-600.bg-blue-700.text-white {
   color: #ffffff;
 }
 html:not(.dark) .bg-blue-700 {
-  background-color: #5c36d6;
+  background-color: #00a3cc;
 }
 html:not(.dark) .hover\:bg-blue-600:hover,
 html:not(.dark) .hover\:bg-blue-500:hover {
-  background-color: #7d5cf4;
+  background-color: #22d3ee;
+}
+
+/* Web3 glow is dark-mode only — light mode stays clean and readable */
+html:not(.dark) .hb-glow {
+  box-shadow: 0 0 0 1px rgb(8 145 178 / 0.15);
+}
+
+/* Active nav glow → soft cyan wash in light mode */
+html:not(.dark) .from-cyan-500\/20.via-blue-600\/30.to-violet-600\/25,
+html:not(.dark) .bg-gradient-to-r.from-cyan-500\/20 {
+  background-image: linear-gradient(to right, rgb(0 200 240 / 0.14), rgb(0 168 220 / 0.16) 50%, rgb(124 58 237 / 0.12));
+  --tw-ring-color: rgb(6 182 212 / 0.35);
+  box-shadow: none;
+}
+
+/* Gradient primary buttons stay readable on white */
+html:not(.dark) .bg-gradient-to-r.from-blue-600.to-blue-700 {
+  background-image: linear-gradient(to right, #0891b2, #7c3aed);
+  color: #ffffff;
+  border-color: transparent;
 }
 
 /* Legacy console layout — migrated incrementally to Tailwind utilities */
@@ -545,9 +605,6 @@ html:not(.dark) .hover\:bg-blue-500:hover {
   .hb-btn {
     @apply cursor-pointer rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60;
   }
-  .hb-btn-primary {
-    @apply border-blue-600 bg-blue-700 hover:bg-blue-600;
-  }
   .hb-hint {
     @apply text-sm leading-snug text-slate-400;
   }
@@ -555,29 +612,17 @@ html:not(.dark) .hover\:bg-blue-500:hover {
     @apply mb-2 text-red-300;
   }
   .hb-json {
-    @apply mt-4 max-h-[min(70vh,40rem)] overflow-auto whitespace-pre-wrap rounded-lg border border-slate-700 bg-slate-950 p-4 text-sm text-slate-200;
+    @apply max-h-64 overflow-auto rounded border border-slate-700 bg-slate-950 p-2 text-xs;
+  }
+  .hb-workspace input,
+  .hb-workspace select,
+  .hb-workspace textarea {
+    @apply rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-slate-100;
   }
   .hb-workspace button {
-    @apply cursor-pointer rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply cursor-pointer rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 hover:bg-slate-700;
   }
-  .hb-workspace button.hb-btn-primary {
-    @apply border-blue-600 bg-blue-700 hover:bg-blue-600;
+  .hb-workspace button.primary {
+    @apply border-blue-600 bg-blue-700;
   }
-  .hb-workspace .hb-grid2 label,
-  .hb-workspace .hb-row > label {
-    @apply text-slate-300;
-  }
-  .hb-workspace .hb-section input:not([type="checkbox"]),
-  .hb-workspace .hb-section select,
-  .hb-workspace .hb-section textarea {
-    @apply rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500;
-    @apply max-w-xl;
-  }
-}
-
-html:not(.dark) .hb-section h2 {
-  color: #1e293b;
-}
-html:not(.dark) .hb-warn {
-  color: #b91c1c;
 }

@@ -52,7 +52,7 @@ export default function LoginPage() {
   return (
     <div className="mx-auto max-w-md space-y-6 pt-4 sm:pt-10">
       <div className="text-center">
-        <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 via-blue-600 to-blue-800 text-white shadow-[0_8px_30px_-8px] shadow-blue-600/50">
+        <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-400 via-blue-600 to-violet-600 text-white shadow-[0_0_30px_-6px] shadow-cyan-400/60 ring-1 ring-cyan-300/30">
           <svg
             viewBox="0 0 24 24"
             fill="none"
@@ -68,7 +68,7 @@ export default function LoginPage() {
             <path d="M9 21v-6h6v6" />
           </svg>
         </span>
-        <h1 className="text-3xl font-semibold text-white">Welcome back</h1>
+        <h1 className="text-3xl font-semibold text-white"><span className="hb-text-gradient">Welcome back</span></h1>
         <p className="mt-2 text-sm text-slate-400">
           Sign in with your household username and password, or with Discord if your admin enabled
           OAuth.

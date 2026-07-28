@@ -56,7 +56,7 @@ export default function BudgetTrendChart({ trends }: Props) {
     return <p className="text-sm text-slate-500">No trend data yet.</p>;
   }
 
-  const colors = ["#8161fb", "#22d3ee", "#fbbf24"];
+  const colors = ["#00f0ff", "#a855f7", "#fbbf24"];
 
   return (
     <div className="space-y-4">
@@ -64,11 +64,11 @@ export default function BudgetTrendChart({ trends }: Props) {
         <p className="mb-1 text-xs text-slate-500">Total expenses by month</p>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={totals}>
-            <CartesianGrid stroke="#242c4d" strokeDasharray="3 3" />
-            <XAxis dataKey="month" stroke="#8f97ba" tick={{ fontSize: 11 }} />
-            <YAxis stroke="#8f97ba" tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v}`} />
+            <CartesianGrid stroke="#202741" strokeDasharray="3 3" />
+            <XAxis dataKey="month" stroke="#8a94bd" tick={{ fontSize: 11 }} />
+            <YAxis stroke="#8a94bd" tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v}`} />
             <Tooltip formatter={(v) => `$${formatMoney(Number(v ?? 0))}`} />
-            <Line type="monotone" dataKey="total" stroke="#8161fb" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="total" stroke="#00f0ff" strokeWidth={2} dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -77,9 +77,9 @@ export default function BudgetTrendChart({ trends }: Props) {
           <p className="mb-1 text-xs text-slate-500">Top categories</p>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={topSeries}>
-              <CartesianGrid stroke="#242c4d" strokeDasharray="3 3" />
-              <XAxis dataKey="month" stroke="#8f97ba" tick={{ fontSize: 11 }} />
-              <YAxis stroke="#8f97ba" tick={{ fontSize: 11 }} />
+              <CartesianGrid stroke="#202741" strokeDasharray="3 3" />
+              <XAxis dataKey="month" stroke="#8a94bd" tick={{ fontSize: 11 }} />
+              <YAxis stroke="#8a94bd" tick={{ fontSize: 11 }} />
               <Tooltip formatter={(v) => `$${formatMoney(Number(v ?? 0))}`} />
               <Legend />
               {topLabels.map((label, i) => (

@@ -60,7 +60,7 @@ function navClass({ isActive }: { isActive: boolean }) {
   return [
     "group flex shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium transition-all md:py-2",
     isActive
-      ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-[0_4px_16px_-4px] shadow-blue-600/40"
+      ? "bg-gradient-to-r from-cyan-500/20 via-blue-600/30 to-violet-600/25 text-white ring-1 ring-cyan-400/30 shadow-[0_0_20px_-6px] shadow-cyan-400/40"
       : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-100",
   ].join(" ");
 }
@@ -69,7 +69,7 @@ function authNavClass({ isActive }: { isActive: boolean }) {
   return [
     "flex shrink-0 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition-all md:justify-start md:py-2",
     isActive
-      ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-[0_4px_16px_-4px] shadow-blue-600/40"
+      ? "bg-gradient-to-r from-cyan-500/20 via-blue-600/30 to-violet-600/25 text-white ring-1 ring-cyan-400/30 shadow-[0_0_20px_-6px] shadow-cyan-400/40"
       : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-100",
   ].join(" ");
 }
@@ -135,7 +135,7 @@ function connectionLabel(status: ReturnType<typeof useApiConnectionStatus>["stat
 
 function BrandMark() {
   return (
-    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 via-blue-600 to-blue-800 text-white shadow-[0_4px_18px_-4px] shadow-blue-600/50">
+    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-400 via-blue-600 to-violet-600 text-white shadow-[0_0_18px_-2px] shadow-cyan-400/50 ring-1 ring-cyan-300/30">
       <Icon name="home" className="h-5 w-5" />
     </span>
   );

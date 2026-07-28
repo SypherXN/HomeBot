@@ -63,7 +63,7 @@ import BudgetTaxSummary from "./budget/BudgetTaxSummary";
 import BudgetTransactionForm from "./budget/BudgetTransactionForm";
 import BudgetTrendChart from "./budget/BudgetTrendChart";
 
-const CHART_COLORS = ["#8161fb", "#22d3ee", "#34d399", "#fbbf24", "#fb7185", "#38bdf8", "#e879f9", "#a3e635"];
+const CHART_COLORS = ["#00f0ff", "#a855f7", "#34d399", "#fbbf24", "#fb7185", "#38bdf8", "#e879f9", "#a3e635"];
 
 const EMPTY_FILTERS: BudgetFilters = {
   merchant: "",

@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="HomeBot">
   <defs>
     <linearGradient id="hb-bg" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#8161fb"/>
-      <stop offset="1" stop-color="#4a2caa"/>
+      <stop offset="0" stop-color="#00e0ff"/>
+      <stop offset="1" stop-color="#6d28d9"/>
     </linearGradient>
   </defs>
   <rect width="48" height="48" rx="12" fill="url(#hb-bg)"/>

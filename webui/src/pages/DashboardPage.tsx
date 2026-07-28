@@ -311,13 +311,39 @@ export default function DashboardPage() {
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-400">{dateLine}</p>
         <h1 className="mt-1 text-3xl font-semibold text-white">
-          {greeting}
+          <span className="hb-text-gradient">{greeting}</span>
           {webUsername ? `, ${titleCase(webUsername)}` : ""}
         </h1>
         <p className="mt-1.5 text-slate-400">
           Here's what needs you today.
         </p>
       </div>
+
+      {/* Cockpit stat strip */}
+      {bundle && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="At a glance">
+          <div className="hb-stat px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Net this month</p>
+            <p className={`mt-1 font-display text-xl font-semibold ${bundle.budgetMonth ? (bundle.budgetMonth.net >= 0 ? "text-emerald-400" : "text-red-400") : "text-slate-500"}`}>
+              {bundle.budgetMonth ? `$${formatMoney(bundle.budgetMonth.net)}` : "—"}
+            </p>
+          </div>
+          <div className="hb-stat px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Today</p>
+            <p className="mt-1 font-display text-xl font-semibold text-white">{bundle.today.totalCount}</p>
+          </div>
+          <div className="hb-stat px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Open tasks</p>
+            <p className="mt-1 font-display text-xl font-semibold text-white">{bundle.tasks.totalCount}</p>
+          </div>
+          <div className="hb-stat px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Alerts</p>
+            <p className={`mt-1 font-display text-xl font-semibold ${bundle.budgetAlertCount > 0 ? "text-amber-400" : "text-slate-500"}`}>
+              {bundle.budgetAlertCount}
+            </p>
+          </div>
+        </div>
+      )}
 
       {!canAuth && (
         <div className="rounded-lg border border-amber-700/50 bg-amber-950/40 px-4 py-3 text-sm text-amber-100">
@@ -382,9 +408,10 @@ export default function DashboardPage() {
 
           <div className="grid gap-4 lg:grid-cols-5">
             {/* Tonight */}
-            <section className="hb-card relative overflow-hidden p-5 lg:col-span-2" aria-label="Tonight">
+            <section className="hb-border-glow lg:col-span-2" aria-label="Tonight">
+            <div className="hb-card relative h-full overflow-hidden p-5">
               <div
-                className="pointer-events-none absolute inset-0 bg-gradient-to-br from-blue-600/15 via-transparent to-transparent"
+                className="pointer-events-none absolute inset-0 bg-gradient-to-br from-cyan-500/15 via-transparent to-violet-600/10"
                 aria-hidden
               />
               <div className="relative">
@@ -436,6 +463,7 @@ export default function DashboardPage() {
                   </>
                 )}
               </div>
+            </div>
             </section>
 
             {/* Today band */}
@@ -711,11 +739,11 @@ function SnapshotCard({
   return (
     <Link
       to={to}
-      className="group flex flex-col hb-card p-4 text-left transition-all hover:-translate-y-0.5 hover:border-blue-500/40"
+      className="group flex flex-col hb-card p-4 text-left transition-all hover:-translate-y-0.5 hover:border-cyan-400/40 hover:shadow-[0_0_28px_-8px] hover:shadow-cyan-400/25"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600/15 text-blue-400 transition-colors group-hover:bg-blue-600/25">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/15 text-blue-300 ring-1 ring-blue-400/20 transition-all group-hover:bg-blue-500/25 group-hover:ring-blue-400/40">
             <Icon name={icon} className="h-4 w-4" />
           </span>
           <div className="min-w-0">
@@ -723,7 +751,7 @@ function SnapshotCard({
             <p className="mt-0.5 truncate text-xs text-slate-500">{titleCase(subtitle)}</p>
           </div>
         </div>
-        <span className="shrink-0 rounded-full bg-slate-800 px-2.5 py-0.5 text-xs font-medium text-slate-200">
+        <span className="shrink-0 rounded-full bg-slate-800/80 px-2.5 py-0.5 text-xs font-medium text-slate-200 ring-1 ring-slate-700/60">
           {stat}
         </span>
       </div>
