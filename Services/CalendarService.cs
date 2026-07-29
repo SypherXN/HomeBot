@@ -920,79 +920,7 @@ public class CalendarService
                 a.DisplayInstanceStartUtc ?? a.InstanceStartUtc,
                 b.DisplayInstanceStartUtc ?? b.InstanceStartUtc));
 
-        // Due-dated tasks (StartDateTime = due date at midnight in the item zone) render as all-day chips.
-        AppendDueDatedTasks(output, conn, fromUtc, toUtcExclusive, householdTz, userFilter, recurrenceExceptions);
         return output;
-    }
-
-    private void AppendDueDatedTasks(
-        List<CalendarRangeItemModel> output,
-        Microsoft.Data.Sqlite.SqliteConnection conn,
-        DateTime fromUtc,
-        DateTime toUtcExclusive,
-        TimeZoneInfo householdTz,
-        ulong? userFilter,
-        Dictionary<(int CalendarItemId, string InstanceStartUtc), RecurrenceExceptionRow> recurrenceExceptions)
-    {
-        var cmd = conn.CreateCommand();
-        cmd.CommandText = @"
-            SELECT Id, Title, Type, StartDateTime, AllDay, AssignedTo, Link, ReminderOffset, Recurrence,
-                   COALESCE(Timezone, '') AS ItemTz, COALESCE(Description, '') AS DescCol, COALESCE(Notes, '') AS NotesCol
-            FROM CalendarItems
-            WHERE Status = 'active' AND Type = 'task' AND StartDateTime IS NOT NULL AND StartDateTime != ''";
-        using var reader = cmd.ExecuteReader();
-        var due = new List<RangeRowMeta>();
-        var starts = new List<DateTime>();
-        while (reader.Read())
-        {
-            var assigned = reader.IsDBNull(5) ? null : (ulong?)reader.GetInt64(5);
-            if (userFilter.HasValue && assigned.HasValue && assigned.Value != 0 && assigned.Value != userFilter.Value)
-                continue;
-            var startRaw = reader.GetString(3);
-            if (!DateTime.TryParse(startRaw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var startUtc))
-                continue;
-            startUtc = DateTime.SpecifyKind(startUtc, DateTimeKind.Utc);
-            var rowTzId = reader.IsDBNull(9) ? "" : reader.GetString(9);
-            var rowTz = TimeZoneResolver.Resolve(string.IsNullOrWhiteSpace(rowTzId) ? null : rowTzId, householdTz.Id);
-            due.Add(new RangeRowMeta
-            {
-                Id = reader.GetInt32(0),
-                Title = reader.GetString(1),
-                Type = reader.GetString(2),
-                AllDay = true,
-                Assigned = assigned,
-                Link = reader.IsDBNull(6) ? "" : reader.GetString(6),
-                ReminderRaw = reader.IsDBNull(7) ? "" : reader.GetString(7),
-                Recurrence = reader.IsDBNull(8) ? "" : reader.GetString(8),
-                TimezoneId = rowTz.Id,
-                Description = reader.IsDBNull(10) ? "" : reader.GetString(10),
-                Notes = reader.IsDBNull(11) ? "" : reader.GetString(11),
-                Status = "active",
-                IsDueTask = true,
-            });
-            starts.Add(startUtc);
-        }
-
-        for (var i = 0; i < due.Count; i++)
-        {
-            var meta = due[i];
-            var rowTz = TimeZoneResolver.Resolve(meta.TimezoneId, householdTz.Id);
-            DateTime startLocalRow;
-            try { startLocalRow = TimeZoneInfo.ConvertTimeFromUtc(starts[i], rowTz); }
-            catch { continue; }
-
-            // Non-recurring: single all-day occurrence on the due date.
-            if (string.IsNullOrWhiteSpace(meta.Recurrence))
-            {
-                EmitInstance(output, meta, startLocalRow.Date, null, rowTz, false, fromUtc, toUtcExclusive, recurrenceExceptions);
-            }
-            else
-            {
-                var winStartDate = TimeZoneInfo.ConvertTimeFromUtc(fromUtc, rowTz).Date;
-                var winEndDateInclusive = TimeZoneInfo.ConvertTimeFromUtc(toUtcExclusive.AddTicks(-1), rowTz).Date;
-                ExpandRecurrence(output, meta, startLocalRow, null, rowTz, winStartDate, winEndDateInclusive, fromUtc, toUtcExclusive, recurrenceExceptions);
-            }
-        }
     }
 
     private static DateTime NextMonthlyOccurrenceDate(DateTime fromDate, int anchorDay)

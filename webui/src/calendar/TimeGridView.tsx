@@ -4,7 +4,6 @@ import type { CalendarRangeItem } from "../api";
 import { formatTimeInZone, rangeInstanceEndUtc, rangeInstanceStartUtc, wallMinutesInZone, ymdInZone } from "./calendarZoned";
 import { isGreyedOccurrence } from "./occurrenceStyle";
 import { layerForAssignee } from "../lib/personLayers";
-import { Icon } from "../components/icons";
 
 type Props = {
   /** Calendar columns as `YYYY-MM-DD` in <see cref="displayZone"/>. */
@@ -169,13 +168,10 @@ export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent
               <div className="flex flex-col gap-0.5">
                 {all.map((ev) => {
                   const greyed = isGreyedOccurrence(ev);
-                  const due = ev.isDueTask === true;
                   const layer = colorByPerson ? layerForAssignee(ev.assignedTo) : undefined;
                   const chipClass = greyed
                     ? "bg-slate-800/60 text-slate-500 line-through hover:bg-slate-800"
-                    : due
-                      ? "border border-amber-500/50 bg-amber-950/40 text-amber-100 hover:bg-amber-950/60"
-                      : (layer?.chip ?? "bg-amber-900/60 text-amber-100 hover:bg-amber-800/70");
+                    : (layer?.chip ?? "bg-amber-900/60 text-amber-100 hover:bg-amber-800/70");
                   return (
                   <button
                     key={`${ev.id}@${ev.instanceStartUtc}`}
@@ -185,9 +181,8 @@ export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent
                       onPickEvent(ev);
                     }}
                     className={`truncate rounded px-2 py-0.5 text-left text-[11px] font-medium ${chipClass}`}
-                    title={`${due ? "Due: " : ""}${ev.title}`}
+                    title={ev.title}
                   >
-                    {due && <Icon name="check" className="mr-1 inline h-2.5 w-2.5 align-[-1px] text-amber-300" />}
                     {ev.title}
                     {ev.isRecurringInstance && !greyed && <span className="ml-1 text-amber-300">↻</span>}
                   </button>

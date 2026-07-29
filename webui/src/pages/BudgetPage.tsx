@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { useAuth } from "../auth/AuthContext";
+import { useTheme } from "../theme/ThemeProvider";
 import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
 import { validActorId } from "../lib/validation";
 import { titleCase } from "../lib/titleCase";
@@ -63,7 +64,9 @@ import BudgetTaxSummary from "./budget/BudgetTaxSummary";
 import BudgetTransactionForm from "./budget/BudgetTransactionForm";
 import BudgetTrendChart from "./budget/BudgetTrendChart";
 
-const CHART_COLORS = ["#00f0ff", "#a855f7", "#34d399", "#fbbf24", "#fb7185", "#38bdf8", "#e879f9", "#a3e635"];
+const CHART_COLORS_DARK = ["#00f0ff", "#a855f7", "#34d399", "#fbbf24", "#fb7185", "#38bdf8", "#e879f9", "#a3e635"];
+// Deeper twins of the neon ramp so slices stay legible on the light canvas.
+const CHART_COLORS_LIGHT = ["#0891b2", "#7c3aed", "#059669", "#d97706", "#e11d48", "#0284c7", "#c026d3", "#65a30d"];
 
 const EMPTY_FILTERS: BudgetFilters = {
   merchant: "",
@@ -87,6 +90,8 @@ type BudgetTab = "overview" | "ledger" | "plan";
 
 export default function BudgetPage() {
   const { token, actorUserId } = useAuth();
+  const { theme } = useTheme();
+  const chartColors = theme === "dark" ? CHART_COLORS_DARK : CHART_COLORS_LIGHT;
   const tok = token.trim();
   const actor = validActorId(actorUserId) ? actorUserId.trim() : "";
   const roster = useDiscordGuildRoster(token);
@@ -434,7 +439,7 @@ export default function BudgetPage() {
                       }}
                     >
                       {chartData.map((_, i) => (
-                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                        <Cell key={i} fill={chartColors[i % chartColors.length]} />
                       ))}
                     </Pie>
                     <Tooltip formatter={(v) => `$${formatMoney(Number(v ?? 0))}`} />

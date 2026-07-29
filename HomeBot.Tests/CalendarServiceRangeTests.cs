@@ -181,6 +181,8 @@ public sealed class CalendarServiceRangeTests : IDisposable
     public void Tasks_are_excluded_from_range()
     {
         _calendar.AddItem("A task", "task", "", "", false, "", null, "", "", "", "", "UTC");
+        // Even a task row that somehow has a start must stay off the calendar grid.
+        _calendar.AddItem("Dated task", "task", "2026-04-16 00:00", "", true, "", null, "", "", "", "", "UTC");
 
         var instances = _calendar.GetRange(
             new DateTime(2026, 4, 15),
@@ -271,40 +273,6 @@ public sealed class CalendarServiceRangeTests : IDisposable
 
         Assert.Equal(3, instances.Count);
         Assert.Equal("2026-04-15T09:00:00Z", instances[^1].InstanceStartUtc);
-    }
-
-    [Fact]
-    public void Due_dated_task_emits_all_day_chip_on_due_date()
-    {
-        _calendar.AddItem("Take out trash", "task", "2026-04-16 00:00", "", true, "", null, "", "", "", "", "UTC");
-
-        var instances = _calendar.GetRange(
-            new DateTime(2026, 4, 15),
-            new DateTime(2026, 4, 18),
-            null);
-
-        var chip = Assert.Single(instances);
-        Assert.True(chip.IsDueTask);
-        Assert.True(chip.AllDay);
-        Assert.Equal("task", chip.Type);
-        Assert.Equal("2026-04-16T00:00:00Z", chip.InstanceStartUtc);
-    }
-
-    [Fact]
-    public void Recurring_due_task_expands_across_window()
-    {
-        _calendar.AddItem("Weekly chore", "task", "2026-04-13 00:00", "", true, "", null, "", "", "", "weekly", "UTC");
-
-        var instances = _calendar.GetRange(
-            new DateTime(2026, 4, 13),
-            new DateTime(2026, 4, 28),
-            null);
-
-        Assert.Equal(3, instances.Count);
-        Assert.All(instances, i => Assert.True(i.IsDueTask));
-        Assert.Equal("2026-04-13T00:00:00Z", instances[0].InstanceStartUtc);
-        Assert.Equal("2026-04-20T00:00:00Z", instances[1].InstanceStartUtc);
-        Assert.Equal("2026-04-27T00:00:00Z", instances[2].InstanceStartUtc);
     }
 
     [Fact]

@@ -10,6 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import type { BudgetTrendPoint } from "../../api";
+import { useTheme } from "../../theme/ThemeProvider";
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -21,6 +22,7 @@ type Props = {
 };
 
 export default function BudgetTrendChart({ trends }: Props) {
+  const { theme } = useTheme();
   const { totals, topSeries, topLabels } = useMemo(() => {
     const monthTotals = new Map<string, number>();
     const catByMonth = new Map<string, Map<string, number>>();
@@ -56,7 +58,11 @@ export default function BudgetTrendChart({ trends }: Props) {
     return <p className="text-sm text-slate-500">No trend data yet.</p>;
   }
 
-  const colors = ["#00f0ff", "#a855f7", "#fbbf24"];
+  const dark = theme === "dark";
+  const gridStroke = dark ? "#202741" : "#e2e8f0";
+  const axisStroke = dark ? "#8a94bd" : "#64748b";
+  const totalStroke = dark ? "#00f0ff" : "#0891b2";
+  const colors = dark ? ["#00f0ff", "#a855f7", "#fbbf24"] : ["#0891b2", "#7c3aed", "#d97706"];
 
   return (
     <div className="space-y-4">
@@ -64,11 +70,11 @@ export default function BudgetTrendChart({ trends }: Props) {
         <p className="mb-1 text-xs text-slate-500">Total expenses by month</p>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={totals}>
-            <CartesianGrid stroke="#202741" strokeDasharray="3 3" />
-            <XAxis dataKey="month" stroke="#8a94bd" tick={{ fontSize: 11 }} />
-            <YAxis stroke="#8a94bd" tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v}`} />
+            <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" />
+            <XAxis dataKey="month" stroke={axisStroke} tick={{ fontSize: 11 }} />
+            <YAxis stroke={axisStroke} tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v}`} />
             <Tooltip formatter={(v) => `$${formatMoney(Number(v ?? 0))}`} />
-            <Line type="monotone" dataKey="total" stroke="#00f0ff" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="total" stroke={totalStroke} strokeWidth={2} dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -77,9 +83,9 @@ export default function BudgetTrendChart({ trends }: Props) {
           <p className="mb-1 text-xs text-slate-500">Top categories</p>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={topSeries}>
-              <CartesianGrid stroke="#202741" strokeDasharray="3 3" />
-              <XAxis dataKey="month" stroke="#8a94bd" tick={{ fontSize: 11 }} />
-              <YAxis stroke="#8a94bd" tick={{ fontSize: 11 }} />
+              <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" />
+              <XAxis dataKey="month" stroke={axisStroke} tick={{ fontSize: 11 }} />
+              <YAxis stroke={axisStroke} tick={{ fontSize: 11 }} />
               <Tooltip formatter={(v) => `$${formatMoney(Number(v ?? 0))}`} />
               <Legend />
               {topLabels.map((label, i) => (

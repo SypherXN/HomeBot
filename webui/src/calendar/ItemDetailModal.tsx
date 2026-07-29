@@ -121,7 +121,7 @@ export default function ItemDetailModal({
             setStartDate(wall.date);
             setStartTime(wall.time);
           } else {
-            setStartDate(d.type === "task" ? DateTime.now().setZone(tz).toISODate()! : "");
+            setStartDate("");
             setStartTime("09:00");
           }
         }
@@ -229,34 +229,45 @@ export default function ItemDetailModal({
 
     setBusy("save");
     try {
-      const isDueTask = detail?.type === "task";
-      const startPayload =
-        (detail?.start?.trim() || isDueTask) && startDate.trim()
-          ? `${startDate.trim()}T${normalizeHmDetail(isDueTask && !startTime.trim() ? "00:00" : startTime)}`
+      const isTask = detail?.type === "task";
+      if (isTask) {
+        await patchCalendarItem(token, itemId!, {
+          title: title.trim() || undefined,
+          description: description.trim() || undefined,
+          notes: notes.trim() || undefined,
+          link: link.trim() || undefined,
+          ...(assignedTo.trim()
+            ? { assignedToUserId: assignedTo.trim() }
+            : { clearAssignedTo: true }),
+        });
+      } else {
+        const startPayload = detail?.start?.trim() && startDate.trim()
+          ? `${startDate.trim()}T${normalizeHmDetail(startTime)}`
           : undefined;
-      let endPayload: string | undefined;
-      let clearEnd = false;
-      if (endDate.trim()) {
-        endPayload = `${endDate.trim()}T${normalizeHmDetail(endTime)}`;
-      } else if (detail?.end?.trim()) {
-        clearEnd = true;
+        let endPayload: string | undefined;
+        let clearEnd = false;
+        if (endDate.trim()) {
+          endPayload = `${endDate.trim()}T${normalizeHmDetail(endTime)}`;
+        } else if (detail?.end?.trim()) {
+          clearEnd = true;
+        }
+        await patchCalendarItem(token, itemId!, {
+          title: title.trim() || undefined,
+          start: startPayload,
+          end: endPayload,
+          clearEnd,
+          description: description.trim() || undefined,
+          notes: notes.trim() || undefined,
+          link: link.trim() || undefined,
+          timezone: eventTz.trim() || undefined,
+          allDay,
+          reminder: reminder.trim(),
+          recurrence: recurrenceToString(seriesRecurrence),
+          ...(assignedTo.trim()
+            ? { assignedToUserId: assignedTo.trim() }
+            : { clearAssignedTo: true }),
+        });
       }
-      await patchCalendarItem(token, itemId!, {
-        title: title.trim() || undefined,
-        start: startPayload,
-        end: endPayload,
-        clearEnd,
-        description: description.trim() || undefined,
-        notes: notes.trim() || undefined,
-        link: link.trim() || undefined,
-        timezone: eventTz.trim() || undefined,
-        allDay,
-        reminder: reminder.trim(),
-        recurrence: recurrenceToString(seriesRecurrence),
-        ...(assignedTo.trim()
-          ? { assignedToUserId: assignedTo.trim() }
-          : { clearAssignedTo: true }),
-      });
       onSuccess("Saved.");
       onChanged();
       onClose();
@@ -392,7 +403,9 @@ export default function ItemDetailModal({
             <Field label="Title">
               <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
             </Field>
-            {detail.start.trim() || detail.type === "task" ? (
+            {detail.type === "task" ? (
+              <p className="text-xs text-slate-500">Tasks have no schedule — they only appear in the Tasks panel.</p>
+            ) : detail.start.trim() ? (
               <>
                 <Field label="Event timezone">
                   <select value={eventTz} onChange={(e) => setEventTz(e.target.value)} className={inputClass}>
@@ -407,7 +420,7 @@ export default function ItemDetailModal({
                   </select>
                 </Field>
                 <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
-                  <Field label={detail.type === "task" ? "Due date" : "Start date"}>
+                  <Field label="Start date">
                     <input
                       type="date"
                       value={startDate}
@@ -415,18 +428,16 @@ export default function ItemDetailModal({
                       className={dateTimeInputClass}
                     />
                   </Field>
-                  {detail.type !== "task" && (
-                    <Field label="Start time">
-                      <input
-                        type="time"
-                        value={startTime}
-                        onChange={(e) => setStartTime(e.target.value)}
-                        className={dateTimeInputClass}
-                      />
-                    </Field>
-                  )}
+                  <Field label="Start time">
+                    <input
+                      type="time"
+                      value={startTime}
+                      onChange={(e) => setStartTime(e.target.value)}
+                      className={dateTimeInputClass}
+                    />
+                  </Field>
                 </div>
-                {detail.type === "task" ? null : isRecurringInstance ? (
+                {isRecurringInstance ? (
                   <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
                     <Field label="End date (this day only, optional)">
                       <input
@@ -467,7 +478,7 @@ export default function ItemDetailModal({
                 )}
               </>
             ) : (
-              <p className="text-xs text-slate-500">This row has no scheduled start (task-style).</p>
+              <p className="text-xs text-slate-500">This row has no scheduled start.</p>
             )}
             <Field label="Description">
               <input value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />
@@ -480,8 +491,28 @@ export default function ItemDetailModal({
             </Field>
 
             {!isRecurringInstance ? (
+              detail.type === "task" ? (
+                <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/40 p-3">
+                  <Field label="Assignee (Discord user id)">
+                    <input
+                      value={assignedTo}
+                      onChange={(e) => setAssignedTo(e.target.value)}
+                      className={inputClass}
+                    />
+                    <div className="mt-2">
+                      <DiscordMemberSelect
+                        token={token}
+                        sharedRoster={guildRoster}
+                        label="Pick from server"
+                        value={assignedTo}
+                        onPickUserId={setAssignedTo}
+                      />
+                    </div>
+                  </Field>
+                </div>
+              ) : (
               <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-                <p className="text-xs text-slate-500">Series settings (applies to the whole event or task row)</p>
+                <p className="text-xs text-slate-500">Series settings (applies to the whole event)</p>
                 <label className="flex items-center gap-2 text-sm text-slate-300">
                   <input
                     type="checkbox"
@@ -512,6 +543,7 @@ export default function ItemDetailModal({
                   </div>
                 </Field>
               </div>
+              )
             ) : (
               <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3 text-xs text-slate-400">
                 <p>Series recurrence: {detail.recurrence || "none"} · all-day: {detail.allDay ? "yes" : "no"}</p>

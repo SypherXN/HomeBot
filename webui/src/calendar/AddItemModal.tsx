@@ -61,7 +61,6 @@ export default function AddItemModal({
   const [allDay, setAllDay] = useState(false);
   const [reminder, setReminder] = useState("");
   const [recurrence, setRecurrence] = useState<RecurrenceEditorState>(emptyRecurrence());
-  const [dueDate, setDueDate] = useState("");
   const [assignToEveryone, setAssignToEveryone] = useState(false);
   const [assignedTo, setAssignedTo] = useState("");
   const [description, setDescription] = useState("");
@@ -80,7 +79,6 @@ export default function AddItemModal({
         ? initialYmd
         : DateTime.now().setZone(tz).toISODate()!;
     setStartDate(y);
-    setDueDate(initialMode === "task" ? y : "");
     const st =
       initialStartTime && /^\d{2}:\d{2}$/.test(initialStartTime)
         ? initialStartTime
@@ -125,33 +123,28 @@ export default function AddItemModal({
       onError("Title is required.");
       return;
     }
-    if (mode === "event") {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate.trim())) {
-        onError("Start date must be YYYY-MM-DD.");
-        return;
-      }
-    } else if (dueDate.trim() && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate.trim())) {
-      onError("Due date must be YYYY-MM-DD.");
+    if (mode === "event" && !/^\d{4}-\d{2}-\d{2}$/.test(startDate.trim())) {
+      onError("Start date must be YYYY-MM-DD.");
       return;
     }
     const recurrenceString = recurrenceToString(recurrence);
     setSubmitting(true);
     try {
       const isTask = mode === "task";
-      const hasDue = isTask && /^\d{4}-\d{2}-\d{2}$/.test(dueDate.trim());
+      // Empty start → API stores Type=task (tasks live only in the Tasks panel).
       await postCalendarItem(token, {
         title: t,
-        start: isTask ? (hasDue ? `${dueDate.trim()}T00:00:00` : "") : wallStartForApi(),
+        start: isTask ? "" : wallStartForApi(),
         end: isTask ? undefined : wallEndForApi(),
-        allDay: isTask ? hasDue : allDay,
-        reminder: reminder.trim() || undefined,
-        recurrence: recurrenceString || undefined,
+        allDay: isTask ? false : allDay,
+        reminder: isTask ? undefined : reminder.trim() || undefined,
+        recurrence: isTask ? undefined : recurrenceString || undefined,
         assignToEveryone: !isTask && assignToEveryone,
         assignedToUserId: assignedTo.trim() || undefined,
         description: description.trim() || undefined,
         notes: notes.trim() || undefined,
         link: link.trim() || undefined,
-        timezone: isTask ? (hasDue ? eventTz.trim() : undefined) : eventTz.trim(),
+        timezone: isTask ? undefined : eventTz.trim(),
       });
       onCreated(mode);
     } catch (err) {
@@ -248,41 +241,25 @@ export default function AddItemModal({
         )}
 
         {mode === "task" && (
-          <>
-            <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Due date (optional)">
-                <input
-                  type="date"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                  className={inputClass}
-                />
-              </Field>
-              <Field label="Reminder">
-                <CalendarReminderSelect value={reminder} onChange={setReminder} className={inputClass} />
-              </Field>
-            </div>
-            <RecurrenceEditor value={recurrence} onChange={setRecurrence} inputClass={inputClass} idPrefix="add-task-rec" />
-            <Field label="Assigned user (Discord id)">
-              <input
+          <Field label="Assigned user (Discord id)">
+            <input
+              value={assignedTo}
+              onChange={(e) => setAssignedTo(e.target.value)}
+              inputMode="numeric"
+              className={inputClass}
+              placeholder="leave blank for unassigned"
+            />
+            <div className="mt-2 min-w-0">
+              <DiscordMemberSelect
+                token={token}
+                sharedRoster={guildRoster}
+                label="Pick from server"
                 value={assignedTo}
-                onChange={(e) => setAssignedTo(e.target.value)}
-                inputMode="numeric"
-                className={inputClass}
-                placeholder="leave blank for unassigned"
+                onPickUserId={setAssignedTo}
+                className="min-w-0"
               />
-              <div className="mt-2 min-w-0">
-                <DiscordMemberSelect
-                  token={token}
-                  sharedRoster={guildRoster}
-                  label="Pick from server"
-                  value={assignedTo}
-                  onPickUserId={setAssignedTo}
-                  className="min-w-0"
-                />
-              </div>
-            </Field>
-          </>
+            </div>
+          </Field>
         )}
 
         <details className="group rounded-lg border border-slate-800 bg-slate-900/30 px-3 py-2.5">

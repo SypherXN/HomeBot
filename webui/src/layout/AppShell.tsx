@@ -233,7 +233,7 @@ export default function AppShell() {
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex md:w-60 md:shrink-0 md:flex-col md:border-r md:border-slate-800/70 md:bg-slate-900/40 md:backdrop-blur">
+      <aside className="hb-sidebar hidden md:flex md:w-60 md:shrink-0 md:flex-col">
         <div className="flex items-center gap-3 px-4 pb-4 pt-4">
           <BrandMark />
           <div className="min-w-0">
@@ -260,7 +260,7 @@ export default function AppShell() {
           {navGroups.map((group) => (
             <div key={group.label ?? "root"} className="flex flex-col gap-0.5">
               {group.label ? (
-                <div className="px-3 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600">
+                <div className="px-3 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                   {group.label}
                 </div>
               ) : null}
@@ -306,7 +306,7 @@ export default function AppShell() {
 
       <div className="min-w-0 flex-1">
         {/* Mobile top bar: brand + search + bell. Desktop: search + status. */}
-        <header className="top-0 z-40 border-b border-slate-800/70 bg-slate-950/50 px-3 py-2.5 backdrop-blur sm:px-4 sm:py-3 md:sticky">
+        <header className="hb-topbar top-0 z-40 px-3 py-2.5 sm:px-4 sm:py-3 md:sticky">
           <div className="flex items-center gap-2 sm:gap-3">
             <Link to="/" className="flex shrink-0 items-center gap-2 md:hidden" aria-label="HomeBot home">
               <BrandMark />
