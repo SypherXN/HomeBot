@@ -964,8 +964,8 @@ public class CalendarService
                 ReminderRaw = reader.IsDBNull(7) ? "" : reader.GetString(7),
                 Recurrence = reader.IsDBNull(8) ? "" : reader.GetString(8),
                 TimezoneId = rowTz.Id,
-                Description = reader.IsDBNull(11) ? "" : reader.GetString(11),
-                Notes = reader.IsDBNull(12) ? "" : reader.GetString(12),
+                Description = reader.IsDBNull(10) ? "" : reader.GetString(10),
+                Notes = reader.IsDBNull(11) ? "" : reader.GetString(11),
                 Status = "active",
                 IsDueTask = true,
             });
