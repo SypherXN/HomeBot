@@ -807,7 +807,8 @@ public class CalendarService
                    COALESCE(Timezone, '') AS ItemTz, COALESCE(Description, '') AS DescCol, COALESCE(Notes, '') AS NotesCol,
                    COALESCE(Status, 'active') AS StatusCol
             FROM CalendarItems
-            WHERE {(includeCompleted ? "Status IN ('active','completed')" : "Status = 'active'")} AND StartDateTime IS NOT NULL AND StartDateTime != ''";
+            WHERE {(includeCompleted ? "Status IN ('active','completed')" : "Status = 'active'")} AND StartDateTime IS NOT NULL AND StartDateTime != ''
+              AND Type != 'task'";
 
         using var reader = cmd.ExecuteReader();
 

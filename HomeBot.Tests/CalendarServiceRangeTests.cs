@@ -148,17 +148,25 @@ public sealed class CalendarServiceRangeTests : IDisposable
     {
         _calendar.AddItem("Birthday", "event", "2024-03-15 09:00", "", false, "", null, "", "", "", "yearly", "UTC");
 
-        var instances = _calendar.GetRange(
-            new DateTime(2024, 1, 1),
-            new DateTime(2027, 1, 1),
-            null);
-
-        Assert.Equal(3, instances.Count);
-        Assert.Equal("2024-03-15T09:00:00Z", instances[0].InstanceStartUtc);
-        Assert.Equal("2025-03-15T09:00:00Z", instances[1].InstanceStartUtc);
-        Assert.Equal("2026-03-15T09:00:00Z", instances[2].InstanceStartUtc);
-        Assert.All(instances, i => Assert.True(i.IsRecurringInstance));
-        Assert.All(instances, i => Assert.Equal("🔁 annual", i.RecurrenceText));
+        // The range query caps windows at RangeMaxDays, so probe each year with its own narrow window.
+        string[] expected =
+        {
+            "2024-03-15T09:00:00Z",
+            "2025-03-15T09:00:00Z",
+            "2026-03-15T09:00:00Z",
+        };
+        foreach (var (start, end, want) in new[]
+        {
+            (new DateTime(2024, 3, 1), new DateTime(2024, 3, 31), expected[0]),
+            (new DateTime(2025, 3, 1), new DateTime(2025, 3, 31), expected[1]),
+            (new DateTime(2026, 3, 1), new DateTime(2026, 3, 31), expected[2]),
+        })
+        {
+            var chip = Assert.Single(_calendar.GetRange(start, end, null));
+            Assert.Equal(want, chip.InstanceStartUtc);
+            Assert.True(chip.IsRecurringInstance);
+            Assert.Equal("🔁 annual", chip.RecurrenceText);
+        }
     }
 
     [Fact]
@@ -193,10 +201,11 @@ public sealed class CalendarServiceRangeTests : IDisposable
             new DateTime(2026, 5, 21),
             null);
 
-        Assert.Equal(3, instances.Count);
+        Assert.Equal(4, instances.Count);
         Assert.Equal("2026-04-08T09:00:00Z", instances[0].InstanceStartUtc);
         Assert.Equal("2026-04-22T09:00:00Z", instances[1].InstanceStartUtc);
         Assert.Equal("2026-05-06T09:00:00Z", instances[2].InstanceStartUtc);
+        Assert.Equal("2026-05-20T09:00:00Z", instances[3].InstanceStartUtc);
     }
 
     [Fact]
@@ -291,10 +300,11 @@ public sealed class CalendarServiceRangeTests : IDisposable
             new DateTime(2026, 4, 28),
             null);
 
-        Assert.Equal(2, instances.Count);
+        Assert.Equal(3, instances.Count);
         Assert.All(instances, i => Assert.True(i.IsDueTask));
         Assert.Equal("2026-04-13T00:00:00Z", instances[0].InstanceStartUtc);
         Assert.Equal("2026-04-20T00:00:00Z", instances[1].InstanceStartUtc);
+        Assert.Equal("2026-04-27T00:00:00Z", instances[2].InstanceStartUtc);
     }
 
     [Fact]

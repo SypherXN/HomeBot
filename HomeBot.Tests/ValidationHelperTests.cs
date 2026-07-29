@@ -20,7 +20,7 @@ public sealed class ValidationHelperTests
     [Fact]
     public void ValidateRecurrence_rejects_unknown_token()
     {
-        Assert.False(ValidationHelper.ValidateRecurrence("biweekly", out var error));
+        Assert.False(ValidationHelper.ValidateRecurrence("everybluemoon", out var error));
         Assert.Contains("yearly", error);
     }
 
