@@ -45,6 +45,17 @@
 }
 
 @layer base {
+  html:not(.dark) {
+    --hb-progress-track: #e2e8f0;
+    --hb-progress-fill: #059669;
+    --hb-heat: #0891b2;
+  }
+  html.dark {
+    --hb-progress-track: #1e293b;
+    --hb-progress-fill: #34d399;
+    --hb-heat: #22d3ee;
+  }
+
   html.dark body {
     @apply m-0 min-h-screen bg-slate-950 text-slate-100 antialiased;
   }
@@ -158,6 +169,14 @@
   /* Soft (secondary) button surface */
   .hb-btn-soft {
     @apply border border-slate-600/70 bg-slate-800/80 transition-colors hover:bg-slate-700/80;
+  }
+
+  .hb-progress-track {
+    background: var(--hb-progress-track);
+  }
+
+  .budget-density-compact .budget-ledger-row {
+    @apply py-1.5;
   }
 
   /* Primary gradient action — cyan → purple pill with neon glow */

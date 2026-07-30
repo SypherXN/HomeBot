@@ -76,9 +76,18 @@ public sealed class BudgetEnvelopeModel
     public int CategoryId { get; set; }
     public string CategoryName { get; set; } = "";
     public double TargetAmount { get; set; }
+    public double LeaveAmount { get; set; }
     public double ActualAmount { get; set; }
     public double Remaining { get; set; }
     public double PercentUsed { get; set; }
+}
+
+public sealed class BudgetMonthNoteModel
+{
+    public string Month { get; set; } = "";
+    public string Note { get; set; } = "";
+    public string? ClosedAt { get; set; }
+    public ulong? ClosedBy { get; set; }
 }
 
 public sealed class BudgetGoalModel

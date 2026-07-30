@@ -127,7 +127,7 @@ public partial class BudgetService
         conn.Open();
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            SELECT e.Id, e.Month, e.CategoryId, c.Name, e.TargetAmount
+            SELECT e.Id, e.Month, e.CategoryId, c.Name, e.TargetAmount, COALESCE(e.LeaveAmount, 0)
             FROM BudgetEnvelopes e
             JOIN BudgetCategories c ON c.Id = e.CategoryId
             WHERE e.Month=$m
@@ -140,6 +140,7 @@ public partial class BudgetService
             var catId = reader.GetInt32(2);
             var actual = SumCategoryExpenses(month, catId, spentByUserId);
             var target = reader.GetDouble(4);
+            var leaveAmount = reader.GetDouble(5);
             envelopes.Add(new BudgetEnvelopeModel
             {
                 Id = reader.GetInt32(0),
@@ -147,6 +148,7 @@ public partial class BudgetService
                 CategoryId = catId,
                 CategoryName = reader.GetString(3),
                 TargetAmount = target,
+                LeaveAmount = leaveAmount,
                 ActualAmount = actual,
                 Remaining = target - actual,
                 PercentUsed = target > 0 ? Math.Round(actual / target * 100, 1) : 0
@@ -163,21 +165,22 @@ public partial class BudgetService
             .Sum(r => r.HomeAmount);
     }
 
-    public void SetEnvelope(string month, int categoryId, double targetAmount, ulong actor)
+    public void SetEnvelope(string month, int categoryId, double targetAmount, ulong actor, double leaveAmount = 0)
     {
         month = NormalizeMonth(month);
         using var conn = _db.GetConnection();
         conn.Open();
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            INSERT INTO BudgetEnvelopes (Month, CategoryId, TargetAmount)
-            VALUES ($m, $c, $t)
-            ON CONFLICT(Month, CategoryId) DO UPDATE SET TargetAmount=$t";
+            INSERT INTO BudgetEnvelopes (Month, CategoryId, TargetAmount, LeaveAmount)
+            VALUES ($m, $c, $t, $leave)
+            ON CONFLICT(Month, CategoryId) DO UPDATE SET TargetAmount=$t, LeaveAmount=$leave";
         cmd.Parameters.AddWithValue("$m", month);
         cmd.Parameters.AddWithValue("$c", categoryId);
         cmd.Parameters.AddWithValue("$t", targetAmount);
+        cmd.Parameters.AddWithValue("$leave", leaveAmount);
         cmd.ExecuteNonQuery();
-        Audit(actor, "envelope", categoryId, "set", new { month, targetAmount });
+        Audit(actor, "envelope", categoryId, "set", new { month, targetAmount, leaveAmount });
     }
 
     public List<BudgetGoalModel> GetGoals()

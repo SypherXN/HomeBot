@@ -37,28 +37,43 @@ export default function BudgetEnvelopeEditor({
 }: Props) {
   const envByCat = new Map(envelopes.map((e) => [e.categoryId, e]));
   const [drafts, setDrafts] = useState<Record<number, string>>({});
+  const [leaveDrafts, setLeaveDrafts] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState(false);
   const [copyBusy, setCopyBusy] = useState(false);
   const [applyBusy, setApplyBusy] = useState(false);
 
   const householdCats = categories.filter((c) => c.visibility !== "personal");
-  const dirtyCount = Object.keys(drafts).length;
+  const dirtyCount = Object.keys(drafts).length + Object.keys(leaveDrafts).length;
 
   async function saveAll(e: React.FormEvent) {
     e.preventDefault();
     if (!actor) return;
     setSaving(true);
     try {
-      for (const cat of householdCats) {
-        const raw = drafts[cat.id];
-        if (raw === undefined || raw.trim() === "") continue;
+      const touched = new Set([...Object.keys(drafts), ...Object.keys(leaveDrafts)].map(Number));
+      for (const catId of touched) {
+        const cat = householdCats.find((c) => c.id === catId);
+        if (!cat) continue;
+        const env = envByCat.get(catId);
+        const rawTarget = drafts[catId];
+        const rawLeave = leaveDrafts[catId];
+        const targetAmount =
+          rawTarget !== undefined && rawTarget.trim() !== ""
+            ? Number(rawTarget) || 0
+            : (env?.targetAmount ?? 0);
+        const leaveAmount =
+          rawLeave !== undefined && rawLeave.trim() !== ""
+            ? Number(rawLeave) || 0
+            : env?.leaveAmount;
         await putBudgetEnvelope(token, actor, {
           month,
-          categoryId: cat.id,
-          targetAmount: Number(raw) || 0,
+          categoryId: catId,
+          targetAmount,
+          leaveAmount: leaveAmount && leaveAmount > 0 ? leaveAmount : undefined,
         });
       }
       setDrafts({});
+      setLeaveDrafts({});
       await onSaved();
     } finally {
       setSaving(false);
@@ -136,6 +151,7 @@ export default function BudgetEnvelopeEditor({
           const pct = env?.percentUsed ?? 0;
           const bar = Math.min(100, pct);
           const targetVal = drafts[cat.id] ?? (env ? String(env.targetAmount) : "");
+          const leaveVal = leaveDrafts[cat.id] ?? (env?.leaveAmount ? String(env.leaveAmount) : "");
           const remaining = env ? env.remaining : null;
           return (
             <li key={cat.id} className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
@@ -178,6 +194,21 @@ export default function BudgetEnvelopeEditor({
                     className="w-24 hb-input px-2 py-1 text-sm text-slate-100"
                   />
                 </label>
+                <label className="flex items-center gap-2 text-xs text-slate-400" title="Soft aim — try to leave at least this much unspent">
+                  Leave $
+                  <input
+                    value={leaveVal}
+                    onChange={(e) => setLeaveDrafts((d) => ({ ...d, [cat.id]: e.target.value }))}
+                    placeholder="0"
+                    className="w-20 hb-input px-2 py-1 text-sm text-slate-100"
+                  />
+                </label>
+                {env?.leaveAmount != null && env.leaveAmount > 0 && remaining != null && (
+                  <span className="text-[11px] text-cyan-400/80">
+                    Aim: leave ${formatMoney(env.leaveAmount)}
+                    {remaining < env.leaveAmount ? " — below aim" : ""}
+                  </span>
+                )}
                 {onLogSpend && (
                   <button
                     type="button"

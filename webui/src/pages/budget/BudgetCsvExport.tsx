@@ -6,17 +6,40 @@ type Props = {
   defaultMonth: string;
 };
 
+type Preset = "month" | "ytd" | "tax";
+
 function lastDayOfMonth(ym: string): string {
   const [y, m] = ym.split("-").map(Number);
   const last = new Date(y, m, 0).getDate();
   return `${ym}-${String(last).padStart(2, "0")}`;
 }
 
+function presetRange(preset: Preset, defaultMonth: string): { from: string; to: string } {
+  const year = defaultMonth.slice(0, 4);
+  if (preset === "tax") {
+    return { from: `${year}-01-01`, to: `${year}-12-31` };
+  }
+  if (preset === "ytd") {
+    const today = new Date().toISOString().slice(0, 10);
+    return { from: `${year}-01-01`, to: today };
+  }
+  return { from: `${defaultMonth}-01`, to: lastDayOfMonth(defaultMonth) };
+}
+
 export default function BudgetCsvExport({ token, defaultMonth }: Props) {
-  const [from, setFrom] = useState(`${defaultMonth}-01`);
-  const [to, setTo] = useState(lastDayOfMonth(defaultMonth));
+  const [preset, setPreset] = useState<Preset>("month");
+  const initial = presetRange("month", defaultMonth);
+  const [from, setFrom] = useState(initial.from);
+  const [to, setTo] = useState(initial.to);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function applyPreset(p: Preset) {
+    setPreset(p);
+    const range = presetRange(p, defaultMonth);
+    setFrom(range.from);
+    setTo(range.to);
+  }
 
   async function handleExport() {
     setBusy(true);
@@ -40,13 +63,38 @@ export default function BudgetCsvExport({ token, defaultMonth }: Props) {
   return (
     <div className="rounded-lg border border-slate-700 p-3">
       <h3 className="mb-2 text-sm font-medium text-slate-200">Export CSV</h3>
+      <div className="mb-2 flex flex-wrap gap-2">
+        {(
+          [
+            ["month", "This month"],
+            ["ytd", "YTD"],
+            ["tax", "Tax year"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => applyPreset(id)}
+            className={`rounded-full px-3 py-1 text-xs ${
+              preset === id
+                ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white"
+                : "bg-slate-800 text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       <div className="mb-2 grid gap-2 sm:grid-cols-2">
         <label className="block text-xs text-slate-400">
           From
           <input
             type="date"
             value={from}
-            onChange={(e) => setFrom(e.target.value)}
+            onChange={(e) => {
+              setPreset("month");
+              setFrom(e.target.value);
+            }}
             className="mt-1 w-full hb-input px-2 py-1 text-sm text-slate-100"
           />
         </label>
@@ -55,7 +103,10 @@ export default function BudgetCsvExport({ token, defaultMonth }: Props) {
           <input
             type="date"
             value={to}
-            onChange={(e) => setTo(e.target.value)}
+            onChange={(e) => {
+              setPreset("month");
+              setTo(e.target.value);
+            }}
             className="mt-1 w-full hb-input px-2 py-1 text-sm text-slate-100"
           />
         </label>

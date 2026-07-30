@@ -356,5 +356,27 @@ public static class DatabaseSchemaMigrations
             SchemaMigrationRunner.TryAddColumn(conn,
                 "ALTER TABLE BudgetTransactions ADD COLUMN ReceiptUrl TEXT");
         }),
+
+        new SchemaMigrationRunner.Migration("010_budget_p2", conn =>
+        {
+            SchemaMigrationRunner.TryAddColumn(conn,
+                "ALTER TABLE BudgetEnvelopes ADD COLUMN LeaveAmount REAL NOT NULL DEFAULT 0");
+            SchemaMigrationRunner.Execute(conn, @"
+                CREATE TABLE IF NOT EXISTS BudgetMonthNotes (
+                    Month TEXT PRIMARY KEY,
+                    Note TEXT NOT NULL DEFAULT '',
+                    ClosedAt TEXT,
+                    ClosedBy INTEGER
+                );
+                CREATE TABLE IF NOT EXISTS BudgetBillSkips (
+                    BillId INTEGER NOT NULL,
+                    Month TEXT NOT NULL,
+                    SkippedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    ActorUserId INTEGER,
+                    PRIMARY KEY (BillId, Month),
+                    FOREIGN KEY (BillId) REFERENCES BudgetBills(Id)
+                );
+            ");
+        }),
     };
 }

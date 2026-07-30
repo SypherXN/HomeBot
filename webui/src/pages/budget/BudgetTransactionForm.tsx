@@ -158,33 +158,80 @@ export default function BudgetTransactionForm({
       </label>
 
       {formType === "transfer" ? (
-        <div className="grid gap-2 sm:grid-cols-2">
-          <select
-            value={formAccountId}
-            onChange={(e) => setFormAccountId(e.target.value)}
-            className="hb-input px-3 py-2 text-slate-100"
-          >
-            <option value="">From account</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name} (${a.currentBalance.toFixed(2)})
-              </option>
-            ))}
-          </select>
-          <select
-            value={transferToId}
-            onChange={(e) => setTransferToId(e.target.value)}
-            className="hb-input px-3 py-2 text-slate-100"
-          >
-            <option value="">To account</option>
-            {accounts
-              .filter((a) => String(a.id) !== formAccountId)
-              .map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-          </select>
+        <div className="space-y-3">
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
+            <label className="block text-xs text-slate-400">
+              From
+              <select
+                value={formAccountId}
+                onChange={(e) => setFormAccountId(e.target.value)}
+                className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
+              >
+                <option value="">Choose account</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div
+              className="hidden text-center text-2xl text-cyan-400 transition-transform duration-300 sm:block"
+              style={{ transform: formAccountId && transferToId ? "scale(1.1)" : "scale(1)" }}
+              aria-hidden
+            >
+              →
+            </div>
+            <label className="block text-xs text-slate-400">
+              To
+              <select
+                value={transferToId}
+                onChange={(e) => setTransferToId(e.target.value)}
+                className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
+              >
+                <option value="">Choose account</option>
+                {accounts
+                  .filter((a) => String(a.id) !== formAccountId)
+                  .map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          </div>
+          {formAccountId && transferToId && (
+            <div className="flex items-center justify-center gap-3 rounded-lg border border-slate-700/80 bg-slate-950/50 px-3 py-3 transition-all duration-300">
+              {(() => {
+                const from = accounts.find((a) => String(a.id) === formAccountId);
+                const to = accounts.find((a) => String(a.id) === transferToId);
+                const amt = Number(formAmount) || 0;
+                return (
+                  <>
+                    <div className="min-w-0 flex-1 text-center">
+                      <p className="truncate text-sm font-medium text-slate-200">{from?.name}</p>
+                      <p className="text-xs text-slate-500">${from?.currentBalance.toFixed(2) ?? "0.00"}</p>
+                      {amt > 0 && (
+                        <p className="mt-1 text-xs text-amber-300 transition-opacity">
+                          → ${Math.max(0, (from?.currentBalance ?? 0) - amt).toFixed(2)}
+                        </p>
+                      )}
+                    </div>
+                    <span className="text-xl text-cyan-400 transition-transform duration-300">→</span>
+                    <div className="min-w-0 flex-1 text-center">
+                      <p className="truncate text-sm font-medium text-slate-200">{to?.name}</p>
+                      <p className="text-xs text-slate-500">${to?.currentBalance.toFixed(2) ?? "0.00"}</p>
+                      {amt > 0 && (
+                        <p className="mt-1 text-xs text-emerald-300 transition-opacity">
+                          → ${((to?.currentBalance ?? 0) + amt).toFixed(2)}
+                        </p>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
         </div>
       ) : (
         <>

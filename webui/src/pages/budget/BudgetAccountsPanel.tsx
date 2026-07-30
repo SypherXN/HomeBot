@@ -7,6 +7,7 @@ import {
   type BudgetAccount,
 } from "../../api";
 import { defaultTransactionDateForMonth } from "../../lib/budgetTransactionDate";
+import BudgetOpeningBalanceWizard from "./BudgetOpeningBalanceWizard";
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -57,6 +58,8 @@ export default function BudgetAccountsPanel({
   }, [month]);
 
   const activeAccounts = accounts.filter((a) => a.isActive !== false);
+  const showOpeningWizard =
+    activeAccounts.length > 0 && activeAccounts.every((a) => Math.abs(a.currentBalance) < 0.01);
 
   async function handleAddAccount(e: React.FormEvent) {
     e.preventDefault();
@@ -149,6 +152,12 @@ export default function BudgetAccountsPanel({
         Track balances across checking, savings, or credit accounts. Transfers move money between accounts without
         affecting category totals.
       </p>
+
+      {showOpeningWizard && actor && (
+        <div className="mb-4">
+          <BudgetOpeningBalanceWizard token={token} actor={actor} accounts={accounts} onSaved={onSaved} />
+        </div>
+      )}
 
       {accounts.length === 0 ? (
         <p className="mb-3 text-sm text-slate-500">No accounts yet.</p>

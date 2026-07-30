@@ -36,7 +36,8 @@ public static class BudgetAccountBalance
         }
 
         if (string.Equals(row.Type, "expense", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(row.Type, "income", StringComparison.OrdinalIgnoreCase))
+            string.Equals(row.Type, "income", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(row.Type, "opening_balance", StringComparison.OrdinalIgnoreCase))
         {
             ApplyDelta(conn, tx, row.AccountId ?? defaultAccountId, row.Type, row.Amount);
         }
@@ -61,9 +62,10 @@ public static class BudgetAccountBalance
         }
 
         if (string.Equals(row.Type, "expense", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(row.Type, "income", StringComparison.OrdinalIgnoreCase))
+            string.Equals(row.Type, "income", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(row.Type, "opening_balance", StringComparison.OrdinalIgnoreCase))
         {
-            var reverseType = row.Type.Equals("income", StringComparison.OrdinalIgnoreCase) ? "expense" : "income";
+            var reverseType = row.Type.Equals("expense", StringComparison.OrdinalIgnoreCase) ? "income" : "expense";
             ApplyDelta(conn, tx, row.AccountId ?? defaultAccountId, reverseType, row.Amount);
         }
     }
@@ -99,6 +101,7 @@ public static class BudgetAccountBalance
         var delta = type switch
         {
             "income" => amount,
+            "opening_balance" => amount,
             "expense" => -amount,
             "transfer_out" => -amount,
             "transfer_in" => amount,

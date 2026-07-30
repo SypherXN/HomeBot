@@ -232,6 +232,27 @@ public sealed class BudgetEnvelopeSetRequest
     public string Month { get; set; } = "";
     public int CategoryId { get; set; }
     public double TargetAmount { get; set; }
+    public double? LeaveAmount { get; set; }
+}
+
+public sealed class BudgetOpeningBalanceRequest
+{
+    public string AmountInput { get; set; } = "";
+    public string? TransactionDate { get; set; }
+}
+
+public sealed class BudgetEnvelopeRollRequest
+{
+    public string FromMonth { get; set; } = "";
+    public string ToMonth { get; set; } = "";
+    public string Mode { get; set; } = "targets";
+}
+
+public sealed class BudgetMonthNotePutRequest
+{
+    public string Month { get; set; } = "";
+    public string Note { get; set; } = "";
+    public bool MarkClosed { get; set; }
 }
 
 public sealed class BudgetGoalCreateRequest

@@ -98,6 +98,18 @@ public static class BudgetApiRegistration
 
         app.MapGet("/api/budget/bills", () => Results.Ok(root.GetRequiredService<BudgetService>().GetBills()));
 
+        app.MapGet("/api/budget/bills/skips", (HttpRequest request) =>
+        {
+            var month = request.Query["month"].ToString();
+            if (string.IsNullOrWhiteSpace(month))
+                return ApiResults.BadRequest("month query (YYYY-MM) is required.", "missing_month");
+            var billIds = root.GetRequiredService<BudgetService>().GetSkippedBillIds(month);
+            return Results.Ok(new { billIds });
+        });
+
+        app.MapGet("/api/budget/month-notes/{month}", (string month) =>
+            Results.Ok(root.GetRequiredService<BudgetService>().GetMonthNote(month)));
+
         app.MapGet("/api/budget/audit", (HttpRequest request) =>
         {
             int limit = int.TryParse(request.Query["limit"], out var l) ? l : 100;
@@ -271,8 +283,41 @@ public static class BudgetApiRegistration
                 return err!;
             if (body is null || string.IsNullOrWhiteSpace(body.Month))
                 return ApiResults.BadRequest("month and categoryId required.", "missing_fields");
-            root.GetRequiredService<BudgetService>().SetEnvelope(body.Month, body.CategoryId, body.TargetAmount, actor);
+            root.GetRequiredService<BudgetService>().SetEnvelope(
+                body.Month, body.CategoryId, body.TargetAmount, actor, body.LeaveAmount ?? 0);
             return Results.Ok(new { ok = true });
+        });
+
+        w.MapPost("/budget/envelopes/roll", (HttpRequest http, BudgetEnvelopeRollRequest? body) =>
+        {
+            if (!HomeBotApiRegistrationTryActor.TryActor(http.Query, out var actor, out var err))
+                return err!;
+            if (body is null || string.IsNullOrWhiteSpace(body.FromMonth) || string.IsNullOrWhiteSpace(body.ToMonth))
+                return ApiResults.BadRequest("fromMonth and toMonth are required.", "missing_fields");
+            var count = root.GetRequiredService<BudgetService>().RollEnvelopes(
+                body.FromMonth, body.ToMonth, body.Mode ?? "targets", actor);
+            return Results.Ok(new { count });
+        });
+
+        w.MapPut("/budget/month-notes", (HttpRequest http, BudgetMonthNotePutRequest? body) =>
+        {
+            if (!HomeBotApiRegistrationTryActor.TryActor(http.Query, out var actor, out var err))
+                return err!;
+            if (body is null || string.IsNullOrWhiteSpace(body.Month))
+                return ApiResults.BadRequest("month is required.", "missing_month");
+            root.GetRequiredService<BudgetService>().PutMonthNote(body.Month, body.Note ?? "", body.MarkClosed, actor);
+            return Results.Ok(new { ok = true });
+        });
+
+        w.MapPost("/budget/accounts/{id:int}/opening-balance", (HttpRequest http, int id, BudgetOpeningBalanceRequest? body) =>
+        {
+            if (!HomeBotApiRegistrationTryActor.TryActor(http.Query, out var actor, out var err))
+                return err!;
+            if (body is null || string.IsNullOrWhiteSpace(body.AmountInput))
+                return ApiResults.BadRequest("amountInput is required.", "missing_amount");
+            var txId = root.GetRequiredService<BudgetService>().SetOpeningBalance(
+                id, body.AmountInput, body.TransactionDate, actor);
+            return Results.Created($"/api/budget/transactions/{txId}", new { id = txId });
         });
 
         w.MapPost("/budget/goals", (HttpRequest http, BudgetGoalCreateRequest? body) =>
@@ -379,6 +424,28 @@ public static class BudgetApiRegistration
                 $"📅 **Calendar** (via web): added **{sTitle}** (monthly bill reminder)");
 
             return Results.Ok(new { ok = true, calendarItemId = calId });
+        });
+
+        w.MapPost("/budget/bills/{id:int}/skip", (HttpRequest http, int id) =>
+        {
+            if (!HomeBotApiRegistrationTryActor.TryActor(http.Query, out var actor, out var err))
+                return err!;
+            var month = http.Query["month"].ToString();
+            if (string.IsNullOrWhiteSpace(month))
+                return ApiResults.BadRequest("month query (YYYY-MM) is required.", "missing_month");
+            root.GetRequiredService<BudgetService>().SkipBill(id, month, actor);
+            return Results.Ok(new { ok = true });
+        });
+
+        w.MapDelete("/budget/bills/{id:int}/skip", (HttpRequest http, int id) =>
+        {
+            if (!HomeBotApiRegistrationTryActor.TryActor(http.Query, out var actor, out var err))
+                return err!;
+            var month = http.Query["month"].ToString();
+            if (string.IsNullOrWhiteSpace(month))
+                return ApiResults.BadRequest("month query (YYYY-MM) is required.", "missing_month");
+            var ok = root.GetRequiredService<BudgetService>().UnskipBill(id, month, actor);
+            return ok ? Results.Ok(new { ok = true }) : ApiResults.NotFound("Bill skip not found.", "not_found");
         });
 
         w.MapPost("/budget/bills/{id:int}/pay", async (HttpRequest http, int id, BudgetBillPayRequest? body) =>

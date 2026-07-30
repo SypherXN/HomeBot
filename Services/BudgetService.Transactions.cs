@@ -541,10 +541,15 @@ public partial class BudgetService
     private static void ReverseAccountDelta(SqliteConnection conn, SqliteTransaction tx, int accountId, string type,
         double amount)
     {
-        var reverseType = type.Equals("income", StringComparison.OrdinalIgnoreCase) ? "expense" : "income";
-        if (type.Equals("expense", StringComparison.OrdinalIgnoreCase) ||
+        if (type.Equals("opening_balance", StringComparison.OrdinalIgnoreCase) ||
             type.Equals("income", StringComparison.OrdinalIgnoreCase))
-            ApplyAccountDelta(conn, tx, accountId, reverseType, amount, null);
+        {
+            ApplyAccountDelta(conn, tx, accountId, "expense", amount, null);
+            return;
+        }
+
+        if (type.Equals("expense", StringComparison.OrdinalIgnoreCase))
+            ApplyAccountDelta(conn, tx, accountId, "income", amount, null);
     }
 
     private static void ApplyAccountDelta(SqliteConnection conn, SqliteTransaction tx, int accountId, string type,
@@ -553,6 +558,7 @@ public partial class BudgetService
         var delta = type switch
         {
             "income" => amount,
+            "opening_balance" => amount,
             "expense" => -amount,
             "transfer_out" => -amount,
             "transfer_in" => amount,

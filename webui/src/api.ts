@@ -1458,6 +1458,7 @@ export type BudgetEnvelope = {
   actualAmount: number;
   remaining: number;
   percentUsed: number;
+  leaveAmount?: number;
 };
 
 export type BudgetGoal = {
@@ -1682,10 +1683,63 @@ export function getBudgetEnvelopes(token: string, month: string) {
 export function putBudgetEnvelope(
   token: string,
   actorUserId: string,
-  body: { month: string; categoryId: number; targetAmount: number }
+  body: { month: string; categoryId: number; targetAmount: number; leaveAmount?: number }
 ) {
   const path = mergeQuery("/api/budget/envelopes", { actorUserId });
   return apiJson<unknown>(path, { token, method: "PUT", body });
+}
+
+export function postBudgetEnvelopesRoll(
+  token: string,
+  actorUserId: string,
+  body: { fromMonth: string; toMonth: string; mode: "targets" | "remaining" }
+) {
+  const path = mergeQuery("/api/budget/envelopes/roll", { actorUserId });
+  return apiJson<{ count: number }>(path, { token, method: "POST", body });
+}
+
+export type BudgetMonthNote = {
+  month: string;
+  note: string;
+  closedAt?: string | null;
+  closedBy?: string | null;
+};
+
+export function getBudgetMonthNote(token: string, month: string) {
+  return apiJson<BudgetMonthNote>(`/api/budget/month-notes/${encodeURIComponent(month)}`, { token });
+}
+
+export function putBudgetMonthNote(
+  token: string,
+  actorUserId: string,
+  body: { month: string; note: string; markClosed?: boolean }
+) {
+  const path = mergeQuery("/api/budget/month-notes", { actorUserId });
+  return apiJson<unknown>(path, { token, method: "PUT", body });
+}
+
+export function postBudgetOpeningBalance(
+  token: string,
+  actorUserId: string,
+  accountId: number,
+  body: { amountInput: string; transactionDate?: string }
+) {
+  const path = mergeQuery(`/api/budget/accounts/${accountId}/opening-balance`, { actorUserId });
+  return apiJson<{ id: number }>(path, { token, method: "POST", body });
+}
+
+export function getBudgetBillSkips(token: string, month: string) {
+  return apiJson<{ billIds: number[] }>(budgetQuery("/api/budget/bills/skips", { month }), { token });
+}
+
+export function postBudgetBillSkip(token: string, actorUserId: string, billId: number, month: string) {
+  const path = mergeQuery(`/api/budget/bills/${billId}/skip`, { actorUserId, month });
+  return apiJson<{ ok: boolean }>(path, { token, method: "POST" });
+}
+
+export function deleteBudgetBillSkip(token: string, actorUserId: string, billId: number, month: string) {
+  const path = mergeQuery(`/api/budget/bills/${billId}/skip`, { actorUserId, month });
+  return apiJson<{ ok: boolean }>(path, { token, method: "DELETE" });
 }
 
 export function getBudgetGoals(token: string) {
@@ -1831,10 +1885,16 @@ export type BudgetBill = {
 export type BudgetRecurring = {
   id: number;
   amount: number;
+  amountInput?: string | null;
+  categoryId?: number | null;
+  spentByUserId?: string;
   cadence: string;
   nextRunDate: string;
+  note?: string | null;
+  merchant?: string | null;
   type: string;
   isActive: boolean;
+  accountId?: number | null;
 };
 
 export function getBudgetIncomePlan(token: string, month: string) {
