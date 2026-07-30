@@ -392,7 +392,7 @@ export default function AppShell() {
               to={to}
               end={end ?? false}
               className={({ isActive }) =>
-                `relative flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition-colors ${
+                `relative flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition-colors ${
                   isActive ? "text-blue-300" : "text-slate-500 hover:text-slate-300"
                 }`
               }
@@ -402,10 +402,10 @@ export default function AppShell() {
                   {isActive && (
                     <span className="absolute -top-px h-0.5 w-8 rounded-full bg-gradient-to-r from-blue-500 to-blue-400" />
                   )}
-                  <Icon name={icon} className="h-5 w-5" />
+                  <Icon name={icon} className="h-6 w-6" />
                   {label}
                   {to === "/budget" && budgetAlertCount > 0 && (
-                    <span className="absolute right-1/2 top-1 h-1.5 w-1.5 translate-x-4 rounded-full bg-amber-500" />
+                    <span className="absolute right-1/2 top-1.5 h-1.5 w-1.5 translate-x-4 rounded-full bg-amber-500" />
                   )}
                 </>
               )}
@@ -414,9 +414,9 @@ export default function AppShell() {
           <button
             type="button"
             onClick={() => setMoreOpen(true)}
-            className="flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium text-slate-500 transition-colors hover:text-slate-300"
+            className="flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium text-slate-500 transition-colors hover:text-slate-300"
           >
-            <Icon name="settings" className="h-5 w-5" />
+            <Icon name="settings" className="h-6 w-6" />
             More
           </button>
         </div>

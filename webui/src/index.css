@@ -250,10 +250,10 @@
     }
   }
 
-  /* Bottom tab bar (mobile chrome) */
+  /* Bottom tab bar (mobile chrome) — clears the iPhone home-indicator area */
   .hb-tabbar {
     @apply fixed inset-x-0 bottom-0 z-40 border-t border-slate-800/80 bg-slate-950/85 backdrop-blur-md;
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-bottom: max(env(safe-area-inset-bottom), 0.4rem);
   }
 
   /* Desktop sidebar — frosted ink strip in dark, soft white rail in light */
