@@ -62,9 +62,11 @@ import {
   type BudgetDensity,
   type BudgetMode,
 } from "../lib/budgetPrefs";
-import { Icon } from "../components/icons";
+import { shareSvgAsPng } from "../lib/shareChart";
 import Sheet from "../components/Sheet";
 import ConfirmDialog from "../components/ConfirmDialog";
+import SwipeableRow from "../components/SwipeableRow";
+import { Icon } from "../components/icons";
 import BudgetAccountsPanel from "./budget/BudgetAccountsPanel";
 import BudgetAccountsStrip from "./budget/BudgetAccountsStrip";
 import BudgetAnnualSnapshot from "./budget/BudgetAnnualSnapshot";
@@ -199,6 +201,8 @@ export default function BudgetPage() {
   const [ledgerHasNext, setLedgerHasNext] = useState(false);
   const [ledgerLoadingMore, setLedgerLoadingMore] = useState(false);
   const ledgerSentinelRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<HTMLDivElement>(null);
+  const [shareBusy, setShareBusy] = useState(false);
   const [monthTxAll, setMonthTxAll] = useState<BudgetTransactionListItem[]>([]);
   const [budgetMode, setBudgetMode] = useState<BudgetMode>(() => loadBudgetMode());
   const [budgetDensity, setBudgetDensity] = useState<BudgetDensity>(() => loadBudgetDensity());
@@ -905,13 +909,39 @@ export default function BudgetPage() {
                   >
                     By Spender
                   </button>
+                  {chartData.length > 0 && (
+                    <button
+                      type="button"
+                      disabled={shareBusy}
+                      onClick={() => {
+                        setShareBusy(true);
+                        void shareSvgAsPng(chartRef.current, `budget-${month}-${chartMode}.png`)
+                          .then((how) => {
+                            showToast({
+                              message: how === "copied" ? "Chart copied to clipboard." : "Chart downloaded.",
+                              kind: "success",
+                            });
+                          })
+                          .catch((e) => {
+                            showToast({
+                              message: e instanceof Error ? e.message : String(e),
+                              kind: "error",
+                            });
+                          })
+                          .finally(() => setShareBusy(false));
+                      }}
+                      className="rounded-lg hb-btn-soft px-3 py-1 text-sm text-slate-300 disabled:opacity-50"
+                    >
+                      {shareBusy ? "…" : "Share"}
+                    </button>
+                  )}
                 </div>
               </div>
               {chartData.length === 0 ? (
                 <p className="text-sm text-slate-500">No expense data for {formatMonthLong(month)} yet.</p>
               ) : (
                 <>
-                  <div className="h-72 w-full">
+                  <div ref={chartRef} className="h-72 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
@@ -1075,9 +1105,14 @@ export default function BudgetPage() {
                           <li
                             key={row.id}
                             ref={row.id === highlightId ? highlightRef : undefined}
-                            className={`budget-ledger-row py-3 text-sm ${highlightRowClass(row.id, highlightId)}`}
+                            className={`budget-ledger-row text-sm ${highlightRowClass(row.id, highlightId)}`}
                           >
-                            <div className="flex items-start gap-2">
+                            <SwipeableRow
+                              enabled={Boolean(actor)}
+                              onEdit={() => setEditTx(row)}
+                              onDelete={() => setDeleteTarget(row)}
+                            >
+                            <div className="flex items-start gap-2 py-3">
                               {actor && (
                                 <input
                                   type="checkbox"
@@ -1174,6 +1209,7 @@ export default function BudgetPage() {
                                 )}
                               </div>
                             </div>
+                            </SwipeableRow>
                           </li>
                         );
                       })}
