@@ -21,7 +21,7 @@ export default function BudgetAlertsPanel({ forecast, notifications, onDismiss, 
     return (
       <section className="hb-card p-4">
         <h2 className="text-lg font-medium text-white">Forecast & alerts</h2>
-        <p className="mt-2 text-sm text-slate-500">No pace warnings or pending alerts right now.</p>
+        <p className="mt-2 text-sm text-slate-500">Nothing needs attention right now.</p>
       </section>
     );
   }
@@ -32,15 +32,15 @@ export default function BudgetAlertsPanel({ forecast, notifications, onDismiss, 
 
       {paceWarnings.length > 0 && (
         <div className="mb-4">
-          <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Pace forecast</h3>
+          <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">At this rate</h3>
           <ul className="space-y-2">
             {paceWarnings.map((f) => (
               <li
                 key={f.categoryId}
                 className="rounded-lg border border-amber-800/40 bg-amber-950/20 px-3 py-2 text-sm text-amber-100"
               >
-                <strong>{titleCase(f.categoryName)}</strong>: on track for ${formatMoney(f.projectedMonthEnd)} this month
-                (budget ${formatMoney(f.envelopeTarget!)}, MTD ${formatMoney(f.monthToDate)})
+                <strong>{titleCase(f.categoryName)}</strong> is on track for ${formatMoney(f.projectedMonthEnd)} this month —
+                over the ${formatMoney(f.envelopeTarget!)} limit (${formatMoney(f.monthToDate)} so far).
               </li>
             ))}
           </ul>
@@ -49,9 +49,7 @@ export default function BudgetAlertsPanel({ forecast, notifications, onDismiss, 
 
       {notifications.length > 0 && (
         <div>
-          <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
-            Active alerts (also sent to Discord when configured)
-          </h3>
+          <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Active alerts</h3>
           <ul className="space-y-2">
             {notifications.map((n) => (
               <li
