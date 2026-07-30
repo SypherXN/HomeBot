@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import DiscordMemberSelect from "../../components/DiscordMemberSelect";
 import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster";
 import { useMerchantSuggestions } from "../../hooks/useMerchantSuggestions";
 import { defaultTransactionDateForMonth } from "../../lib/budgetTransactionDate";
+import { parseReceiptText } from "../../lib/receiptOcr";
 import {
   postBudgetTransaction,
   postBudgetTransfer,
@@ -51,6 +52,36 @@ export default function BudgetTransactionForm({
   ]);
 
   const { merchants, suggestion } = useMerchantSuggestions(token, formMerchant);
+  const receiptInputRef = useRef<HTMLInputElement | null>(null);
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const [ocrStatus, setOcrStatus] = useState<string | null>(null);
+
+  async function scanReceipt(file: File) {
+    setOcrBusy(true);
+    setOcrStatus("Reading receipt…");
+    try {
+      const { createWorker } = await import("tesseract.js");
+      const worker = await createWorker("eng");
+      try {
+        const { data } = await worker.recognize(file);
+        const guess = parseReceiptText(data.text);
+        if (guess.amount) setFormAmount(guess.amount);
+        if (guess.merchant) setFormMerchant((m) => m || guess.merchant!);
+        if (guess.date) setFormDate(guess.date);
+        setOcrStatus(
+          guess.amount || guess.merchant
+            ? `Found ${[guess.merchant, guess.amount ? `$${guess.amount}` : null, guess.date].filter(Boolean).join(" · ")} — check before saving.`
+            : "Couldn't read the receipt — fill in manually."
+        );
+      } finally {
+        await worker.terminate();
+      }
+    } catch {
+      setOcrStatus("Receipt scan failed — fill in manually.");
+    } finally {
+      setOcrBusy(false);
+    }
+  }
 
   useEffect(() => {
     setFormDate(defaultTransactionDateForMonth(month));
@@ -358,6 +389,29 @@ export default function BudgetTransactionForm({
               <option key={m} value={m} />
             ))}
           </datalist>
+          <div className="flex items-center gap-2">
+            <input
+              ref={receiptInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void scanReceipt(f);
+                e.target.value = "";
+              }}
+            />
+            <button
+              type="button"
+              disabled={ocrBusy}
+              onClick={() => receiptInputRef.current?.click()}
+              className="shrink-0 rounded-lg hb-btn-soft px-3 py-2 text-sm text-slate-200 disabled:opacity-50"
+            >
+              {ocrBusy ? "Scanning…" : "Scan receipt"}
+            </button>
+            {ocrStatus && <span className="text-xs text-slate-400">{ocrStatus}</span>}
+          </div>
           <input
             type="url"
             placeholder="Receipt URL (optional)"

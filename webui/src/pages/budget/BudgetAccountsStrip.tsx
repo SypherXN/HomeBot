@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import type { BudgetAccount } from "../../api";
 import { formatMoney } from "../../lib/budgetMoney";
 
@@ -40,30 +41,35 @@ export default function BudgetAccountsStrip({ accounts, onManage }: Props) {
               ? Math.min(100, (Math.abs(Math.min(0, a.currentBalance)) / a.creditLimit) * 100)
               : null;
           return (
-            <li key={a.id} className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="truncate text-sm text-slate-300">{a.name}</span>
-                <span
-                  className={`shrink-0 text-sm font-semibold ${
-                    a.currentBalance < 0 ? "text-red-300" : "text-white"
-                  }`}
-                >
-                  {a.currentBalance < 0 ? "−" : ""}${formatMoney(Math.abs(a.currentBalance))}
-                </span>
-              </div>
-              {utilization != null && (
-                <div className="mt-1.5">
-                  <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
-                    <div
-                      className={`h-full ${utilization >= 80 ? "bg-red-500" : utilization >= 50 ? "bg-amber-500" : "bg-emerald-600"}`}
-                      style={{ width: `${utilization}%` }}
-                    />
-                  </div>
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    {utilization.toFixed(0)}% of ${formatMoney(a.creditLimit!)} limit
-                  </p>
+            <li key={a.id}>
+              <Link
+                to={`/budget/accounts/${a.id}`}
+                className="block rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 transition-colors hover:border-slate-700"
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="truncate text-sm text-slate-300">{a.name}</span>
+                  <span
+                    className={`shrink-0 text-sm font-semibold ${
+                      a.currentBalance < 0 ? "text-red-300" : "text-white"
+                    }`}
+                  >
+                    {a.currentBalance < 0 ? "−" : ""}${formatMoney(Math.abs(a.currentBalance))}
+                  </span>
                 </div>
-              )}
+                {utilization != null && (
+                  <div className="mt-1.5">
+                    <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
+                      <div
+                        className={`h-full ${utilization >= 80 ? "bg-red-500" : utilization >= 50 ? "bg-amber-500" : "bg-emerald-600"}`}
+                        style={{ width: `${utilization}%` }}
+                      />
+                    </div>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      {utilization.toFixed(0)}% of ${formatMoney(a.creditLimit!)} limit
+                    </p>
+                  </div>
+                )}
+              </Link>
             </li>
           );
         })}

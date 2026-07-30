@@ -1497,6 +1497,7 @@ export type BudgetTransactionListOpts = {
   month?: string;
   spentByUserId?: string;
   categoryId?: string;
+  accountId?: string;
   scope?: string;
   merchant?: string;
   noteContains?: string;
@@ -1511,6 +1512,7 @@ export function getBudgetTransactions(token: string, page: number, opts?: Budget
     month: opts?.month,
     spentByUserId: opts?.spentByUserId,
     categoryId: opts?.categoryId,
+    accountId: opts?.accountId,
     scope: opts?.scope,
     merchant: opts?.merchant,
     noteContains: opts?.noteContains,

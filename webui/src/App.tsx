@@ -8,6 +8,7 @@ import LoginPage from "./pages/LoginPage";
 import MealPlanPage from "./pages/MealPlanPage";
 import MoneyPage from "./pages/MoneyPage";
 import BudgetPage from "./pages/BudgetPage";
+import BudgetAccountPage from "./pages/BudgetAccountPage";
 import OAuthCallbackPage from "./pages/OAuthCallbackPage";
 import SettingsPage from "./pages/SettingsPage";
 import SetupPage from "./pages/SetupPage";
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/wishlist" element={<WishlistPage />} />
         <Route path="/money" element={<MoneyPage />} />
         <Route path="/budget" element={<BudgetPage />} />
+        <Route path="/budget/accounts/:accountId" element={<BudgetAccountPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/meals" element={<MealPlanPage />} />
         <Route path="/health" element={<HealthPage />} />

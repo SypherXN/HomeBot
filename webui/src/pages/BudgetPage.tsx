@@ -86,11 +86,14 @@ import BudgetGoalsPanel from "./budget/BudgetGoalsPanel";
 import BudgetIncomeBanner from "./budget/BudgetIncomeBanner";
 import BudgetInsights from "./budget/BudgetInsights";
 import BudgetMonthClose from "./budget/BudgetMonthClose";
+import BudgetMonthNoteBanner from "./budget/BudgetMonthNoteBanner";
 import BudgetOpeningBalanceWizard from "./budget/BudgetOpeningBalanceWizard";
 import BudgetOverviewHero from "./budget/BudgetOverviewHero";
 import BudgetQuickAdd, { type QuickAddPrefill } from "./budget/BudgetQuickAdd";
 import BudgetRecurringPreview from "./budget/BudgetRecurringPreview";
+import BudgetScenarioPanel from "./budget/BudgetScenarioPanel";
 import BudgetSetupChecklist from "./budget/BudgetSetupChecklist";
+import BudgetStatStrip from "./budget/BudgetStatStrip";
 import BudgetTaxSummary from "./budget/BudgetTaxSummary";
 import BudgetTransactionForm from "./budget/BudgetTransactionForm";
 import BudgetTrendChart from "./budget/BudgetTrendChart";
@@ -503,6 +506,23 @@ export default function BudgetPage() {
         },
       });
     }
+    for (const a of accounts) {
+      if (a.isActive === false || a.accountType !== "credit" || !a.creditLimit || a.creditLimit <= 0) continue;
+      const owed = Math.abs(Math.min(0, a.currentBalance));
+      const utilization = (owed / a.creditLimit) * 100;
+      const remaining = a.creditLimit - owed;
+      if (utilization >= 90 || remaining <= 100) {
+        items.push({
+          key: `credit-${a.id}`,
+          message: `${a.name} is near its limit — $${formatMoney(remaining)} left of $${formatMoney(a.creditLimit)} (${utilization.toFixed(0)}%).`,
+        });
+      } else if (utilization >= 80) {
+        items.push({
+          key: `credit-${a.id}`,
+          message: `${a.name} is at ${utilization.toFixed(0)}% of its $${formatMoney(a.creditLimit)} limit.`,
+        });
+      }
+    }
     for (const n of notifications) {
       items.push({
         key: `n-${n.key || `${n.kind}-${n.message}`}`,
@@ -514,7 +534,7 @@ export default function BudgetPage() {
       });
     }
     return items;
-  }, [envelopes, forecast, bills, month, monthTxAll, notifications, actor, dismissBusyKey, dismissNotification]);
+  }, [envelopes, forecast, bills, month, monthTxAll, notifications, actor, accounts, dismissBusyKey, dismissNotification]);
 
   const txGroups = useMemo(() => {
     if (ledgerItems.length === 0 && !txData) return [];
@@ -827,7 +847,14 @@ export default function BudgetPage() {
       ) : (
         tab === "overview" && (
           <>
+            <BudgetStatStrip
+              leftToBudget={incomePlan?.availableToBudget ?? null}
+              net={(summary?.totalIncome ?? 0) - (summary?.totalExpenses ?? 0)}
+              billsDueCount={attentionItems.filter((i) => i.key.startsWith("bill-")).length}
+              alertCount={attentionItems.length}
+            />
             <BudgetOverviewHero month={month} summary={summary} incomePlan={incomePlan} envelopeSpent={envelopeSpent} />
+            <BudgetMonthNoteBanner token={tok} actor={actor} month={month} onSaved={load} />
             <BudgetAttentionInbox month={month} items={attentionItems} />
           </>
         )
@@ -873,6 +900,8 @@ export default function BudgetPage() {
             onViewCategory={viewCategoryInLedger}
             onViewMerchant={viewMerchantInLedger}
           />
+
+          <BudgetScenarioPanel forecast={forecast} envelopes={envelopes} />
 
           {budgetMode === "full" && (
             <>
