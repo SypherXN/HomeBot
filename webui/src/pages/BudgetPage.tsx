@@ -728,12 +728,12 @@ export default function BudgetPage() {
       )}
 
       <div className="flex flex-wrap items-end gap-3">
-        <div className="flex items-center gap-1">
+        <div className="flex items-end gap-1">
           <button
             type="button"
             onClick={() => stepMonth(-1)}
             aria-label="Previous month"
-            className="rounded-lg hb-btn-soft px-2.5 py-2 text-slate-300 hover:bg-slate-700"
+            className="flex h-[2.625rem] w-10 shrink-0 items-center justify-center rounded-lg hb-btn-soft px-2.5 py-2 text-slate-300 hover:bg-slate-700"
           >
             ‹
           </button>
@@ -746,14 +746,14 @@ export default function BudgetPage() {
                 setLedgerPage(0);
                 setMonth(e.target.value);
               }}
-              className="hb-input px-3 py-2 text-slate-100"
+              className="hb-input h-[2.625rem] px-3 py-2 text-slate-100"
             />
           </div>
           <button
             type="button"
             onClick={() => stepMonth(1)}
             aria-label="Next month"
-            className="rounded-lg hb-btn-soft px-2.5 py-2 text-slate-300 hover:bg-slate-700"
+            className="flex h-[2.625rem] w-10 shrink-0 items-center justify-center rounded-lg hb-btn-soft px-2.5 py-2 text-slate-300 hover:bg-slate-700"
           >
             ›
           </button>
@@ -774,7 +774,7 @@ export default function BudgetPage() {
                 disabled={id === "mine" && !actor}
                 title={id === "mine" && !actor ? "Set “Acting as” in Settings first" : undefined}
                 onClick={() => setScopeView(id)}
-                className={`px-3 py-2 text-sm ${
+                className={`whitespace-nowrap px-3 py-2 text-sm ${
                   scopeView === id ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white" : "bg-slate-900/60 text-slate-400 hover:text-slate-200"
                 } disabled:cursor-not-allowed disabled:opacity-50`}
               >
