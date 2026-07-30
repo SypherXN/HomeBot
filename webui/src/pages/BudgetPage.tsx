@@ -459,6 +459,20 @@ export default function BudgetPage() {
 
   const envelopeSpent = useMemo(() => envelopes.reduce((sum, e) => sum + e.actualAmount, 0), [envelopes]);
 
+  const daysLeft = useMemo(() => {
+    const [y, m] = month.split("-").map(Number);
+    if (!y || !m) return 0;
+    const now = new Date();
+    const isCurrent = y === now.getFullYear() && m === now.getMonth() + 1;
+    if (!isCurrent) return 0;
+    return new Date(y, m, 0).getDate() - now.getDate();
+  }, [month]);
+
+  const spentPctOfIncome = useMemo(() => {
+    if (!summary || summary.totalIncome <= 0) return 0;
+    return (summary.totalExpenses / summary.totalIncome) * 100;
+  }, [summary]);
+
   const attentionItems = useMemo(() => {
     const items: AttentionItem[] = [];
     for (const e of envelopes) {
@@ -849,9 +863,10 @@ export default function BudgetPage() {
           <>
             <BudgetStatStrip
               leftToBudget={incomePlan?.availableToBudget ?? null}
-              net={(summary?.totalIncome ?? 0) - (summary?.totalExpenses ?? 0)}
               billsDueCount={attentionItems.filter((i) => i.key.startsWith("bill-")).length}
               alertCount={attentionItems.length}
+              daysLeft={daysLeft}
+              spentPct={spentPctOfIncome}
             />
             <BudgetOverviewHero month={month} summary={summary} incomePlan={incomePlan} envelopeSpent={envelopeSpent} />
             <BudgetMonthNoteBanner token={tok} actor={actor} month={month} onSaved={load} />
@@ -897,6 +912,7 @@ export default function BudgetPage() {
             envelopes={envelopes}
             transactions={monthTxAll}
             notifications={notifications}
+            month={month}
             onViewCategory={viewCategoryInLedger}
             onViewMerchant={viewMerchantInLedger}
           />

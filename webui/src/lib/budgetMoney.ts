@@ -1,7 +1,15 @@
 import type { CSSProperties } from "react";
 
+/** Tabular-figure money text — keeps digits column-aligned like Monarch/Copilot tables. */
+export const MONEY_TEXT = "font-mono tabular-nums tracking-tight";
+
 export function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** Signed display money with +/− prefix. */
+export function formatSignedMoney(n: number): string {
+  return `${n < 0 ? "−" : "+"}$${formatMoney(Math.abs(n))}`;
 }
 
 export function formatMonthLong(ym: string): string {

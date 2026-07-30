@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { getBudgetEnvelopes, putBudgetEnvelope, type BudgetCategory, type BudgetEnvelope } from "../../api";
-import { categoryDotStyle, formatMoney } from "../../lib/budgetMoney";
+import { MONEY_TEXT, categoryDotStyle, formatMoney } from "../../lib/budgetMoney";
+import PaceBar, { monthTimePct, paceState } from "./PaceBar";
 
 function priorMonth(ym: string): string {
   const [y, m] = ym.split("-").map(Number);
@@ -22,8 +23,8 @@ type Props = {
 };
 
 /**
- * Envelope board: one card per category with progress, remaining, target editing,
- * and quick actions (log spend / view spending).
+ * Envelope board: one card per category with pacing progress, remaining, target editing,
+ * and quick actions (log spend / view spending). Sorts by pacing risk (over → warn → rest).
  */
 export default function BudgetEnvelopeEditor({
   token,
@@ -44,6 +45,17 @@ export default function BudgetEnvelopeEditor({
 
   const householdCats = categories.filter((c) => c.visibility !== "personal");
   const dirtyCount = Object.keys(drafts).length + Object.keys(leaveDrafts).length;
+  const timePct = monthTimePct(month);
+
+  const rank: Record<string, number> = { over: 0, warn: 1, pace: 2, under: 3, none: 4 };
+  const sortedCats = [...householdCats].sort((a, b) => {
+    const ea = envByCat.get(a.id);
+    const eb = envByCat.get(b.id);
+    const sa = paceState(ea?.percentUsed ?? 0, timePct, ea != null && ea.targetAmount > 0);
+    const sb = paceState(eb?.percentUsed ?? 0, timePct, eb != null && eb.targetAmount > 0);
+    if (rank[sa] !== rank[sb]) return rank[sa] - rank[sb];
+    return (eb?.actualAmount ?? 0) - (ea?.actualAmount ?? 0);
+  });
 
   async function saveAll(e: React.FormEvent) {
     e.preventDefault();
@@ -145,70 +157,85 @@ export default function BudgetEnvelopeEditor({
           )}
         </div>
       )}
-      <ul className="grid gap-3 md:grid-cols-2">
-        {householdCats.map((cat) => {
+      <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {sortedCats.map((cat) => {
           const env = envByCat.get(cat.id);
+          const hasTarget = env != null && env.targetAmount > 0;
           const pct = env?.percentUsed ?? 0;
-          const bar = Math.min(100, pct);
           const targetVal = drafts[cat.id] ?? (env ? String(env.targetAmount) : "");
           const leaveVal = leaveDrafts[cat.id] ?? (env?.leaveAmount ? String(env.leaveAmount) : "");
           const remaining = env ? env.remaining : null;
           return (
-            <li key={cat.id} className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+            <li
+              key={cat.id}
+              className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 transition-colors hover:border-slate-700"
+            >
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={categoryDotStyle(cat.color)} aria-hidden />
                   <span className="truncate font-medium text-slate-200">{cat.name}</span>
                 </span>
-                <span className={`text-xs ${remaining != null && remaining < 0 ? "text-red-300" : "text-slate-500"}`}>
-                  {env
+                <span
+                  className={`${MONEY_TEXT} text-xs ${
+                    remaining != null && remaining < 0 ? "text-rose-400" : "text-slate-500"
+                  }`}
+                >
+                  {hasTarget
                     ? remaining != null && remaining < 0
                       ? `$${formatMoney(Math.abs(remaining))} over`
                       : `$${formatMoney(remaining ?? 0)} left`
                     : "no target"}
                 </span>
               </div>
+
               <button
                 type="button"
                 onClick={() => onViewSpending?.(cat.id)}
-                className="mb-2 block w-full text-left"
+                className="mb-1 block w-full text-left"
                 title={onViewSpending ? `View ${cat.name} spending in Ledger` : cat.name}
               >
-                <div className="h-2 overflow-hidden rounded-full bg-slate-800">
-                  <div
-                    className={`h-full ${pct >= 100 ? "bg-red-500" : pct >= 85 ? "bg-amber-500" : "bg-emerald-600"}`}
-                    style={{ width: `${bar}%` }}
-                  />
-                </div>
-                <p className="mt-1 text-[11px] text-slate-500">
-                  Spent ${formatMoney(env?.actualAmount ?? 0)}
-                  {env ? ` of $${formatMoney(env.targetAmount)} (${pct.toFixed(0)}%)` : ""}
+                <PaceBar spentPct={pct} timePct={timePct} hasTarget={hasTarget} />
+                <p className={`mt-1 text-[11px] ${MONEY_TEXT} text-slate-500`}>
+                  ${formatMoney(env?.actualAmount ?? 0)}
+                  {hasTarget ? ` of $${formatMoney(env.targetAmount)}` : " spent"}
+                  {hasTarget && env?.leaveAmount != null && env.leaveAmount > 0 && remaining != null && (
+                    <span className="ml-1 text-cyan-400/80">
+                      · aim leave ${formatMoney(env.leaveAmount)}
+                      {remaining < env.leaveAmount ? " (below)" : ""}
+                    </span>
+                  )}
                 </p>
               </button>
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="flex items-center gap-2 text-xs text-slate-400">
-                  Target $
-                  <input
-                    value={targetVal}
-                    onChange={(e) => setDrafts((d) => ({ ...d, [cat.id]: e.target.value }))}
-                    className="w-24 hb-input px-2 py-1 text-sm text-slate-100"
-                  />
-                </label>
-                <label className="flex items-center gap-2 text-xs text-slate-400" title="Soft aim — try to leave at least this much unspent">
-                  Leave $
-                  <input
-                    value={leaveVal}
-                    onChange={(e) => setLeaveDrafts((d) => ({ ...d, [cat.id]: e.target.value }))}
-                    placeholder="0"
-                    className="w-20 hb-input px-2 py-1 text-sm text-slate-100"
-                  />
-                </label>
-                {env?.leaveAmount != null && env.leaveAmount > 0 && remaining != null && (
-                  <span className="text-[11px] text-cyan-400/80">
-                    Aim: leave ${formatMoney(env.leaveAmount)}
-                    {remaining < env.leaveAmount ? " — below aim" : ""}
+
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-1.5 text-xs text-slate-400">
+                  Target
+                  <span className={`inline-flex items-center gap-0.5 rounded hb-input px-1.5 py-0.5 ${MONEY_TEXT}`}>
+                    <span className="text-slate-500">$</span>
+                    <input
+                      value={targetVal}
+                      onChange={(e) => setDrafts((d) => ({ ...d, [cat.id]: e.target.value }))}
+                      inputMode="decimal"
+                      className="w-20 bg-transparent text-sm text-slate-100 outline-none"
+                    />
                   </span>
-                )}
+                </label>
+                <label
+                  className="flex items-center gap-1.5 text-xs text-slate-400"
+                  title="Soft aim — try to leave at least this much unspent"
+                >
+                  Leave
+                  <span className={`inline-flex items-center gap-0.5 rounded hb-input px-1.5 py-0.5 ${MONEY_TEXT}`}>
+                    <span className="text-slate-500">$</span>
+                    <input
+                      value={leaveVal}
+                      onChange={(e) => setLeaveDrafts((d) => ({ ...d, [cat.id]: e.target.value }))}
+                      placeholder="0"
+                      inputMode="decimal"
+                      className="w-16 bg-transparent text-sm text-slate-100 outline-none"
+                    />
+                  </span>
+                </label>
                 {onLogSpend && (
                   <button
                     type="button"

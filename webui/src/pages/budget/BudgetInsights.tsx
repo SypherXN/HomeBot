@@ -1,12 +1,14 @@
 import { useMemo } from "react";
 import type { BudgetEnvelope, BudgetNotificationItem, BudgetTransactionListItem } from "../../api";
-import { formatMoney } from "../../lib/budgetMoney";
+import { MONEY_TEXT, formatMoney } from "../../lib/budgetMoney";
 import { titleCase } from "../../lib/titleCase";
+import PaceBar, { monthTimePct } from "./PaceBar";
 
 type Props = {
   envelopes: BudgetEnvelope[];
   transactions: BudgetTransactionListItem[];
   notifications: BudgetNotificationItem[];
+  month: string;
   onViewCategory?: (categoryId: number) => void;
   onViewMerchant?: (merchant: string) => void;
 };
@@ -18,10 +20,12 @@ export default function BudgetInsights({
   envelopes,
   transactions,
   notifications,
+  month,
   onViewCategory,
   onViewMerchant,
 }: Props) {
   const withTargets = envelopes.filter((e) => e.targetAmount > 0);
+  const timePct = monthTimePct(month);
   const topMerchants = useMemo(() => {
     const map = new Map<string, number>();
     for (const t of transactions) {
@@ -67,37 +71,23 @@ export default function BudgetInsights({
         <div>
           <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Budget vs actual</h3>
           <ul className="space-y-2.5">
-            {withTargets.map((e) => {
-              const pct = Math.min(100, e.percentUsed);
-              return (
-                <li key={e.categoryId}>
-                  <button
-                    type="button"
-                    className="block w-full text-left"
-                    onClick={() => onViewCategory?.(e.categoryId)}
-                  >
-                    <div className="mb-1 flex justify-between gap-2 text-sm">
-                      <span className="text-slate-200">{titleCase(e.categoryName)}</span>
-                      <span className="text-xs text-slate-500">
-                        ${formatMoney(e.actualAmount)} / ${formatMoney(e.targetAmount)}
-                      </span>
-                    </div>
-                    <div className="hb-progress-track h-2 overflow-hidden rounded-full">
-                      <div
-                        className={`h-full transition-all ${
-                          e.percentUsed >= 100
-                            ? "bg-red-500"
-                            : e.percentUsed >= 85
-                              ? "bg-amber-500"
-                              : "bg-[var(--hb-progress-fill,#059669)]"
-                        }`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </button>
-                </li>
-              );
-            })}
+            {withTargets.map((e) => (
+              <li key={e.categoryId}>
+                <button
+                  type="button"
+                  className="block w-full text-left"
+                  onClick={() => onViewCategory?.(e.categoryId)}
+                >
+                  <div className="mb-1 flex justify-between gap-2 text-sm">
+                    <span className="text-slate-200">{titleCase(e.categoryName)}</span>
+                    <span className={`text-xs ${MONEY_TEXT} text-slate-500`}>
+                      ${formatMoney(e.actualAmount)} / ${formatMoney(e.targetAmount)}
+                    </span>
+                  </div>
+                  <PaceBar spentPct={e.percentUsed} timePct={timePct} hasTarget={e.targetAmount > 0} />
+                </button>
+              </li>
+            ))}
           </ul>
         </div>
       )}

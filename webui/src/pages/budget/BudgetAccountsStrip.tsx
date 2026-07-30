@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import type { BudgetAccount } from "../../api";
-import { formatMoney } from "../../lib/budgetMoney";
+import { MONEY_TEXT, formatMoney } from "../../lib/budgetMoney";
 
 type Props = {
   accounts: BudgetAccount[];
@@ -24,7 +24,7 @@ export default function BudgetAccountsStrip({ accounts, onManage }: Props) {
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-medium text-white">Accounts</h2>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-slate-500">
+          <span className={`text-xs text-slate-500 ${MONEY_TEXT}`}>
             Cash ${formatMoney(cash)}
             {debt > 0 ? ` · credit balances $${formatMoney(debt)}` : ""}
           </span>
@@ -49,8 +49,8 @@ export default function BudgetAccountsStrip({ accounts, onManage }: Props) {
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="truncate text-sm text-slate-300">{a.name}</span>
                   <span
-                    className={`shrink-0 text-sm font-semibold ${
-                      a.currentBalance < 0 ? "text-red-300" : "text-white"
+                    className={`shrink-0 text-sm font-semibold ${MONEY_TEXT} ${
+                      a.currentBalance < 0 ? "text-rose-400" : "text-white"
                     }`}
                   >
                     {a.currentBalance < 0 ? "−" : ""}${formatMoney(Math.abs(a.currentBalance))}
@@ -58,13 +58,13 @@ export default function BudgetAccountsStrip({ accounts, onManage }: Props) {
                 </div>
                 {utilization != null && (
                   <div className="mt-1.5">
-                    <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
+                    <div className="hb-progress-track h-1.5 overflow-hidden rounded-full">
                       <div
-                        className={`h-full ${utilization >= 80 ? "bg-red-500" : utilization >= 50 ? "bg-amber-500" : "bg-emerald-600"}`}
+                        className={`h-full ${utilization >= 80 ? "bg-rose-500" : utilization >= 50 ? "bg-amber-500" : "bg-emerald-500"}`}
                         style={{ width: `${utilization}%` }}
                       />
                     </div>
-                    <p className="mt-1 text-[11px] text-slate-500">
+                    <p className={`mt-1 text-[11px] text-slate-500 ${MONEY_TEXT}`}>
                       {utilization.toFixed(0)}% of ${formatMoney(a.creditLimit!)} limit
                     </p>
                   </div>
