@@ -6,11 +6,14 @@ import { useTheme } from "../theme/ThemeProvider";
 import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
 import { useHorizontalSwipe } from "../hooks/useHorizontalSwipe";
 import { useUndoToast } from "../hooks/useUndoToast";
+import { useToasts } from "../components/toastContext";
 import { validActorId } from "../lib/validation";
 import { titleCase } from "../lib/titleCase";
-import { formatMoney, formatMonthLong } from "../lib/budgetMoney";
+import { layerForAssignee } from "../lib/personLayers";
+import { categoryDotStyle, formatMoney, formatMonthLong } from "../lib/budgetMoney";
 import {
   deleteBudgetTransaction,
+  patchBudgetTransaction,
   getBudgetAccounts,
   getBudgetAudit,
   getBudgetCategories,
@@ -50,7 +53,9 @@ import {
 import { highlightRowClass, useSearchHighlightId } from "../lib/searchHighlight";
 import { Icon } from "../components/icons";
 import Sheet from "../components/Sheet";
+import ConfirmDialog from "../components/ConfirmDialog";
 import BudgetAccountsPanel from "./budget/BudgetAccountsPanel";
+import BudgetAccountsStrip from "./budget/BudgetAccountsStrip";
 import BudgetAnnualSnapshot from "./budget/BudgetAnnualSnapshot";
 import BudgetAttentionInbox, { type AttentionItem } from "./budget/BudgetAttentionInbox";
 import BudgetCategoryEditor from "./budget/BudgetCategoryEditor";
@@ -61,15 +66,18 @@ import BudgetBillsRecurring from "./budget/BudgetBillsRecurring";
 import BudgetCurrencyPanel from "./budget/BudgetCurrencyPanel";
 import BudgetCsvImport from "./budget/BudgetCsvImport";
 import BudgetEnvelopeEditor from "./budget/BudgetEnvelopeEditor";
+import BudgetFairnessSnapshot from "./budget/BudgetFairnessSnapshot";
 import BudgetFiltersPanel, { type BudgetFilters } from "./budget/BudgetFiltersPanel";
+import BudgetGoalsCard from "./budget/BudgetGoalsCard";
 import BudgetGoalsPanel from "./budget/BudgetGoalsPanel";
 import BudgetIncomeBanner from "./budget/BudgetIncomeBanner";
 import BudgetOverviewHero from "./budget/BudgetOverviewHero";
-import BudgetQuickAdd from "./budget/BudgetQuickAdd";
+import BudgetQuickAdd, { type QuickAddPrefill } from "./budget/BudgetQuickAdd";
 import BudgetSetupChecklist from "./budget/BudgetSetupChecklist";
 import BudgetTaxSummary from "./budget/BudgetTaxSummary";
 import BudgetTransactionForm from "./budget/BudgetTransactionForm";
 import BudgetTrendChart from "./budget/BudgetTrendChart";
+import BudgetUpcomingBills from "./budget/BudgetUpcomingBills";
 
 const CHART_COLORS_DARK = ["#00f0ff", "#a855f7", "#34d399", "#fbbf24", "#fb7185", "#38bdf8", "#e879f9", "#a3e635"];
 // Deeper twins of the neon ramp so slices stay legible on the light canvas.
@@ -94,9 +102,47 @@ function shiftMonth(ym: string, delta: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function ordinal(n: number): string {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] ?? s[v] ?? s[0]);
+}
+
+function overBudgetMessage(categoryName: string, spent: number, target: number): string {
+  return `${categoryName} is over budget by $${formatMoney(spent - target)} ($${formatMoney(spent)} of $${formatMoney(target)}).`;
+}
+
+function paceMessage(categoryName: string, projected: number, target: number, mtd: number): string {
+  return `At this rate you'll spend about $${formatMoney(projected)} on ${categoryName} this month (limit $${formatMoney(target)}, $${formatMoney(mtd)} so far).`;
+}
+
+function hasActiveFilters(f: BudgetFilters, spender: string, categoryId: number | null): boolean {
+  return Boolean(
+    categoryId != null ||
+      spender.trim() ||
+      f.merchant.trim() ||
+      f.noteContains.trim() ||
+      f.amountMin.trim() ||
+      f.amountMax.trim() ||
+      f.tag.trim()
+  );
+}
+
+function dayLabel(isoDay: string): string {
+  const d = new Date(`${isoDay}T12:00:00`);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  const key = (x: Date) => `${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`;
+  if (key(d) === key(today)) return "Today";
+  if (key(d) === key(yesterday)) return "Yesterday";
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+
 type ChartMode = "category" | "user";
 type BudgetTab = "overview" | "ledger" | "plan";
 type PlanSection = "plan" | "accounts" | "bills" | "goals" | "tools";
+type ScopeView = "household" | "all" | "mine";
 
 export default function BudgetPage() {
   const { token, actorUserId } = useAuth();
@@ -106,6 +152,7 @@ export default function BudgetPage() {
   const actor = validActorId(actorUserId) ? actorUserId.trim() : "";
   const roster = useDiscordGuildRoster(token);
   const undoToast = useUndoToast();
+  const { showToast } = useToasts();
   const [params] = useSearchParams();
   const highlightId = useSearchHighlightId();
   const highlightRef = useRef<HTMLLIElement>(null);
@@ -120,6 +167,7 @@ export default function BudgetPage() {
   const [scope, setScope] = useState<"household" | "all">("household");
   const [filters, setFilters] = useState<BudgetFilters>(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<BudgetFilters>(EMPTY_FILTERS);
+  const [categoryFilter, setCategoryFilter] = useState<number | null>(null);
 
   const [categories, setCategories] = useState<BudgetCategory[]>([]);
   const [allTags, setAllTags] = useState<string[]>([]);
@@ -153,6 +201,12 @@ export default function BudgetPage() {
   const [planSection, setPlanSection] = useState<PlanSection>("plan");
   const [addOpen, setAddOpen] = useState(false);
   const [dismissBusyKey, setDismissBusyKey] = useState<string | null>(null);
+  const [quickAddPrefill, setQuickAddPrefill] = useState<QuickAddPrefill>(null);
+  const [deleteTarget, setDeleteTarget] = useState<BudgetTransactionListItem | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkCategoryId, setBulkCategoryId] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   useEffect(() => {
     if (highlightId) setTab("ledger");
@@ -162,14 +216,32 @@ export default function BudgetPage() {
   const [editTx, setEditTx] = useState<BudgetTransactionListItem | null>(null);
 
   const categoryNameById = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories]);
-
-  const stepMonth = useCallback(
-    (delta: number) => {
-      setListPage(0);
-      setMonth((m) => shiftMonth(m, delta));
-    },
-    []
+  const categoryColorByName = useMemo(
+    () => new Map(categories.map((c) => [c.name.toLowerCase(), c.color] as const)),
+    [categories]
   );
+
+  const scopeView: ScopeView =
+    scope === "all" && spenderFilter && spenderFilter === actor ? "mine" : scope === "all" ? "all" : "household";
+
+  function setScopeView(v: ScopeView) {
+    setListPage(0);
+    if (v === "household") {
+      setScope("household");
+      setSpenderFilter("");
+    } else if (v === "all") {
+      setScope("all");
+      setSpenderFilter("");
+    } else {
+      setScope("all");
+      setSpenderFilter(actor);
+    }
+  }
+
+  const stepMonth = useCallback((delta: number) => {
+    setListPage(0);
+    setMonth((m) => shiftMonth(m, delta));
+  }, []);
   const swipe = useHorizontalSwipe((dir) => stepMonth(dir));
 
   const dismissNotification = useCallback(
@@ -189,31 +261,20 @@ export default function BudgetPage() {
     [tok, actor]
   );
 
-  const load = useCallback(async () => {
+  // Core month-scoped data; not refetched when only the ledger page / trend window changes.
+  const loadCore = useCallback(async () => {
     if (!tok) return;
-    setError(null);
     try {
       const spenderQ = spenderFilter || undefined;
-      const [cats, tags, sm, catSlices, userSlices, txs, envs, g, tr, ip, fc, notes, au, tax, rates, billRows, recurringRows, accts] =
+      const [cats, tags, sm, catSlices, userSlices, envs, g, ip, fc, notes, au, tax, rates, billRows, recurringRows, accts] =
         await Promise.all([
           getBudgetCategories(tok),
           getBudgetTags(tok).catch(() => [] as string[]),
           getBudgetSummaryMonth(tok, month, { spentByUserId: spenderQ, scope }),
           getBudgetSummaryByCategory(tok, month, { spentByUserId: spenderQ, scope }),
           getBudgetSummaryByUser(tok, month),
-          getBudgetTransactions(tok, listPage, {
-            month,
-            spentByUserId: spenderQ,
-            scope,
-            merchant: appliedFilters.merchant || undefined,
-            noteContains: appliedFilters.noteContains || undefined,
-            amountMin: appliedFilters.amountMin || undefined,
-            amountMax: appliedFilters.amountMax || undefined,
-            tag: appliedFilters.tag || undefined,
-          }),
           getBudgetEnvelopes(tok, month),
           getBudgetGoals(tok),
-          getBudgetTrends(tok, trendMonths, trendGroupBy),
           getBudgetIncomePlan(tok, month).catch(() => null),
           getBudgetForecast(tok, month).catch(() => [] as BudgetForecastCategory[]),
           getBudgetNotifications(tok).catch(() => [] as BudgetNotificationItem[]),
@@ -221,18 +282,16 @@ export default function BudgetPage() {
           getBudgetTaxSummary(tok, Number(month.slice(0, 4))).catch(() => [] as BudgetTaxSummaryLine[]),
           getBudgetExchangeRates(tok).catch(() => [] as BudgetExchangeRate[]),
           getBudgetBills(tok).catch(() => [] as BudgetBill[]),
-        getBudgetRecurring(tok).catch(() => [] as BudgetRecurring[]),
-        getBudgetAccounts(tok).catch(() => [] as BudgetAccount[]),
-      ]);
+          getBudgetRecurring(tok).catch(() => [] as BudgetRecurring[]),
+          getBudgetAccounts(tok).catch(() => [] as BudgetAccount[]),
+        ]);
       setCategories(cats);
       setAllTags(tags);
       setSummary(sm);
       setByCategory(catSlices);
       setByUser(userSlices);
-      setTxData(txs);
       setEnvelopes(envs);
       setGoals(g);
-      setTrends(tr);
       setIncomePlan(ip);
       setForecast(fc);
       setNotifications(notes);
@@ -245,17 +304,71 @@ export default function BudgetPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [tok, month, spenderFilter, scope, listPage, appliedFilters, trendMonths, trendGroupBy]);
+  }, [tok, month, spenderFilter, scope]);
+
+  const loadTx = useCallback(async () => {
+    if (!tok) return;
+    try {
+      const txs = await getBudgetTransactions(tok, listPage, {
+        month,
+        spentByUserId: spenderFilter || undefined,
+        scope,
+        categoryId: categoryFilter != null ? String(categoryFilter) : undefined,
+        merchant: appliedFilters.merchant || undefined,
+        noteContains: appliedFilters.noteContains || undefined,
+        amountMin: appliedFilters.amountMin || undefined,
+        amountMax: appliedFilters.amountMax || undefined,
+        tag: appliedFilters.tag || undefined,
+      });
+      setTxData(txs);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, [tok, month, spenderFilter, scope, listPage, appliedFilters, categoryFilter]);
+
+  const loadTrends = useCallback(async () => {
+    if (!tok) return;
+    try {
+      setTrends(await getBudgetTrends(tok, trendMonths, trendGroupBy));
+    } catch {
+      setTrends([]);
+    }
+  }, [tok, trendMonths, trendGroupBy]);
+
+  const load = useCallback(async () => {
+    if (!tok) return;
+    setError(null);
+    await Promise.all([loadCore(), loadTx(), loadTrends()]);
+  }, [tok, loadCore, loadTx, loadTrends]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadCore();
+  }, [loadCore]);
+  useEffect(() => {
+    void loadTx();
+  }, [loadTx]);
+  useEffect(() => {
+    void loadTrends();
+  }, [loadTrends]);
 
   const chartData = (chartMode === "category" ? byCategory : byUser).map((slice) => ({
     key: slice.key,
     label: titleCase(slice.label),
     total: slice.total,
   }));
+
+  function sliceColor(slice: BudgetSummarySlice, index: number): string {
+    if (chartMode === "category") {
+      const c = categoryColorByName.get(slice.label.toLowerCase());
+      if (c?.trim()) return c.trim();
+    } else {
+      const layer = layerForAssignee(slice.key);
+      // Person dot classes are Tailwind; extract the hex from the palette via computed fallback.
+      const dotHex = DOT_HEX[layer.dot] ?? null;
+      if (dotHex) return dotHex;
+    }
+    return chartColors[index % chartColors.length];
+  }
 
   const envelopeSpent = useMemo(() => envelopes.reduce((sum, e) => sum + e.actualAmount, 0), [envelopes]);
 
@@ -271,7 +384,6 @@ export default function BudgetPage() {
     }
     for (const f of forecast) {
       if (f.envelopeTarget != null && f.envelopeTarget > 0 && f.projectedMonthEnd > f.envelopeTarget) {
-        // Skip when already flagged as over-budget from actuals.
         if (items.some((i) => i.key === `over-${f.categoryId}`)) continue;
         items.push({
           key: `pace-${f.categoryId}`,
@@ -320,14 +432,83 @@ export default function BudgetPage() {
     return items;
   }, [envelopes, forecast, bills, month, txData, notifications, actor, dismissBusyKey, dismissNotification]);
 
+  const txGroups = useMemo(() => {
+    if (!txData) return [];
+    const groups = new Map<string, BudgetTransactionListItem[]>();
+    for (const row of txData.items) {
+      const day = row.transactionDate?.slice(0, 10) || "undated";
+      const arr = groups.get(day) ?? [];
+      arr.push(row);
+      groups.set(day, arr);
+    }
+    return [...groups.entries()].map(([day, rows]) => ({
+      day,
+      rows,
+      spent: rows.filter((r) => r.type === "expense").reduce((s, r) => s + r.amount, 0),
+    }));
+  }, [txData]);
+
   const isFresh = categories.length === 0 && (txData?.items.length ?? 0) === 0 && summary != null;
 
-  async function handleDelete(row: BudgetTransactionListItem) {
-    if (!tok || !actor) return;
-    if (!confirm("Delete this transaction?")) return;
-    await deleteBudgetTransaction(tok, actor, row.id);
-    undoToast(`Deleted ${titleCase(row.categoryName ?? row.type)} $${formatMoney(row.amount)}`, () => void load());
-    await load();
+  async function confirmDelete() {
+    if (!tok || !actor || !deleteTarget) return;
+    setDeleteBusy(true);
+    try {
+      await deleteBudgetTransaction(tok, actor, deleteTarget.id);
+      undoToast(
+        `Deleted ${titleCase(deleteTarget.categoryName ?? deleteTarget.type)} $${formatMoney(deleteTarget.amount)}`,
+        () => void load()
+      );
+      setDeleteTarget(null);
+      await load();
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
+  function toggleSelect(id: number) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function bulkSetCategory() {
+    if (!tok || !actor || !bulkCategoryId || selected.size === 0) return;
+    setBulkBusy(true);
+    try {
+      const catId = Number(bulkCategoryId);
+      for (const id of selected) {
+        await patchBudgetTransaction(tok, actor, id, { categoryId: catId });
+      }
+      showToast({
+        message: `Moved ${selected.size} transaction${selected.size === 1 ? "" : "s"} to ${categoryNameById.get(catId) ?? "category"}.`,
+        kind: "success",
+      });
+      setSelected(new Set());
+      setBulkCategoryId("");
+      await load();
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function bulkMarkCleared() {
+    if (!tok || !actor || selected.size === 0) return;
+    setBulkBusy(true);
+    try {
+      const clearedAt = new Date().toISOString();
+      for (const id of selected) {
+        await patchBudgetTransaction(tok, actor, id, { isPending: false, clearedAt });
+      }
+      showToast({ message: `Marked ${selected.size} transaction${selected.size === 1 ? "" : "s"} cleared.`, kind: "success" });
+      setSelected(new Set());
+      await load();
+    } finally {
+      setBulkBusy(false);
+    }
   }
 
   function applyFilters() {
@@ -339,7 +520,33 @@ export default function BudgetPage() {
     setFilters(EMPTY_FILTERS);
     setAppliedFilters(EMPTY_FILTERS);
     setSpenderFilter("");
+    setCategoryFilter(null);
     setListPage(0);
+  }
+
+  function viewCategoryInLedger(categoryId: number) {
+    setCategoryFilter(categoryId);
+    setListPage(0);
+    setTab("ledger");
+  }
+
+  function viewUserInLedger(userId: string) {
+    setScope("all");
+    setSpenderFilter(userId);
+    setListPage(0);
+    setTab("ledger");
+  }
+
+  function onPieClick(index: number) {
+    const slices = chartMode === "category" ? byCategory : byUser;
+    const slice = slices[index];
+    if (!slice) return;
+    if (chartMode === "category") {
+      const id = Number(slice.key);
+      if (id > 0) viewCategoryInLedger(id);
+    } else if (slice.key && slice.key !== "0") {
+      viewUserInLedger(slice.key);
+    }
   }
 
   function goPlan(section: PlanSection) {
@@ -402,18 +609,29 @@ export default function BudgetPage() {
           </button>
         </div>
         <div>
-          <label className="mb-1 block text-xs text-slate-400">Scope</label>
-          <select
-            value={scope}
-            onChange={(e) => {
-              setListPage(0);
-              setScope(e.target.value as "household" | "all");
-            }}
-            className="hb-input px-3 py-2 text-slate-100"
-          >
-            <option value="household">Household</option>
-            <option value="all">Include Personal</option>
-          </select>
+          <label className="mb-1 block text-xs text-slate-400">Whose money</label>
+          <div className="flex overflow-hidden rounded-lg border border-slate-700">
+            {(
+              [
+                ["household", "Household"],
+                ["all", "Include personal"],
+                ["mine", "Just me"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                disabled={id === "mine" && !actor}
+                title={id === "mine" && !actor ? "Set “Acting as” in Settings first" : undefined}
+                onClick={() => setScopeView(id)}
+                className={`px-3 py-2 text-sm ${
+                  scopeView === id ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white" : "bg-slate-900/60 text-slate-400 hover:text-slate-200"
+                } disabled:cursor-not-allowed disabled:opacity-50`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
         <span className="hidden text-xs text-slate-500 md:inline">Swipe left/right to change month on mobile</span>
       </div>
@@ -474,8 +692,31 @@ export default function BudgetPage() {
               accounts={accounts}
               roster={roster}
               onSaved={load}
+              prefill={quickAddPrefill}
+              onPrefillConsumed={() => setQuickAddPrefill(null)}
             />
           </section>
+
+          <BudgetUpcomingBills
+            token={tok}
+            actor={actor}
+            bills={bills}
+            onSaved={load}
+            onToast={(msg) => undoToast(msg, () => void load())}
+            onManageBills={() => goPlan("bills")}
+          />
+
+          <BudgetAccountsStrip accounts={accounts} onManage={() => goPlan("accounts")} />
+
+          <BudgetGoalsCard
+            token={tok}
+            actor={actor}
+            goals={goals}
+            availableToBudget={incomePlan?.availableToBudget ?? null}
+            onSaved={load}
+            onToast={(msg) => undoToast(msg, () => void load())}
+            onManageGoals={() => goPlan("goals")}
+          />
 
           {summary && summary.totalExpenses + summary.totalIncome > 0 ? (
             <section className="hb-card p-4">
@@ -501,33 +742,43 @@ export default function BudgetPage() {
               {chartData.length === 0 ? (
                 <p className="text-sm text-slate-500">No expense data for {formatMonthLong(month)} yet.</p>
               ) : (
-                <div className="h-72 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={chartData}
-                        dataKey="total"
-                        nameKey="label"
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={100}
-                        label={({ name, percent }) => {
-                          const pct = typeof percent === "number" ? (percent * 100).toFixed(0) : "0";
-                          return `${String(name ?? "")} ${pct}%`;
-                        }}
-                      >
-                        {chartData.map((_, i) => (
-                          <Cell key={i} fill={chartColors[i % chartColors.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(v) => `$${formatMoney(Number(v ?? 0))}`} />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
+                <>
+                  <div className="h-72 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={chartData}
+                          dataKey="total"
+                          nameKey="label"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={100}
+                          label={({ name, percent }) => {
+                            const pct = typeof percent === "number" ? (percent * 100).toFixed(0) : "0";
+                            return `${String(name ?? "")} ${pct}%`;
+                          }}
+                        >
+                          {(chartMode === "category" ? byCategory : byUser).map((slice, i) => (
+                            <Cell
+                              key={slice.key}
+                              fill={sliceColor(slice, i)}
+                              onClick={() => onPieClick(i)}
+                              cursor="pointer"
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(v) => `$${formatMoney(Number(v ?? 0))}`} />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <p className="text-xs text-slate-500">Tap a slice to open it in the Ledger.</p>
+                </>
               )}
             </section>
           ) : null}
+
+          {chartMode === "category" && <BudgetFairnessSnapshot byUser={byUser} onPickUser={viewUserInLedger} />}
 
           <section className="hb-card p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -572,6 +823,8 @@ export default function BudgetPage() {
               accounts={accounts}
               roster={roster}
               onSaved={load}
+              prefill={quickAddPrefill}
+              onPrefillConsumed={() => setQuickAddPrefill(null)}
             />
           </section>
 
@@ -591,17 +844,29 @@ export default function BudgetPage() {
           />
 
           <section className="hb-card p-4">
-            <h2 className="mb-3 text-lg font-medium text-white">Transactions</h2>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-lg font-medium text-white">Transactions</h2>
+              {categoryFilter != null && (
+                <button
+                  type="button"
+                  onClick={() => setCategoryFilter(null)}
+                  className="flex items-center gap-1 rounded-full border border-blue-700/60 bg-blue-950/40 px-3 py-1 text-xs text-blue-100 hover:bg-blue-950/70"
+                >
+                  Category: {categoryNameById.get(categoryFilter) ?? `#${categoryFilter}`}
+                  <span aria-hidden>✕</span>
+                </button>
+              )}
+            </div>
             {!txData ? (
               <p className="text-slate-500">Loading…</p>
             ) : txData.items.length === 0 ? (
               <div className="rounded-lg border border-dashed border-slate-700 p-6 text-center">
                 <p className="text-sm text-slate-400">
-                  {hasActiveFilters(appliedFilters, spenderFilter)
+                  {hasActiveFilters(appliedFilters, spenderFilter, categoryFilter)
                     ? "No transactions match these filters."
                     : `Nothing logged for ${formatMonthLong(month)} yet.`}
                 </p>
-                {!hasActiveFilters(appliedFilters, spenderFilter) && actor && (
+                {!hasActiveFilters(appliedFilters, spenderFilter, categoryFilter) && actor && (
                   <button
                     type="button"
                     onClick={() => setAddOpen(true)}
@@ -610,7 +875,7 @@ export default function BudgetPage() {
                     Add the first one
                   </button>
                 )}
-                {hasActiveFilters(appliedFilters, spenderFilter) && (
+                {hasActiveFilters(appliedFilters, spenderFilter, categoryFilter) && (
                   <button
                     type="button"
                     onClick={clearFilters}
@@ -621,86 +886,133 @@ export default function BudgetPage() {
                 )}
               </div>
             ) : (
-              <ul className="divide-y divide-slate-800">
-                {txData.items.map((row) => (
-                  <li
-                    key={row.id}
-                    ref={row.id === highlightId ? highlightRef : undefined}
-                    className={`py-3 text-sm ${highlightRowClass(row.id, highlightId)}`}
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <span className={row.type === "income" ? "text-emerald-400" : "text-amber-300"}>
-                          ${formatMoney(row.amount)}
-                        </span>{" "}
-                        <span className="text-white">
-                          {titleCase(row.categoryName ?? row.type)}
-                        </span>
-                        <span className="text-slate-500"> · {row.spentByMemberLabel}</span>
-                        {row.merchant && <span className="text-slate-500"> · {row.merchant}</span>}
-                        {row.isPending && (
-                          <span className="ml-1 rounded bg-amber-900/50 px-1 text-xs text-amber-200">Pending</span>
-                        )}
-                        {row.type === "expense" && row.categoryId == null && (
-                          <span className="ml-1 rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-400">Uncategorized</span>
-                        )}
-                      </div>
-                      {actor ? (
-                        <span className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setEditTx(row)}
-                            className="text-blue-400 hover:text-blue-300"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void handleDelete(row)}
-                            className="text-red-400 hover:text-red-300"
-                          >
-                            Delete
-                          </button>
-                        </span>
-                      ) : (
-                        <span className="text-xs text-slate-600">Set “Acting as” in Settings to edit</span>
+              <>
+                {txGroups.map((group) => (
+                  <div key={group.day} className="mb-2">
+                    <div className="flex items-baseline justify-between border-b border-slate-800 pb-1 pt-3">
+                      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        {group.day === "undated" ? "No date" : dayLabel(group.day)}
+                      </h3>
+                      {group.spent > 0 && (
+                        <span className="text-xs text-slate-500">spent ${formatMoney(group.spent)}</span>
                       )}
                     </div>
-                    {row.note && <p className="mt-1 text-slate-500">{row.note}</p>}
-                    {row.receiptUrl && (
-                      <p className="mt-1">
-                        <a
-                          href={row.receiptUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-blue-400 hover:underline"
-                        >
-                          Receipt
-                        </a>
-                      </p>
-                    )}
-                    {row.tags.length > 0 && (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {row.tags.map((t) => (
-                          <span key={t} className="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
-                            {t}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {row.splits.length > 0 && (
-                      <ul className="mt-1 text-xs text-slate-500">
-                        {row.splits.map((s) => (
-                          <li key={s.id}>
-                            Split ${formatMoney(s.amount)}
-                            {s.categoryId != null ? ` · ${categoryNameById.get(s.categoryId) ?? "Uncategorized"}` : ""}
+                    <ul className="divide-y divide-slate-800/60">
+                      {group.rows.map((row) => {
+                        const spenderLayer = layerForAssignee(row.spentByUserId);
+                        const catColor = row.categoryName
+                          ? categoryColorByName.get(row.categoryName.toLowerCase())
+                          : undefined;
+                        return (
+                          <li
+                            key={row.id}
+                            ref={row.id === highlightId ? highlightRef : undefined}
+                            className={`py-3 text-sm ${highlightRowClass(row.id, highlightId)}`}
+                          >
+                            <div className="flex items-start gap-2">
+                              {actor && (
+                                <input
+                                  type="checkbox"
+                                  checked={selected.has(row.id)}
+                                  onChange={() => toggleSelect(row.id)}
+                                  aria-label="Select transaction"
+                                  className="mt-1 h-4 w-4 rounded border-slate-600 bg-slate-900"
+                                />
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                  <div>
+                                    <span className={row.type === "income" ? "text-emerald-400" : "text-amber-300"}>
+                                      ${formatMoney(row.amount)}
+                                    </span>{" "}
+                                    {row.categoryName && (
+                                      <span
+                                        className="mr-1 inline-block h-2 w-2 rounded-full align-middle"
+                                        style={categoryDotStyle(catColor)}
+                                        aria-hidden
+                                      />
+                                    )}
+                                    <span className="text-white">
+                                      {titleCase(row.categoryName ?? row.type)}
+                                    </span>
+                                    <span className="text-slate-500">
+                                      {" · "}
+                                      <span
+                                        className={`mr-1 inline-block h-2 w-2 rounded-full align-middle ${spenderLayer.dot}`}
+                                        aria-hidden
+                                      />
+                                      {row.spentByMemberLabel}
+                                    </span>
+                                    {row.merchant && <span className="text-slate-500"> · {row.merchant}</span>}
+                                    {row.isPending && (
+                                      <span className="ml-1 rounded bg-amber-900/50 px-1 text-xs text-amber-200">Pending</span>
+                                    )}
+                                    {row.type === "expense" && row.categoryId == null && (
+                                      <span className="ml-1 rounded bg-slate-800 px-1.5 py-0.5 text-xs text-slate-400">Uncategorized</span>
+                                    )}
+                                  </div>
+                                  {actor ? (
+                                    <span className="flex gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditTx(row)}
+                                        className="text-blue-400 hover:text-blue-300"
+                                      >
+                                        Edit
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setDeleteTarget(row)}
+                                        className="text-red-400 hover:text-red-300"
+                                      >
+                                        Delete
+                                      </button>
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-slate-600">Set “Acting as” in Settings to edit</span>
+                                  )}
+                                </div>
+                                {row.note && <p className="mt-1 text-slate-500">{row.note}</p>}
+                                {row.receiptUrl && (
+                                  <p className="mt-1">
+                                    <a
+                                      href={row.receiptUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-sm text-blue-400 hover:underline"
+                                    >
+                                      Receipt
+                                    </a>
+                                  </p>
+                                )}
+                                {row.tags.length > 0 && (
+                                  <div className="mt-1 flex flex-wrap gap-1">
+                                    {row.tags.map((t) => (
+                                      <span key={t} className="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
+                                        {t}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                {row.splits.length > 0 && (
+                                  <ul className="mt-1 text-xs text-slate-500">
+                                    {row.splits.map((s) => (
+                                      <li key={s.id}>
+                                        Split ${formatMoney(s.amount)}
+                                        {s.categoryId != null ? ` · ${categoryNameById.get(s.categoryId) ?? "Uncategorized"}` : ""}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                            </div>
                           </li>
-                        ))}
-                      </ul>
-                    )}
-                  </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
                 ))}
-              </ul>
+              </>
             )}
             {txData && (txData.hasPrev || txData.hasNext) && (
               <div className="mt-3 flex gap-2">
@@ -766,6 +1078,11 @@ export default function BudgetPage() {
                     categories={categories}
                     envelopes={envelopes}
                     onSaved={load}
+                    onLogSpend={(categoryId) => {
+                      setQuickAddPrefill({ categoryId });
+                      setTab("overview");
+                    }}
+                    onViewSpending={viewCategoryInLedger}
                   />
                 ) : (
                   <p className="text-sm text-slate-500">Set “Acting as” in Settings to edit envelopes.</p>
@@ -862,6 +1179,50 @@ export default function BudgetPage() {
         </button>
       )}
 
+      {selected.size > 0 && (
+        <div className="fixed inset-x-0 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-40 flex justify-center px-4 md:bottom-8">
+          <div className="hb-card flex flex-wrap items-center gap-2 px-4 py-2.5 text-sm shadow-lg">
+            <span className="text-slate-200">{selected.size} selected</span>
+            <select
+              value={bulkCategoryId}
+              onChange={(e) => setBulkCategoryId(e.target.value)}
+              className="hb-input px-2 py-1 text-xs text-slate-100"
+            >
+              <option value="">Set category…</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              disabled={bulkBusy || !bulkCategoryId}
+              onClick={() => void bulkSetCategory()}
+              className="rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+            >
+              Apply
+            </button>
+            <button
+              type="button"
+              disabled={bulkBusy}
+              onClick={() => void bulkMarkCleared()}
+              className="rounded-lg hb-btn-soft px-3 py-1 text-xs text-slate-200 disabled:opacity-50"
+            >
+              Mark cleared
+            </button>
+            <button
+              type="button"
+              disabled={bulkBusy}
+              onClick={() => setSelected(new Set())}
+              className="text-xs text-slate-400 hover:text-slate-200"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       <Sheet open={addOpen} title="Add transaction" onClose={() => setAddOpen(false)}>
         <BudgetTransactionForm
           token={tok}
@@ -876,6 +1237,24 @@ export default function BudgetPage() {
           }}
         />
       </Sheet>
+
+      <ConfirmDialog
+        open={deleteTarget != null}
+        title="Delete this transaction?"
+        danger
+        busy={deleteBusy}
+        confirmLabel="Delete"
+        body={
+          deleteTarget ? (
+            <p>
+              {titleCase(deleteTarget.categoryName ?? deleteTarget.type)} — ${formatMoney(deleteTarget.amount)}
+              {deleteTarget.merchant ? ` at ${deleteTarget.merchant}` : ""}. You can undo right after.
+            </p>
+          ) : null
+        }
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
 
       <BudgetTransactionEditModal
         open={editTx != null}
@@ -892,27 +1271,15 @@ export default function BudgetPage() {
   );
 }
 
-function ordinal(n: number): string {
-  const s = ["th", "st", "nd", "rd"];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] ?? s[v] ?? s[0]);
-}
-
-function overBudgetMessage(categoryName: string, spent: number, target: number): string {
-  return `${categoryName} is over budget by $${formatMoney(spent - target)} ($${formatMoney(spent)} of $${formatMoney(target)}).`;
-}
-
-function paceMessage(categoryName: string, projected: number, target: number, mtd: number): string {
-  return `At this rate you'll spend about $${formatMoney(projected)} on ${categoryName} this month (limit $${formatMoney(target)}, $${formatMoney(mtd)} so far).`;
-}
-
-function hasActiveFilters(f: BudgetFilters, spender: string): boolean {
-  return Boolean(
-    spender.trim() ||
-      f.merchant.trim() ||
-      f.noteContains.trim() ||
-      f.amountMin.trim() ||
-      f.amountMax.trim() ||
-      f.tag.trim()
-  );
-}
+/** Hex lookup for person-layer dot classes (pie slices need real colors, not Tailwind classes). */
+const DOT_HEX: Record<string, string> = {
+  "bg-blue-400": "#60a5fa",
+  "bg-cyan-400": "#22d3ee",
+  "bg-violet-400": "#a78bfa",
+  "bg-emerald-400": "#34d399",
+  "bg-amber-400": "#fbbf24",
+  "bg-rose-400": "#fb7185",
+  "bg-sky-400": "#38bdf8",
+  "bg-fuchsia-400": "#e879f9",
+  "bg-lime-400": "#a3e635",
+};

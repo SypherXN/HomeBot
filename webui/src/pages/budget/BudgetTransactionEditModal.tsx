@@ -210,6 +210,18 @@ export default function BudgetTransactionEditModal({
           )}
           {useSplits && row.type === "expense" && (
             <div className="space-y-2 rounded border border-slate-700 p-2">
+              {(() => {
+                const total = Number(amount) || 0;
+                const sum = splits.reduce((acc, s) => acc + (Number(s.amount) || 0), 0);
+                const remaining = total - sum;
+                return total > 0 ? (
+                  <p className={`text-xs ${Math.abs(remaining) > 0.005 ? "text-amber-300" : "text-emerald-300"}`}>
+                    {Math.abs(remaining) > 0.005
+                      ? `$${Math.abs(remaining).toFixed(2)} ${remaining > 0 ? "left to split" : "over-split"}`
+                      : "Fully split"}
+                  </p>
+                ) : null;
+              })()}
               {splits.map((s, i) => (
                 <div key={i} className="grid gap-2 sm:grid-cols-3">
                   <select
@@ -219,7 +231,7 @@ export default function BudgetTransactionEditModal({
                     }
                     className="hb-input px-2 py-1 text-xs text-slate-100"
                   >
-                    <option value="">Cat</option>
+                    <option value="">Category</option>
                     {categories.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
@@ -231,29 +243,25 @@ export default function BudgetTransactionEditModal({
                     onChange={(e) =>
                       setSplits((prev) => prev.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))
                     }
-                    placeholder="Amt"
+                    placeholder="Amount"
                     className="hb-input px-2 py-1 text-xs text-slate-100"
                   />
-                  <input
+                  <select
                     value={s.spentByUserId}
                     onChange={(e) =>
                       setSplits((prev) =>
                         prev.map((x, j) => (j === i ? { ...x, spentByUserId: e.target.value } : x))
                       )
                     }
-                    placeholder="Spender"
-                    list={roster.data?.available ? `split-spenders-${i}` : undefined}
                     className="hb-input px-2 py-1 text-xs text-slate-100"
-                  />
-                  {roster.data?.available && (
-                    <datalist id={`split-spenders-${i}`}>
-                      {roster.data.members.map((m) => (
-                        <option key={m.userId} value={m.userId}>
-                          {m.displayName || m.username}
-                        </option>
-                      ))}
-                    </datalist>
-                  )}
+                  >
+                    <option value="">Spender</option>
+                    {roster.data?.members.map((m) => (
+                      <option key={m.userId} value={m.userId}>
+                        {m.displayName || m.username}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               ))}
               <button
