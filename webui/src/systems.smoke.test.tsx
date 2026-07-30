@@ -33,7 +33,7 @@ const routes: { path: string; heading: RegExp }[] = [
   { path: "/money", heading: /^money$/i },
   { path: "/budget", heading: /^budget$/i },
   { path: "/calendar", heading: /^calendar$/i },
-  { path: "/meals", heading: /^meal planning$/i },
+  { path: "/meals", heading: /^meals$/i },
   { path: "/settings", heading: /^settings$/i },
   { path: "/login", heading: /^welcome back$/i },
   { path: "/setup", heading: /^household accounts$/i },
