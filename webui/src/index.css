@@ -56,6 +56,44 @@
     --hb-heat: #22d3ee;
   }
 
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /*
+   * Stop iOS/Android from double-tap-zooming on taps. Pinch-to-zoom still works
+   * (`manipulation` allows continuous zoom, just not the tap gesture).
+   */
+  html,
+  body,
+  #root,
+  a,
+  button,
+  input,
+  select,
+  textarea,
+  label,
+  summary,
+  [role="button"],
+  [role="tab"] {
+    touch-action: manipulation;
+  }
+
+  /*
+   * iOS Safari auto-zooms the page when a focused field is under 16px, then
+   * zooms back out on blur — the in/out jump when tapping around the app.
+   * Coarse pointers (phones/tablets) keep form controls at 16px so that
+   * doesn't fire; pinch-to-zoom is unaffected.
+   */
+  @media (pointer: coarse) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
+  }
+
   html.dark body {
     @apply m-0 min-h-screen bg-slate-950 text-slate-100 antialiased;
   }
