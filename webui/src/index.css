@@ -186,12 +186,39 @@
     min-width: 0;
   }
   input[type="month"] {
+    display: flex;
+    align-items: center;
     height: 2.75rem;
     min-height: 0;
     max-height: 2.75rem;
     padding-top: 0;
     padding-bottom: 0;
-    line-height: 1.25;
+    line-height: 1;
+  }
+  /* WebKit paints the month value in an inner edit control that otherwise sits high. */
+  input[type="month"]::-webkit-datetime-edit,
+  input[type="month"]::-webkit-datetime-edit-fields-wrapper,
+  input[type="month"]::-webkit-date-and-time-value {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    min-height: 0;
+    padding: 0;
+    line-height: 1;
+  }
+  input[type="month"]::-webkit-datetime-edit-month-field,
+  input[type="month"]::-webkit-datetime-edit-year-field,
+  input[type="month"]::-webkit-datetime-edit-text {
+    padding-top: 0;
+    padding-bottom: 0;
+    line-height: 1;
+  }
+  input[type="month"]::-webkit-calendar-picker-indicator {
+    align-self: center;
+    margin-block: 0;
+    height: 1rem;
+    width: 1rem;
+    cursor: pointer;
   }
 
   /*
