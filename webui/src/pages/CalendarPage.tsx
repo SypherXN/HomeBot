@@ -995,30 +995,29 @@ function Toolbar({
       )}
 
       <div className="flex min-w-0 w-full flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center lg:gap-3">
-        <div className="inline-flex max-w-full shrink-0 flex-wrap rounded-lg border border-slate-700 bg-slate-900/60 p-0.5 text-xs">
-          <button
-            type="button"
-            onClick={() => onFilterMode("all")}
-            className={`rounded-md px-2 py-1 ${filterMode === "all" ? "bg-slate-800 text-white" : "text-slate-400 hover:text-slate-200"}`}
-          >
-            Everyone
-          </button>
-          <button
-            type="button"
-            onClick={() => onFilterMode("me")}
-            disabled={!canActor}
-            className={`rounded-md px-2 py-1 ${filterMode === "me" ? "bg-slate-800 text-white" : "text-slate-400 hover:text-slate-200"} disabled:opacity-50`}
-            title={canActor ? undefined : "Set actorUserId in Settings"}
-          >
-            Me
-          </button>
-          <button
-            type="button"
-            onClick={() => onFilterMode("user")}
-            className={`rounded-md px-2 py-1 ${filterMode === "user" ? "bg-slate-800 text-white" : "text-slate-400 hover:text-slate-200"}`}
-          >
-            User…
-          </button>
+        <div className="flex w-fit overflow-hidden rounded-lg border border-slate-700">
+          {(
+            [
+              ["all", "Everyone", false, undefined],
+              ["me", "Me", !canActor, canActor ? undefined : "Set actorUserId in Settings"],
+              ["user", "User…", false, undefined],
+            ] as const
+          ).map(([id, label, disabled, title]) => (
+            <button
+              key={id}
+              type="button"
+              disabled={disabled}
+              title={title}
+              onClick={() => onFilterMode(id)}
+              className={`whitespace-nowrap px-3 py-2 text-sm ${
+                filterMode === id
+                  ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white"
+                  : "bg-slate-900/60 text-slate-400 hover:text-slate-200"
+              } disabled:cursor-not-allowed disabled:opacity-50`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
         <button
           type="button"
