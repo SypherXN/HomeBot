@@ -750,7 +750,7 @@ export default function BudgetPage() {
                 setLedgerPage(0);
                 setMonth(e.target.value);
               }}
-              className="box-border flex h-full min-h-0 max-h-full w-[12rem] items-center hb-input px-3 py-0 leading-none text-slate-100"
+              className="box-border flex h-full min-h-0 max-h-full w-[12rem] items-center justify-center hb-input px-3 py-0 text-center leading-none text-slate-100"
             />
             <button
               type="button"
