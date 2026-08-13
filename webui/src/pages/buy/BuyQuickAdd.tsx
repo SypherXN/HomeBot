@@ -119,7 +119,7 @@ export default function BuyQuickAdd({
         }}
         className="space-y-2"
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-stretch gap-2">
           <input
             ref={nameRef}
             value={name}
@@ -129,19 +129,19 @@ export default function BuyQuickAdd({
             enterKeyHint="done"
             list="buy-name-suggestions"
             aria-label="Item name"
-            className="min-w-0 flex-1 hb-input px-3 py-2.5 text-base text-slate-100 placeholder:text-slate-500"
+            className="box-border h-11 min-w-0 flex-1 hb-input px-3 py-0 text-base leading-none text-slate-100 placeholder:text-slate-500"
           />
           <datalist id="buy-name-suggestions">
             {knownNames.map((n) => (
               <option key={n} value={n} />
             ))}
           </datalist>
-          <div className="flex shrink-0 items-center rounded-lg hb-input" aria-label="Quantity">
+          <div className="flex h-11 shrink-0 items-center rounded-lg hb-input" aria-label="Quantity">
             <button
               type="button"
               onClick={() => bumpQty(-1)}
               aria-label="Decrease quantity"
-              className="px-2.5 py-2 text-lg leading-none text-slate-400 hover:text-slate-200"
+              className="flex h-full items-center px-2.5 text-lg leading-none text-slate-400 hover:text-slate-200"
             >
               −
             </button>
@@ -153,13 +153,13 @@ export default function BuyQuickAdd({
               inputMode="numeric"
               placeholder="1"
               aria-label="Quantity"
-              className="w-8 bg-transparent text-center text-sm text-slate-100 outline-none"
+              className="h-full w-8 bg-transparent text-center text-base leading-none text-slate-100 outline-none"
             />
             <button
               type="button"
               onClick={() => bumpQty(1)}
               aria-label="Increase quantity"
-              className="px-2.5 py-2 text-lg leading-none text-slate-400 hover:text-slate-200"
+              className="flex h-full items-center px-2.5 text-lg leading-none text-slate-400 hover:text-slate-200"
             >
               +
             </button>
@@ -167,7 +167,7 @@ export default function BuyQuickAdd({
           <button
             type="submit"
             disabled={busy || !name.trim() || !canActor}
-            className="shrink-0 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2.5 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
+            className="box-border flex h-11 shrink-0 items-center rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-4 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
           >
             {busy ? "…" : "Add"}
           </button>
