@@ -19,6 +19,7 @@ import {
   postCalendarItemComplete,
   postMealPlanAddToBuy,
   type CalendarListItem,
+  type DiscordGuildMembersResponse,
   type MealPlanEntry,
   type MoneySummary,
   type PagedBuyList,
@@ -28,7 +29,8 @@ import {
   type PagedWishlistList,
 } from "../api";
 import { useAuth } from "../auth/AuthContext";
-import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
+import { useGuildRoster } from "../hooks/GuildRosterContext";
+import { memberUsername } from "../lib/memberDisplay";
 import { useUndoToast } from "../hooks/useUndoToast";
 import { useToasts } from "../components/toastContext";
 import { titleCase } from "../lib/titleCase";
@@ -45,9 +47,9 @@ type Slice<T> =
   | { status: "error"; message: string }
   | { status: "ready"; value: T };
 
-function balanceLine(s: MoneySummary): string {
-  const a = s.user1Name || s.user1MemberLabel || `User ${s.user1Id}`;
-  const b = s.user2Name || s.user2MemberLabel || `User ${s.user2Id}`;
+function balanceLine(s: MoneySummary, rosterData: DiscordGuildMembersResponse | null): string {
+  const a = memberUsername(rosterData, s.user1Id, s.user1Name || s.user1MemberLabel);
+  const b = memberUsername(rosterData, s.user2Id, s.user2Name || s.user2MemberLabel);
   if (s.balance > 0) return `${b} owes ${a} $${formatMoney(s.balance)} (net).`;
   if (s.balance < 0) return `${a} owes ${b} $${formatMoney(Math.abs(s.balance))} (net).`;
   return `${a} and ${b} are even (net).`;
@@ -106,7 +108,7 @@ export default function DashboardPage() {
   const canAuth = tok.length > 0;
   const canActor = canAuth && validActorId(actor);
   const { greeting, dateLine } = greetingLine();
-  const guildRoster = useDiscordGuildRoster(token);
+  const guildRoster = useGuildRoster();
   const undoToast = useUndoToast();
   const { showToast } = useToasts();
 
@@ -127,8 +129,8 @@ export default function DashboardPage() {
         roster?.available === true && roster.members.length >= 2;
       const u1 = canPairSummary ? roster.members[0].userId : "";
       const u2 = canPairSummary ? roster.members[1].userId : "";
-      const n1 = canPairSummary ? roster.members[0].displayName : "";
-      const n2 = canPairSummary ? roster.members[1].displayName : "";
+      const n1 = canPairSummary ? roster.members[0].username || roster.members[0].displayName : "";
+      const n2 = canPairSummary ? roster.members[1].username || roster.members[1].displayName : "";
 
       const month = new Date().toISOString().slice(0, 7);
       const todayYmd = new Date().toISOString().slice(0, 10);
@@ -500,7 +502,9 @@ export default function DashboardPage() {
                 </p>
               ) : (
                 <ul className="mt-3 divide-y divide-slate-800/70">
-                  {visibleToday.map((it) => (
+                  {visibleToday.map((it) => {
+                    const assignedName = memberUsername(guildRoster.data, it.assignedTo, it.assignedToMemberLabel);
+                    return (
                     <li
                       key={it.instanceStartUtc ? `t-${it.id}-${it.instanceStartUtc}` : `t-${it.id}`}
                       className="flex items-center gap-3 py-2.5"
@@ -518,13 +522,14 @@ export default function DashboardPage() {
                       <span className="min-w-0 flex-1 truncate text-sm text-slate-200">
                         {calendarLine(it, "today")}
                       </span>
-                      {it.assignedToMemberLabel && (
+                      {assignedName ? (
                         <span className="shrink-0 rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">
-                          {it.assignedToMemberLabel}
+                          {assignedName}
                         </span>
-                      )}
+                      ) : null}
                     </li>
-                  ))}
+                    );
+                  })}
                   {visibleTasks.map((it) => (
                     <li key={`task-${it.id}`} className="flex items-center gap-3 py-2.5">
                       <button
@@ -666,7 +671,7 @@ export default function DashboardPage() {
               >
                 {bundle.moneySummary ? (
                   <p className="mt-2 text-sm leading-relaxed text-slate-300">
-                    {balanceLine(bundle.moneySummary)}
+                    {balanceLine(bundle.moneySummary, guildRoster.data)}
                   </p>
                 ) : (
                   <p className="mt-2 text-sm text-slate-500">

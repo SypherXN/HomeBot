@@ -56,6 +56,27 @@ public sealed class DiscordGuildDirectoryService
             Members: members);
     }
 
+    /// <summary>
+    /// Cached Discord username for a user id. Does not download the member list (list rows call this often).
+    /// </summary>
+    public string? TryGetUsername(ulong userId)
+    {
+        var client = _holder.Client;
+        if (client is null || client.ConnectionState != ConnectionState.Connected)
+            return null;
+
+        var rawGuild = Environment.GetEnvironmentVariable("DISCORD_GUILD_ID");
+        if (!string.IsNullOrWhiteSpace(rawGuild) && ulong.TryParse(rawGuild, out var guildId))
+        {
+            var member = client.GetGuild(guildId)?.GetUser(userId);
+            if (member != null && !string.IsNullOrWhiteSpace(member.Username))
+                return member.Username;
+        }
+
+        var user = client.GetUser(userId);
+        return string.IsNullOrWhiteSpace(user?.Username) ? null : user.Username;
+    }
+
     private static string MemberLabel(SocketGuildUser u)
     {
         if (!string.IsNullOrWhiteSpace(u.Nickname))

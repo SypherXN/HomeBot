@@ -8,7 +8,8 @@ import { formatMoney, formatMonthLong } from "../lib/budgetMoney";
 import { layerForAssignee } from "../lib/personLayers";
 import { getBudgetAccounts, getBudgetTransactions, type BudgetAccount, type BudgetTransactionListItem } from "../api";
 import BudgetTransactionEditModal from "./budget/BudgetTransactionEditModal";
-import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
+import { useGuildRoster } from "../hooks/GuildRosterContext";
+import { memberUsername } from "../lib/memberDisplay";
 import { getBudgetCategories, type BudgetCategory } from "../api";
 
 function currentMonth(): string {
@@ -28,7 +29,7 @@ export default function BudgetAccountPage() {
   const { token, actorUserId } = useAuth();
   const tok = token.trim();
   const actor = validActorId(actorUserId) ? actorUserId.trim() : "";
-  const roster = useDiscordGuildRoster(token);
+  const roster = useGuildRoster();
 
   const [account, setAccount] = useState<BudgetAccount | null>(null);
   const [categories, setCategories] = useState<BudgetCategory[]>([]);
@@ -138,7 +139,7 @@ export default function BudgetAccountPage() {
                     <span className="text-slate-500">
                       {" · "}
                       <span className={`mr-1 inline-block h-2 w-2 rounded-full align-middle ${layerForAssignee(row.spentByUserId).dot}`} aria-hidden />
-                      {row.spentByMemberLabel}
+                      {memberUsername(roster.data, row.spentByUserId, row.spentByMemberLabel)}
                     </span>
                     {row.merchant && <span className="text-slate-500"> · {row.merchant}</span>}
                   </div>

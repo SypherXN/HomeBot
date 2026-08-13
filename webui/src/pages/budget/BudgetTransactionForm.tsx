@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import DiscordMemberSelect from "../../components/DiscordMemberSelect";
 import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster";
+import { memberPickerLabel } from "../../lib/memberDisplay";
 import { useMerchantSuggestions } from "../../hooks/useMerchantSuggestions";
 import { defaultTransactionDateForMonth } from "../../lib/budgetTransactionDate";
 import { parseReceiptText } from "../../lib/receiptOcr";
@@ -345,7 +346,7 @@ export default function BudgetTransactionForm({
                     <option value="">Spender</option>
                     {roster.data?.members.map((m) => (
                       <option key={m.userId} value={m.userId}>
-                        {m.displayName}
+                        {memberPickerLabel(m)}
                       </option>
                     ))}
                   </select>

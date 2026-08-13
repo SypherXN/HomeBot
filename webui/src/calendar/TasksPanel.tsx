@@ -1,5 +1,7 @@
 import type { CalendarListItem } from "../api";
 import { Icon } from "../components/icons";
+import { useGuildRoster } from "../hooks/GuildRosterContext";
+import { memberUsername } from "../lib/memberDisplay";
 
 type Props = {
   loading: boolean;
@@ -29,6 +31,7 @@ export default function TasksPanel({
   onQuickComplete,
   quickCompletingId,
 }: Props) {
+  const roster = useGuildRoster();
   return (
     <aside
       aria-labelledby="tasks-panel-heading"
@@ -76,7 +79,9 @@ export default function TasksPanel({
 
       {canAuth && data && data.items.length > 0 && (
         <ul className="space-y-2">
-          {data.items.map((t) => (
+          {data.items.map((t) => {
+            const assignedName = memberUsername(roster.data, t.assignedTo, t.assignedToMemberLabel);
+            return (
             <li key={t.id} className="flex items-stretch gap-1.5">
               {onQuickComplete && (
                 <button
@@ -100,12 +105,13 @@ export default function TasksPanel({
                 className="flex min-w-0 flex-1 flex-col gap-0.5 rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-left hover:border-slate-700 hover:bg-slate-900/60"
               >
                 <span className="truncate text-sm font-medium text-slate-100">{t.title}</span>
-                {t.assignedToMemberLabel && (
-                  <span className="text-xs text-slate-500">{t.assignedToMemberLabel}</span>
-                )}
+                {assignedName ? (
+                  <span className="text-xs text-slate-500">{assignedName}</span>
+                ) : null}
               </button>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
 

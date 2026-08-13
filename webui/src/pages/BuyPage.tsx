@@ -3,7 +3,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import BulkActionBar from "../components/BulkActionBar";
 import { useBulkSelection } from "../hooks/useBulkSelection";
-import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
+import { useGuildRoster } from "../hooks/GuildRosterContext";
+import { memberPickerLabel, memberUsername } from "../lib/memberDisplay";
 import { useUndoToast } from "../hooks/useUndoToast";
 import { validActorId } from "../lib/validation";
 import { titleCase } from "../lib/titleCase";
@@ -49,7 +50,7 @@ export default function BuyPage() {
   const actor = actorUserId.trim();
   const canAuth = tok.length > 0;
   const canActor = canAuth && validActorId(actor);
-  const guildRoster = useDiscordGuildRoster(token);
+  const guildRoster = useGuildRoster();
   const [params] = useSearchParams();
   const highlightId = useSearchHighlightId();
   const highlightRef = useRef<HTMLLIElement>(null);
@@ -513,7 +514,7 @@ export default function BuyPage() {
               onClick={() => setFilterAssigned("")}
               className="flex items-center gap-1 rounded-full border border-blue-700/60 bg-blue-950/40 px-2.5 py-1 text-xs text-blue-100"
             >
-              Assigned: {guildRoster.data?.members.find((m) => m.userId === filterAssigned)?.displayName ?? filterAssigned}{" "}
+              Assigned: {memberUsername(guildRoster.data, filterAssigned, filterAssigned)}{" "}
               <span aria-hidden>✕</span>
             </button>
           )}
@@ -575,7 +576,7 @@ export default function BuyPage() {
               {guildRoster.data?.available &&
                 guildRoster.data.members.map((m) => (
                   <option key={m.userId} value={m.userId}>
-                    {m.displayName}
+                    {memberPickerLabel(m)}
                   </option>
                 ))}
             </select>

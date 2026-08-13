@@ -3,7 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { useAuth } from "../auth/AuthContext";
 import { useTheme } from "../theme/ThemeProvider";
-import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
+import { useGuildRoster } from "../hooks/GuildRosterContext";
+import { memberUsername } from "../lib/memberDisplay";
 import { useHorizontalSwipe } from "../hooks/useHorizontalSwipe";
 import { useUndoToast } from "../hooks/useUndoToast";
 import { useToasts } from "../components/toastContext";
@@ -172,7 +173,7 @@ export default function BudgetPage() {
   const chartColors = theme === "dark" ? CHART_COLORS_DARK : CHART_COLORS_LIGHT;
   const tok = token.trim();
   const actor = validActorId(actorUserId) ? actorUserId.trim() : "";
-  const roster = useDiscordGuildRoster(token);
+  const roster = useGuildRoster();
   const undoToast = useUndoToast();
   const { showToast } = useToasts();
   const [params] = useSearchParams();
@@ -440,7 +441,10 @@ export default function BudgetPage() {
 
   const chartData = (chartMode === "category" ? byCategory : byUser).map((slice) => ({
     key: slice.key,
-    label: titleCase(slice.label),
+    label:
+      chartMode === "category"
+        ? titleCase(slice.label)
+        : memberUsername(roster.data, slice.key, slice.label),
     total: slice.total,
   }));
 
@@ -1189,7 +1193,7 @@ export default function BudgetPage() {
                                         className={`mr-1 inline-block h-2 w-2 rounded-full align-middle ${spenderLayer.dot}`}
                                         aria-hidden
                                       />
-                                      {row.spentByMemberLabel}
+                                      {memberUsername(roster.data, row.spentByUserId, row.spentByMemberLabel)}
                                     </span>
                                     {row.merchant && <span className="text-slate-500"> · {row.merchant}</span>}
                                     {row.isPending && (

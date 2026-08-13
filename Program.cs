@@ -80,12 +80,15 @@ class Program
     /// </summary>
     private IServiceProvider ConfigureServices()
     {
-        return new ServiceCollection()
+        var services = new ServiceCollection()
             .AddSingleton(_ => _client)
             .AddSingleton(_ => _interactions)
             .AddHomeBotDataServices()
             .AddSingleton<ReminderService>()
             .BuildServiceProvider();
+        HouseholdIdentity.UseUsernameLookup(id =>
+            services.GetRequiredService<DiscordGuildDirectoryService>().TryGetUsername(id));
+        return services;
     }
 
     /// <summary>

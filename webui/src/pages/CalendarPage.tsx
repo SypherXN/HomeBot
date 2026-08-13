@@ -40,7 +40,9 @@ import {
   weekRangeSunday,
   ymdListForDays,
 } from "../calendar/calendarZoned";
-import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
+import { useGuildRoster } from "../hooks/GuildRosterContext";
+import type { DiscordGuildRosterState } from "../hooks/useDiscordGuildRoster";
+import { memberUsername } from "../lib/memberDisplay";
 import { useHorizontalSwipe } from "../hooks/useHorizontalSwipe";
 import { useSearchHighlightId } from "../lib/searchHighlight";
 import { validActorId } from "../lib/validation";
@@ -66,7 +68,7 @@ export default function CalendarPage() {
   const actor = actorUserId.trim();
   const canAuth = tok.length > 0;
   const canActor = canAuth && validActorId(actor);
-  const guildRoster = useDiscordGuildRoster(token);
+  const guildRoster = useGuildRoster();
 
   const [params, setParams] = useSearchParams();
   const view = (ALL_VIEWS.includes(params.get("view") as View) ? params.get("view") : "month") as View;
@@ -392,12 +394,12 @@ export default function CalendarPage() {
       const label =
         key === ""
           ? "Everyone"
-          : ev.assignedToMemberLabel?.trim() || `User ${key}`;
+          : memberUsername(guildRoster.data, key, ev.assignedToMemberLabel) || `User ${key}`;
       const layer = key === "" ? everyoneLayer() : layerForAssignee(key);
       byId.set(key, { id: key, label, dot: layer.dot });
     }
     return [...byId.values()];
-  }, [range]);
+  }, [range, guildRoster.data]);
 
   async function handleQuickCompleteTask(t: CalendarListItem) {
     if (!canActor) {
@@ -912,7 +914,7 @@ function Toolbar({
   onToggleColorByPerson: () => void;
   personLayers: { id: string; label: string; dot: string }[];
   token: string;
-  guildRoster: ReturnType<typeof useDiscordGuildRoster>;
+  guildRoster: DiscordGuildRosterState;
   canActor: boolean;
   viewerTimeZone: string;
   onViewerTimeZone: (z: string) => void;

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import Sheet from "../components/Sheet";
-import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
+import { useGuildRoster } from "../hooks/GuildRosterContext";
+import { memberPickerLabel, lookupMemberUsername, snowflakeFromMemberLabel } from "../lib/memberDisplay";
 import { validActorId } from "../lib/validation";
 import { formatMoney } from "../lib/budgetMoney";
 import {
@@ -30,7 +31,7 @@ import MoneyUserField, { type MoneyUserOption } from "./money/MoneyUserField";
 function memberOptions(members: DiscordGuildMember[]): MoneyUserOption[] {
   return members.map((m) => ({
     value: m.userId,
-    label: `${m.displayName} (@${m.username})`,
+    label: memberPickerLabel(m),
   }));
 }
 
@@ -40,7 +41,7 @@ export default function MoneyPage() {
   const actor = actorUserId.trim();
   const canAuth = tok.length > 0;
   const canActor = canAuth && validActorId(actor);
-  const guildRoster = useDiscordGuildRoster(token);
+  const guildRoster = useGuildRoster();
 
   const rosterOptions = useMemo(() => {
     const r = guildRoster.data;
@@ -304,8 +305,7 @@ export default function MoneyPage() {
    * (only up to 2^53−1 is exact), so prefer the server's `member-{id}` label or a known query id.
    */
   function snowflakeDigitsFromHouseholdLabel(label: string): string | null {
-    const m = /^member-(\d+)$/.exec(label.trim());
-    return m?.[1] ?? null;
+    return snowflakeFromMemberLabel(label);
   }
 
   function exactSnowflakeForMoneyParticipant(
@@ -321,18 +321,9 @@ export default function MoneyPage() {
     return String(apiUserId);
   }
 
-  /** Discord display line from roster, or null if not in guild cache. */
+  /** Discord username from roster, or null if not in guild cache. */
   function primaryLabelFromRoster(idStr: string): string | null {
-    const members = guildRoster.data?.members;
-    if (!members?.length) return null;
-    const mem = members.find((x) => x.userId === idStr);
-    if (!mem) return null;
-    const u = mem.username.trim();
-    const nick = mem.displayName.trim();
-    if (nick && u && nick.toLowerCase() !== u.toLowerCase()) {
-      return `${nick} (@${u})`;
-    }
-    return u ? `@${u}` : nick || null;
+    return lookupMemberUsername(guildRoster.data, idStr, null);
   }
 
   /** Ledger row: roster name + exact snowflake (never the rounded JSON id alone). */

@@ -8,7 +8,7 @@ import { formatRecurrence as recurrenceToString, parseRecurrence as stringToRecu
 import type { RecurrenceEditorState } from "../lib/recurrenceEditor";
 import { emptyRecurrence } from "../lib/recurrenceEditor";
 import { reminderRawToToken } from "../lib/calendarReminder";
-import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
+import { useGuildRoster } from "../hooks/GuildRosterContext";
 import {
   deleteCalendarInstanceOverrides,
   deleteCalendarItem,
@@ -72,7 +72,7 @@ export default function ItemDetailModal({
   const [seriesRecurrence, setSeriesRecurrence] = useState<RecurrenceEditorState>(emptyRecurrence());
   const [assignedTo, setAssignedTo] = useState("");
   const [busy, setBusy] = useState<"save" | "complete" | "completeOne" | "delete" | "omit" | "clear" | null>(null);
-  const guildRoster = useDiscordGuildRoster(token);
+  const guildRoster = useGuildRoster();
 
   useEffect(() => {
     if (!open || itemId == null) return;

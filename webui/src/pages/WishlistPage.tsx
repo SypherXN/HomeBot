@@ -3,7 +3,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import BulkActionBar from "../components/BulkActionBar";
 import { useBulkSelection } from "../hooks/useBulkSelection";
-import { useDiscordGuildRoster } from "../hooks/useDiscordGuildRoster";
+import { useGuildRoster } from "../hooks/GuildRosterContext";
+import { memberPickerLabel, memberUsername } from "../lib/memberDisplay";
 import { validActorId } from "../lib/validation";
 import { titleCase } from "../lib/titleCase";
 import { layerForAssignee } from "../lib/personLayers";
@@ -48,7 +49,7 @@ export default function WishlistPage() {
   const actor = actorUserId.trim();
   const canAuth = tok.length > 0;
   const canActor = canAuth && validActorId(actor);
-  const guildRoster = useDiscordGuildRoster(token);
+  const guildRoster = useGuildRoster();
   const [params] = useSearchParams();
   const highlightId = useSearchHighlightId();
   const highlightRef = useRef<HTMLLIElement>(null);
@@ -101,13 +102,13 @@ export default function WishlistPage() {
     if (r?.available && r.members.length > 0) {
       for (const m of r.members) {
         seen.add(m.userId);
-        base.push({ value: m.userId, label: `${m.displayName} (@${m.username})` });
+        base.push({ value: m.userId, label: memberPickerLabel(m) });
       }
     }
     for (const o of dbOwners) {
       if (!seen.has(o.userId)) {
         seen.add(o.userId);
-        base.push({ value: o.userId, label: `${o.label} (${o.userId})` });
+        base.push({ value: o.userId, label: memberUsername(guildRoster.data, o.userId, o.label) || o.userId });
       }
     }
     return base;
@@ -419,11 +420,11 @@ export default function WishlistPage() {
     for (const o of dbOwners) {
       if (!seen.has(o.userId)) {
         seen.add(o.userId);
-        chips.push({ userId: o.userId, label: o.label });
+        chips.push({ userId: o.userId, label: memberUsername(guildRoster.data, o.userId, o.label) || o.userId });
       }
     }
     return chips;
-  }, [dbOwners]);
+  }, [dbOwners, guildRoster.data]);
 
   const groups = useMemo(() => {
     if (groupMode === "all" || items.length === 0) return [{ key: "", items }];
@@ -431,7 +432,7 @@ export default function WishlistPage() {
     for (const item of items) {
       let keys: string[];
       if (groupMode === "owner") {
-        keys = [item.ownerMemberLabel || "Unknown owner"];
+        keys = [memberUsername(guildRoster.data, item.owner, item.ownerMemberLabel) || "Unknown owner"];
       } else {
         keys = item.tags?.length ? item.tags : ["Untagged"];
       }
@@ -444,7 +445,7 @@ export default function WishlistPage() {
     return [...map.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([key, groupItems]) => ({ key, items: groupItems }));
-  }, [groupMode, items]);
+  }, [groupMode, items, guildRoster.data]);
 
   return (
     <div className="mx-auto min-w-0 max-w-3xl space-y-4 px-3 pb-10 sm:px-4">

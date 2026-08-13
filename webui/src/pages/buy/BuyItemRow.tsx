@@ -1,4 +1,6 @@
 import SwipeableRow from "../../components/SwipeableRow";
+import { useGuildRoster } from "../../hooks/GuildRosterContext";
+import { memberUsername } from "../../lib/memberDisplay";
 import { layerForAssignee } from "../../lib/personLayers";
 import { titleCase } from "../../lib/titleCase";
 import type { BuyListItem } from "../../api";
@@ -37,9 +39,11 @@ export default function BuyItemRow({
   onEdit,
   onDelete,
 }: Props) {
+  const roster = useGuildRoster();
   const age = itemAge(item.createdAt);
   const layer = layerForAssignee(item.assignedTo != null ? String(item.assignedTo) : null);
-  const hasDetails = Boolean(item.store || item.tags?.length || item.notes || item.assignedToMemberLabel);
+  const assignedName = memberUsername(roster.data, item.assignedTo, item.assignedToMemberLabel);
+  const hasDetails = Boolean(item.store || item.tags?.length || item.notes || assignedName);
 
   return (
     <SwipeableRow
@@ -92,10 +96,10 @@ export default function BuyItemRow({
                   #{t}
                 </span>
               ))}
-              {item.assignedToMemberLabel && (
+              {assignedName && (
                 <span className="inline-flex items-center gap-1 text-slate-400">
                   <span className={`h-2 w-2 rounded-full ${layer.dot}`} aria-hidden />
-                  {item.assignedToMemberLabel}
+                  {assignedName}
                 </span>
               )}
             </div>

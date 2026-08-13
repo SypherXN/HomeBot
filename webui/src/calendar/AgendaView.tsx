@@ -1,5 +1,7 @@
 import { useMemo } from "react";
 import type { CalendarRangeItem } from "../api";
+import { useGuildRoster } from "../hooks/GuildRosterContext";
+import { memberUsername } from "../lib/memberDisplay";
 import { formatLongDateYmd, formatTimeInZone, rangeInstanceEndUtc, rangeInstanceStartUtc, ymdInZone } from "./calendarZoned";
 import { isGreyedOccurrence } from "./occurrenceStyle";
 import { Icon } from "../components/icons";
@@ -17,6 +19,7 @@ type DayBucket = { ymd: string; events: CalendarRangeItem[] };
 
 export default function AgendaView({ events, displayZone, onPickEvent, onQuickComplete, quickCompletingKey }: Props) {
   const buckets = useMemo(() => groupByDay(events, displayZone), [events, displayZone]);
+  const roster = useGuildRoster();
 
   if (buckets.length === 0) {
     return (
@@ -37,6 +40,7 @@ export default function AgendaView({ events, displayZone, onPickEvent, onQuickCo
             {bucket.events.map((ev) => {
               const greyed = isGreyedOccurrence(ev);
               const evKey = `${ev.id}@${ev.instanceStartUtc}`;
+              const assignedName = memberUsername(roster.data, ev.assignedTo, ev.assignedToMemberLabel);
               return (
               <li key={evKey} className="group relative">
                 <button
@@ -71,9 +75,9 @@ export default function AgendaView({ events, displayZone, onPickEvent, onQuickCo
                           }`}
                     </span>
                   </div>
-                  {ev.assignedToMemberLabel && (
+                  {assignedName && (
                     <p className="text-xs text-slate-500">
-                      Assigned to <span className="text-slate-300">{ev.assignedToMemberLabel}</span>
+                      Assigned to <span className="text-slate-300">{assignedName}</span>
                     </p>
                   )}
                   {(ev.recurrenceText || ev.reminderText || ev.hasLink) && (

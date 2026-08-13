@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import App from "./App";
 import { AuthProvider } from "./auth/AuthContext";
 import { CalendarZoneProvider } from "./calendar/CalendarZoneContext";
+import { GuildRosterProvider } from "./hooks/GuildRosterContext";
 import { ThemeProvider } from "./theme/ThemeProvider";
 import { ToastProvider } from "./components/ToastProvider";
 import { AUTH_STORAGE_ACTOR, AUTH_STORAGE_TOKEN } from "./auth/storageKeys";
@@ -13,13 +14,15 @@ function renderRoute(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <AuthProvider>
-        <ThemeProvider>
-          <CalendarZoneProvider>
-            <ToastProvider>
-              <App />
-            </ToastProvider>
-          </CalendarZoneProvider>
-        </ThemeProvider>
+        <GuildRosterProvider>
+          <ThemeProvider>
+            <CalendarZoneProvider>
+              <ToastProvider>
+                <App />
+              </ToastProvider>
+            </CalendarZoneProvider>
+          </ThemeProvider>
+        </GuildRosterProvider>
       </AuthProvider>
     </MemoryRouter>
   );
@@ -69,11 +72,13 @@ describe("Web UI — route smoke (all feature areas)", () => {
     render(
       <MemoryRouter initialEntries={["/oauth/callback?oauth_error=access_denied"]}>
         <AuthProvider>
-          <CalendarZoneProvider>
-            <ToastProvider>
-              <App />
-            </ToastProvider>
-          </CalendarZoneProvider>
+          <GuildRosterProvider>
+            <CalendarZoneProvider>
+              <ToastProvider>
+                <App />
+              </ToastProvider>
+            </CalendarZoneProvider>
+          </GuildRosterProvider>
         </AuthProvider>
       </MemoryRouter>
     );

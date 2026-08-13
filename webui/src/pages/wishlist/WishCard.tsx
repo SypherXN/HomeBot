@@ -1,4 +1,6 @@
 import SwipeableRow from "../../components/SwipeableRow";
+import { useGuildRoster } from "../../hooks/GuildRosterContext";
+import { memberUsername } from "../../lib/memberDisplay";
 import { layerForAssignee } from "../../lib/personLayers";
 import { titleCase } from "../../lib/titleCase";
 import type { WishlistListItem } from "../../api";
@@ -30,10 +32,12 @@ export default function WishCard({
   onEdit,
   onDelete,
 }: Props) {
+  const roster = useGuildRoster();
   const stars = priorityStars(item.priority);
   const domain = item.link ? linkDomain(item.link) : null;
   const layer = layerForAssignee(item.owner);
-  const showOwner = Boolean(item.ownerMemberLabel && item.ownerMemberLabel !== item.owner);
+  const ownerName = memberUsername(roster.data, item.owner, item.ownerMemberLabel);
+  const showOwner = Boolean(ownerName);
 
   return (
     <SwipeableRow
@@ -70,7 +74,7 @@ export default function WishCard({
               {showOwner && (
                 <span className="inline-flex items-center gap-1 text-xs text-slate-400">
                   <span className={`h-2 w-2 rounded-full ${layer.dot}`} aria-hidden />
-                  {item.ownerMemberLabel}
+                  {ownerName}
                 </span>
               )}
             </div>

@@ -13,7 +13,7 @@ export type DiscordGuildRosterState = {
 /** One GET /api/discord/guild/members per token change (shared across pickers on feature pages). */
 export function useDiscordGuildRoster(token: string): DiscordGuildRosterState {
   const [data, setData] = useState<DiscordGuildMembersResponse | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => Boolean(token.trim()));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {

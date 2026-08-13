@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import MemberIdField from "../../components/MemberIdField";
 import Sheet from "../../components/Sheet";
 import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster";
+import { memberPickerLabel } from "../../lib/memberDisplay";
 import {
   patchBudgetTransaction,
   type BudgetAccount,
@@ -258,7 +259,7 @@ export default function BudgetTransactionEditModal({
                     <option value="">Spender</option>
                     {roster.data?.members.map((m) => (
                       <option key={m.userId} value={m.userId}>
-                        {m.displayName || m.username}
+                        {memberPickerLabel(m)}
                       </option>
                     ))}
                   </select>

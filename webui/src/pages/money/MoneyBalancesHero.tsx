@@ -1,6 +1,8 @@
 import { layerForAssignee } from "../../lib/personLayers";
 import { formatMoney, MONEY_TEXT } from "../../lib/budgetMoney";
 import type { MoneyBalances } from "../../api";
+import { useGuildRoster } from "../../hooks/GuildRosterContext";
+import { memberUsername } from "../../lib/memberDisplay";
 
 type Props = {
   balances: MoneyBalances | null;
@@ -14,6 +16,7 @@ type Props = {
  * Settle button that prefills the settle-up sheet.
  */
 export default function MoneyBalancesHero({ balances, loading, error, onSettle }: Props) {
+  const roster = useGuildRoster();
   const rows = balances?.balances ?? [];
   const net = rows.reduce((s, b) => s + b.balance, 0);
   const netTone = net > 0 ? "text-emerald-300" : net < 0 ? "text-amber-300" : "text-slate-300";
@@ -40,11 +43,12 @@ export default function MoneyBalancesHero({ balances, loading, error, onSettle }
           {rows.map((b) => {
             const owed = b.balance >= 0;
             const layer = layerForAssignee(String(b.otherUserId));
+            const otherName = memberUsername(roster.data, b.otherUserId, b.otherMemberLabel);
             return (
               <li key={String(b.otherUserId)} className="flex items-center gap-3 px-3 py-2.5">
                 <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${layer.dot}`} aria-hidden />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-slate-100">{b.otherMemberLabel}</p>
+                  <p className="truncate text-sm font-medium text-slate-100">{otherName}</p>
                   <p className="text-xs text-slate-500">{owed ? "owes you" : "you owe them"}</p>
                 </div>
                 <span className={`${MONEY_TEXT} text-sm font-semibold ${owed ? "text-emerald-300" : "text-amber-300"}`}>
@@ -53,7 +57,7 @@ export default function MoneyBalancesHero({ balances, loading, error, onSettle }
                 <button
                   type="button"
                   onClick={() =>
-                    onSettle(String(b.otherUserId), b.otherMemberLabel, Math.abs(b.balance), owed ? "they-pay" : "i-pay")
+                    onSettle(String(b.otherUserId), otherName, Math.abs(b.balance), owed ? "they-pay" : "i-pay")
                   }
                   className="shrink-0 rounded-lg border border-emerald-800/70 bg-emerald-950/30 px-2.5 py-1 text-xs font-medium text-emerald-200 hover:bg-emerald-950/60"
                 >

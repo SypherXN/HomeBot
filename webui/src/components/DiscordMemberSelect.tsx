@@ -1,6 +1,8 @@
 import { useEffect, useId, useState } from "react";
 import { getDiscordGuildMembers, type DiscordGuildMembersResponse } from "../api";
+import { useGuildRoster } from "../hooks/GuildRosterContext";
 import type { DiscordGuildRosterState } from "../hooks/useDiscordGuildRoster";
+import { memberPickerLabel } from "../lib/memberDisplay";
 
 type Props = {
   token: string;
@@ -35,8 +37,10 @@ export default function DiscordMemberSelect({
   const [state, setState] = useState<DiscordGuildMembersResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const appRoster = useGuildRoster();
 
-  const useShared = sharedRoster !== undefined;
+  const resolvedShared = sharedRoster ?? appRoster;
+  const useShared = resolvedShared.data !== null || resolvedShared.loading || Boolean(resolvedShared.error);
 
   useEffect(() => {
     if (useShared) return;
@@ -62,9 +66,9 @@ export default function DiscordMemberSelect({
     return () => ac.abort();
   }, [token, useShared]);
 
-  const rosterData = useShared ? sharedRoster!.data : state;
-  const rosterLoading = useShared ? sharedRoster!.loading : loading;
-  const rosterError = useShared ? sharedRoster!.error : error;
+  const rosterData = useShared ? resolvedShared.data : state;
+  const rosterLoading = useShared ? resolvedShared.loading : loading;
+  const rosterError = useShared ? resolvedShared.error : error;
 
   if (!token.trim()) {
     return null;
@@ -113,15 +117,11 @@ export default function DiscordMemberSelect({
         onChange={(e) => onPickUserId(e.target.value)}
       >
         <option value="">— Choose a person —</option>
-        {rosterData.members.map((m) => {
-          const primary = (m.displayName || m.username || "").trim() || m.userId;
-          const title = `@${m.username} · ${m.userId}`;
-          return (
-            <option key={m.userId} value={m.userId} title={title}>
-              {primary}
-            </option>
-          );
-        })}
+        {rosterData.members.map((m) => (
+          <option key={m.userId} value={m.userId} title={`@${m.username} · ${m.userId}`}>
+            {memberPickerLabel(m)}
+          </option>
+        ))}
       </select>
       {rosterData.guildId && !useShared && (
         <p className="text-xs text-slate-500">Guild {rosterData.guildId}</p>

@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
 import { CalendarZoneProvider } from "./calendar/CalendarZoneContext";
+import { GuildRosterProvider } from "./hooks/GuildRosterContext";
 import { ThemeProvider } from "./theme/ThemeProvider";
 import { ToastProvider } from "./components/ToastProvider";
 import "./index.css";
@@ -14,13 +15,15 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter basename={routerBasename.length > 0 ? routerBasename : undefined}>
       <AuthProvider>
-        <ThemeProvider>
-          <CalendarZoneProvider>
-            <ToastProvider>
-              <App />
-            </ToastProvider>
-          </CalendarZoneProvider>
-        </ThemeProvider>
+        <GuildRosterProvider>
+          <ThemeProvider>
+            <CalendarZoneProvider>
+              <ToastProvider>
+                <App />
+              </ToastProvider>
+            </CalendarZoneProvider>
+          </ThemeProvider>
+        </GuildRosterProvider>
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>

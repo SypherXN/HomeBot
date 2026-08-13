@@ -1,5 +1,6 @@
 import type { BudgetAuditEntry } from "../../api";
 import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster";
+import { lookupMemberUsername } from "../../lib/memberDisplay";
 
 type Props = {
   entries: BudgetAuditEntry[];
@@ -7,8 +8,7 @@ type Props = {
 };
 
 function actorLabel(actorUserId: string, roster?: DiscordGuildRosterState | null): string {
-  const member = roster?.data?.members.find((m) => m.userId === actorUserId);
-  return member?.displayName ?? member?.username ?? `User ${actorUserId.slice(-4)}`;
+  return lookupMemberUsername(roster?.data, actorUserId, null) ?? `User ${actorUserId.slice(-4)}`;
 }
 
 function parseData(dataJson: string | null): Record<string, unknown> | null {
