@@ -25,7 +25,7 @@ type Props = {
   initialEndTime?: string | null;
   /** Pre-check all-day (e.g. clicked the all-day row). */
   initialAllDay?: boolean;
-  /** Pre-fill the title (e.g. from the natural-language quick-create field). */
+  /** Optional pre-filled title when opening the sheet. */
   initialTitle?: string | null;
   /** Default IANA id for new events (usually matches viewer zone). */
   eventTimeZoneDefault: string;
@@ -184,7 +184,7 @@ export default function AddItemModal({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             autoFocus
-            className={inputClass}
+            className={`${inputClass} w-full`}
             placeholder={mode === "event" ? "Dentist appointment" : "Take out trash"}
           />
         </Field>
@@ -360,7 +360,7 @@ function normalizeHm(t: string): string {
 }
 
 const inputClass =
-  "box-border min-w-0 w-full max-w-full hb-input px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+  "box-border block min-w-0 w-full max-w-full hb-input px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
 
 function Field({
   label,
@@ -372,7 +372,7 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="block min-w-0 max-w-full">
+    <label className="block w-full min-w-0 max-w-full">
       <span className="mb-1 block text-xs font-medium text-slate-400">
         {label}
         {required && <span className="ml-0.5 text-red-400">*</span>}

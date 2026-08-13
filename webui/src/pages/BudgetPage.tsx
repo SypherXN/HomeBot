@@ -728,17 +728,17 @@ export default function BudgetPage() {
       )}
 
       <div className="flex flex-wrap items-end gap-3">
-        <div className="flex items-end gap-1">
-          <button
-            type="button"
-            onClick={() => stepMonth(-1)}
-            aria-label="Previous month"
-            className="flex h-[2.625rem] w-10 shrink-0 items-center justify-center rounded-lg hb-btn-soft px-2.5 py-2 text-slate-300 hover:bg-slate-700"
-          >
-            ‹
-          </button>
-          <div>
-            <label className="mb-1 block text-xs text-slate-400">Month</label>
+        <div>
+          <label className="mb-1 block text-xs text-slate-400">Month</label>
+          <div className="flex h-11 items-stretch gap-1">
+            <button
+              type="button"
+              onClick={() => stepMonth(-1)}
+              aria-label="Previous month"
+              className="box-border flex w-10 shrink-0 items-center justify-center rounded-lg hb-btn-soft text-slate-300 hover:bg-slate-700"
+            >
+              ‹
+            </button>
             <input
               type="month"
               value={month}
@@ -746,17 +746,17 @@ export default function BudgetPage() {
                 setLedgerPage(0);
                 setMonth(e.target.value);
               }}
-              className="hb-input h-[2.625rem] px-3 py-2 text-slate-100"
+              className="box-border h-full min-h-0 max-h-full w-[12rem] hb-input px-3 py-0 leading-none text-slate-100"
             />
+            <button
+              type="button"
+              onClick={() => stepMonth(1)}
+              aria-label="Next month"
+              className="box-border flex w-10 shrink-0 items-center justify-center rounded-lg hb-btn-soft text-slate-300 hover:bg-slate-700"
+            >
+              ›
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => stepMonth(1)}
-            aria-label="Next month"
-            className="flex h-[2.625rem] w-10 shrink-0 items-center justify-center rounded-lg hb-btn-soft px-2.5 py-2 text-slate-300 hover:bg-slate-700"
-          >
-            ›
-          </button>
         </div>
         <div>
           <label className="mb-1 block text-xs text-slate-400">Whose money</label>
@@ -784,7 +784,7 @@ export default function BudgetPage() {
           </div>
         </div>
         <span className="hidden text-xs text-slate-500 md:inline">Swipe left/right to change month on mobile</span>
-        <div className="ml-auto flex flex-wrap gap-2">
+        <div className="flex w-full flex-wrap justify-start gap-2 md:ml-auto md:w-auto">
           <div className="flex overflow-hidden rounded-lg border border-slate-700">
             {(
               [

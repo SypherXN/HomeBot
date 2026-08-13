@@ -633,7 +633,7 @@ export default function ItemDetailModal({
 }
 
 const inputClass =
-  "box-border min-w-0 w-full max-w-full hb-input px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+  "box-border block min-w-0 w-full max-w-full hb-input px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
 
 const dateTimeInputClass = `${inputClass} calendar-datetime-input`;
 
@@ -665,7 +665,7 @@ function normalizeHmDetail(t: string): string {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="block min-w-0 max-w-full overflow-hidden">
+    <label className="block w-full min-w-0 max-w-full overflow-hidden">
       <span className="mb-1 block text-xs font-medium text-slate-400">{label}</span>
       {children}
     </label>

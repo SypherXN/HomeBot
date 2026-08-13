@@ -45,7 +45,6 @@ import { useHorizontalSwipe } from "../hooks/useHorizontalSwipe";
 import { useSearchHighlightId } from "../lib/searchHighlight";
 import { validActorId } from "../lib/validation";
 import { defaultEndTimeForSlot, minutesToHm } from "../lib/calendarDefaults";
-import { parseNaturalCreate } from "../lib/calendarNatural";
 import { everyoneLayer, layerForAssignee } from "../lib/personLayers";
 import { useUndoToast } from "../hooks/useUndoToast";
 import AddItemModal from "../calendar/AddItemModal";
@@ -124,8 +123,6 @@ export default function CalendarPage() {
         startTime?: string;
         endTime?: string;
         allDay?: boolean;
-        /** Pre-filled title from the natural-language quick-create field. */
-        title?: string;
       }
     | {
         kind: "detail";
@@ -140,7 +137,6 @@ export default function CalendarPage() {
   const [quickCompletingId, setQuickCompletingId] = useState<number | null>(null);
   const [quickCompletingKey, setQuickCompletingKey] = useState<string | null>(null);
   const [colorByPerson, setColorByPerson] = useState(true);
-  const [nlText, setNlText] = useState("");
 
   const rangeYmd = useMemo(
     () => computeRangeQuery(view, anchorYmd, effectiveViewerZone, AGENDA_DAYS),
@@ -383,26 +379,6 @@ export default function CalendarPage() {
     } catch (err) {
       showBanner("err", err instanceof Error ? err.message : String(err));
     }
-  }
-
-  /** Natural-language quick create: parse → pre-fill the add sheet. */
-  function handleNlSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!canAuth) return;
-    const parsed = parseNaturalCreate(nlText, effectiveViewerZone);
-    if (!parsed) {
-      showBanner("err", "Couldn't parse that — try “dentist thursday 3pm 1h”.");
-      return;
-    }
-    setNlText("");
-    setModal({
-      kind: "add",
-      mode: "event",
-      title: parsed.title,
-      ymd: parsed.ymd ?? anchorYmd,
-      startTime: parsed.startTime,
-      endTime: parsed.endTime,
-    });
   }
 
   // Distinct assignees present in the current range — drives the color legend.
@@ -681,9 +657,6 @@ export default function CalendarPage() {
         colorByPerson={colorByPerson}
         onToggleColorByPerson={() => setColorByPerson((v) => !v)}
         personLayers={personLayers}
-        nlText={nlText}
-        onNlText={setNlText}
-        onNlSubmit={handleNlSubmit}
         token={tok}
         guildRoster={guildRoster}
         canActor={canActor}
@@ -852,7 +825,6 @@ export default function CalendarPage() {
         initialStartTime={modal.kind === "add" ? modal.startTime ?? null : null}
         initialEndTime={modal.kind === "add" ? modal.endTime ?? null : null}
         initialAllDay={modal.kind === "add" ? modal.allDay === true : false}
-        initialTitle={modal.kind === "add" ? modal.title ?? null : null}
         eventTimeZoneDefault={effectiveViewerZone}
         token={tok}
         guildRoster={guildRoster}
@@ -916,9 +888,6 @@ function Toolbar({
   colorByPerson,
   onToggleColorByPerson,
   personLayers,
-  nlText,
-  onNlText,
-  onNlSubmit,
   token,
   guildRoster,
   canActor,
@@ -942,9 +911,6 @@ function Toolbar({
   colorByPerson: boolean;
   onToggleColorByPerson: () => void;
   personLayers: { id: string; label: string; dot: string }[];
-  nlText: string;
-  onNlText: (s: string) => void;
-  onNlSubmit: (e: React.FormEvent) => void;
   token: string;
   guildRoster: ReturnType<typeof useDiscordGuildRoster>;
   canActor: boolean;
@@ -998,25 +964,6 @@ function Toolbar({
           ))}
         </div>
       </div>
-
-      {canAuth && (
-        <form onSubmit={onNlSubmit} className="flex min-w-0 items-center gap-2">
-          <input
-            value={nlText}
-            onChange={(e) => onNlText(e.target.value)}
-            placeholder="Quick add: dentist thursday 3pm 1h"
-            aria-label="Quick add event with natural language"
-            className="hb-input h-9 min-w-0 flex-1 px-3 text-sm text-slate-100 placeholder:text-slate-500"
-          />
-          <button
-            type="submit"
-            disabled={!nlText.trim()}
-            className="shrink-0 rounded-md border border-blue-500/60 bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-1.5 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
-          >
-            Parse
-          </button>
-        </form>
-      )}
 
       {colorByPerson && personLayers.length > 0 && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-400" aria-label="Person color legend">

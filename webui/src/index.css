@@ -157,28 +157,55 @@
     scrollbar-color: rgb(148 163 184 / 0.7) transparent;
   }
 
-  /* Native date/time pickers have a large intrinsic width on WebKit (iOS PWA). */
-  input[type="date"].calendar-datetime-input,
-  input[type="time"].calendar-datetime-input {
+  /* Native date/time/month pickers have a large intrinsic size on WebKit (iOS PWA). */
+  input[type="date"],
+  input[type="time"],
+  input[type="month"] {
     display: block;
     width: 100%;
     max-width: 100%;
     min-width: 0;
     box-sizing: border-box;
   }
-  input[type="date"].calendar-datetime-input::-webkit-date-and-time-value,
-  input[type="time"].calendar-datetime-input::-webkit-date-and-time-value {
+  input[type="date"]::-webkit-date-and-time-value,
+  input[type="time"]::-webkit-date-and-time-value,
+  input[type="month"]::-webkit-date-and-time-value {
     min-width: 0;
     text-align: left;
   }
-  input[type="date"].calendar-datetime-input::-webkit-datetime-edit,
-  input[type="time"].calendar-datetime-input::-webkit-datetime-edit {
+  input[type="date"]::-webkit-datetime-edit,
+  input[type="time"]::-webkit-datetime-edit,
+  input[type="month"]::-webkit-datetime-edit {
     min-width: 0;
     overflow: hidden;
+    padding: 0;
   }
-  input[type="date"].calendar-datetime-input::-webkit-datetime-edit-fields-wrapper,
-  input[type="time"].calendar-datetime-input::-webkit-datetime-edit-fields-wrapper {
+  input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+  input[type="time"]::-webkit-datetime-edit-fields-wrapper,
+  input[type="month"]::-webkit-datetime-edit-fields-wrapper {
     min-width: 0;
+  }
+  input[type="month"] {
+    height: 2.75rem;
+    min-height: 0;
+    max-height: 2.75rem;
+    padding-top: 0;
+    padding-bottom: 0;
+    line-height: 1.25;
+  }
+
+  /*
+   * Native date/time controls are `width: 100%` above. Text inputs default to
+   * `size=20` and look narrower in the same form unless they also stretch.
+   */
+  .hb-dialog input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="file"]),
+  .hb-dialog select,
+  .hb-dialog textarea {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
 }
 
