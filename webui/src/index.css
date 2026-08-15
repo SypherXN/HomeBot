@@ -168,13 +168,10 @@
     box-sizing: border-box;
   }
   input[type="date"]::-webkit-date-and-time-value,
-  input[type="time"]::-webkit-date-and-time-value {
-    min-width: 0;
-    text-align: left;
-  }
+  input[type="time"]::-webkit-date-and-time-value,
   input[type="month"]::-webkit-date-and-time-value {
     min-width: 0;
-    text-align: center;
+    text-align: left;
   }
   input[type="date"]::-webkit-datetime-edit,
   input[type="time"]::-webkit-datetime-edit,
@@ -187,50 +184,6 @@
   input[type="time"]::-webkit-datetime-edit-fields-wrapper,
   input[type="month"]::-webkit-datetime-edit-fields-wrapper {
     min-width: 0;
-  }
-  input[type="month"] {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    height: 2.75rem;
-    min-height: 0;
-    max-height: 2.75rem;
-    padding-top: 0;
-    padding-bottom: 0;
-    line-height: 1;
-    text-align: center;
-  }
-  /* WebKit paints the month value in an inner edit control that otherwise sits high and left. */
-  input[type="month"]::-webkit-datetime-edit,
-  input[type="month"]::-webkit-datetime-edit-fields-wrapper,
-  input[type="month"]::-webkit-date-and-time-value {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    min-height: 0;
-    padding: 0;
-    line-height: 1;
-    text-align: center;
-  }
-  input[type="month"]::-webkit-datetime-edit-month-field,
-  input[type="month"]::-webkit-datetime-edit-year-field,
-  input[type="month"]::-webkit-datetime-edit-text {
-    padding-top: 0;
-    padding-bottom: 0;
-    line-height: 1;
-  }
-  input[type="month"]::-webkit-calendar-picker-indicator {
-    position: absolute;
-    right: 0.55rem;
-    top: 50%;
-    transform: translateY(-50%);
-    margin: 0;
-    height: 1rem;
-    width: 1rem;
-    cursor: pointer;
   }
 
   /*

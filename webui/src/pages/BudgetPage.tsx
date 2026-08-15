@@ -12,6 +12,7 @@ import { validActorId } from "../lib/validation";
 import { titleCase } from "../lib/titleCase";
 import { layerForAssignee } from "../lib/personLayers";
 import { categoryDotStyle, formatMoney, formatMonthLong } from "../lib/budgetMoney";
+import MonthPickerField from "../components/MonthPickerField";
 import {
   deleteBudgetTransaction,
   patchBudgetTransaction,
@@ -733,7 +734,9 @@ export default function BudgetPage() {
 
       <div className="flex flex-wrap items-end gap-3">
         <div>
-          <label className="mb-1 block text-xs text-slate-400">Month</label>
+          <label htmlFor="budget-month" className="mb-1 block text-xs text-slate-400">
+            Month
+          </label>
           <div className="flex h-11 items-stretch gap-1">
             <button
               type="button"
@@ -743,14 +746,13 @@ export default function BudgetPage() {
             >
               ‹
             </button>
-            <input
-              type="month"
+            <MonthPickerField
+              id="budget-month"
               value={month}
-              onChange={(e) => {
+              onChange={(next) => {
                 setLedgerPage(0);
-                setMonth(e.target.value);
+                setMonth(next);
               }}
-              className="box-border flex h-full min-h-0 max-h-full w-[12rem] items-center justify-center hb-input px-3 py-0 text-center leading-none text-slate-100"
             />
             <button
               type="button"
