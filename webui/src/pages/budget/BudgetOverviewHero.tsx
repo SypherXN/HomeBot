@@ -1,5 +1,5 @@
 import { MONEY_TEXT, formatMoney, formatMonthLong } from "../../lib/budgetMoney";
-import { monthTimePct } from "./PaceBar";
+import { monthTimePct } from "./budgetPace";
 import type { BudgetIncomePlan, BudgetMonthSummary } from "../../api";
 
 type Props = {

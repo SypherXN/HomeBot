@@ -57,7 +57,7 @@ export function parseReceiptText(text: string): ReceiptGuess {
   for (const line of lines.slice(0, 15)) {
     const mdy = line.match(DATE_RES[0]);
     if (mdy) {
-      let [, a, b, y] = mdy;
+      const [, a, b, y] = mdy;
       let m = Number(a), d = Number(b);
       if (m > 12 && d <= 12) [m, d] = [d, m];
       if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {

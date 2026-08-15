@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import type { BudgetEnvelope, BudgetNotificationItem, BudgetTransactionListItem } from "../../api";
 import { MONEY_TEXT, formatMoney } from "../../lib/budgetMoney";
 import { titleCase } from "../../lib/titleCase";
-import PaceBar, { monthTimePct } from "./PaceBar";
+import PaceBar from "./PaceBar";
+import { monthTimePct } from "./budgetPace";
 
 type Props = {
   envelopes: BudgetEnvelope[];

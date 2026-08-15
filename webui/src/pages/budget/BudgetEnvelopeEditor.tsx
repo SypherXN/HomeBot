@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { getBudgetEnvelopes, putBudgetEnvelope, type BudgetCategory, type BudgetEnvelope } from "../../api";
 import { MONEY_TEXT, categoryDotStyle, formatMoney } from "../../lib/budgetMoney";
-import PaceBar, { monthTimePct, paceState } from "./PaceBar";
+import PaceBar from "./PaceBar";
+import { monthTimePct, paceState } from "./budgetPace";
 
 function priorMonth(ym: string): string {
   const [y, m] = ym.split("-").map(Number);
