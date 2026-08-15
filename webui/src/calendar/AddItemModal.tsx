@@ -25,8 +25,6 @@ type Props = {
   initialEndTime?: string | null;
   /** Pre-check all-day (e.g. clicked the all-day row). */
   initialAllDay?: boolean;
-  /** Optional pre-filled title when opening the sheet. */
-  initialTitle?: string | null;
   /** Default IANA id for new events (usually matches viewer zone). */
   eventTimeZoneDefault: string;
   token: string;
@@ -43,7 +41,6 @@ export default function AddItemModal({
   initialStartTime,
   initialEndTime,
   initialAllDay,
-  initialTitle,
   eventTimeZoneDefault,
   token,
   guildRoster,
@@ -71,7 +68,7 @@ export default function AddItemModal({
   useEffect(() => {
     if (!open) return;
     setMode(initialMode);
-    setTitle(initialTitle?.trim() ?? "");
+    setTitle("");
     const tz = eventTimeZoneDefault;
     setEventTz(tz);
     const y =
@@ -100,7 +97,7 @@ export default function AddItemModal({
     setNotes("");
     setLink("");
     setSubmitting(false);
-  }, [open, initialMode, initialYmd, initialStartTime, initialEndTime, initialAllDay, initialTitle, eventTimeZoneDefault]);
+  }, [open, initialMode, initialYmd, initialStartTime, initialEndTime, initialAllDay, eventTimeZoneDefault]);
 
   if (!open) return null;
 
