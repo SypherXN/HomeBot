@@ -13,6 +13,7 @@ import {
   deleteBuyItem,
   getBuyItems,
   getBuyTagCatalog,
+  getBuyStoreCatalog,
   getBuyRecurring,
   postBuyRecurring,
   deleteBuyRecurring,
@@ -24,6 +25,7 @@ import {
   postUndo,
   putBuyItem,
   putBuyTagCatalog,
+  putBuyStoreCatalog,
   type BuyListItem,
   type BuyListSort,
   type BuyRecurringItem,
@@ -39,6 +41,12 @@ const TAG_TOKEN = /^[a-z0-9_-]{1,48}$/;
 function normalizeTagToken(raw: string): string | null {
   const s = raw.trim().toLowerCase().replace(/^#+/, "");
   if (!s || !TAG_TOKEN.test(s)) return null;
+  return s;
+}
+
+function normalizeStoreName(raw: string): string | null {
+  const s = raw.trim().replace(/\s+/g, " ");
+  if (!s || s.length > 50 || s.includes(",")) return null;
   return s;
 }
 
@@ -59,6 +67,9 @@ export default function BuyPage() {
   const [catalogTags, setCatalogTags] = useState<string[]>([]);
   const [draftCatalogTags, setDraftCatalogTags] = useState<string[]>([]);
   const [newCatalogTag, setNewCatalogTag] = useState("");
+  const [catalogStores, setCatalogStores] = useState<string[]>([]);
+  const [draftCatalogStores, setDraftCatalogStores] = useState<string[]>([]);
+  const [newCatalogStore, setNewCatalogStore] = useState("");
   const [catalogBusy, setCatalogBusy] = useState(false);
 
   const [filterTag, setFilterTag] = useState("");
@@ -105,16 +116,22 @@ export default function BuyPage() {
     if (!canAuth) {
       setCatalogTags([]);
       setDraftCatalogTags([]);
+      setCatalogStores([]);
+      setDraftCatalogStores([]);
       return;
     }
     setCatalogBusy(true);
     try {
-      const r = await getBuyTagCatalog(tok);
-      setCatalogTags(r.tags);
-      setDraftCatalogTags([...r.tags]);
+      const [tags, stores] = await Promise.all([getBuyTagCatalog(tok), getBuyStoreCatalog(tok)]);
+      setCatalogTags(tags.tags);
+      setDraftCatalogTags([...tags.tags]);
+      setCatalogStores(stores.stores);
+      setDraftCatalogStores([...stores.stores]);
     } catch {
       setCatalogTags([]);
       setDraftCatalogTags([]);
+      setCatalogStores([]);
+      setDraftCatalogStores([]);
     } finally {
       setCatalogBusy(false);
     }
@@ -331,6 +348,42 @@ export default function BuyPage() {
     }
   }
 
+  function appendDraftStore() {
+    const n = normalizeStoreName(newCatalogStore);
+    if (!n) {
+      showBanner("err", "Use 1–50 characters, no commas (e.g. Costco).");
+      return;
+    }
+    if (draftCatalogStores.some((s) => s.toLowerCase() === n.toLowerCase())) {
+      setNewCatalogStore("");
+      return;
+    }
+    setDraftCatalogStores((d) => [...d, n].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })));
+    setNewCatalogStore("");
+  }
+
+  async function handleSaveStoreCatalog() {
+    if (!canAuth) return;
+    setCatalogBusy(true);
+    try {
+      const r = await putBuyStoreCatalog(tok, draftCatalogStores);
+      setCatalogStores(r.stores);
+      setDraftCatalogStores([...r.stores]);
+      setFilterStore((fs) => {
+        if (!fs) return fs;
+        if (r.stores.length === 0) return fs;
+        const hit = r.stores.find((s) => s.toLowerCase() === fs.toLowerCase());
+        return hit ?? "";
+      });
+      showBanner("ok", "Store catalog saved.");
+      await loadList();
+    } catch (err) {
+      showBanner("err", err instanceof Error ? err.message : String(err));
+    } finally {
+      setCatalogBusy(false);
+    }
+  }
+
   const totalPages = data && data.pageSize > 0 ? Math.max(1, Math.ceil(data.totalCount / data.pageSize)) : 1;
   const rangeStart = data && data.items.length > 0 ? data.page * data.pageSize + 1 : 0;
   const rangeEnd = data ? data.page * data.pageSize + data.items.length : 0;
@@ -447,6 +500,7 @@ export default function BuyPage() {
           actor={actor}
           roster={guildRoster}
           catalogTags={catalogTags}
+          catalogStores={catalogStores}
           listItems={items}
           recurring={recurring}
           onAdd={handleAdd}
@@ -548,16 +602,35 @@ export default function BuyPage() {
             <label htmlFor="buy-filter-store" className="mb-1 block text-xs font-medium text-slate-400">
               Store
             </label>
-            <input
-              id="buy-filter-store"
-              value={filterStore}
-              onChange={(e) => {
-                setFilterStore(e.target.value);
-                setListPage(0);
-              }}
-              placeholder="e.g. Costco"
-              className="h-10 w-full hb-input px-3 text-sm text-slate-100"
-            />
+            {catalogStores.length > 0 ? (
+              <select
+                id="buy-filter-store"
+                value={filterStore}
+                onChange={(e) => {
+                  setFilterStore(e.target.value);
+                  setListPage(0);
+                }}
+                className="h-10 w-full hb-input px-3 text-sm text-slate-100"
+              >
+                <option value="">All stores</option>
+                {catalogStores.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                id="buy-filter-store"
+                value={filterStore}
+                onChange={(e) => {
+                  setFilterStore(e.target.value);
+                  setListPage(0);
+                }}
+                placeholder="e.g. Costco"
+                className="h-10 w-full hb-input px-3 text-sm text-slate-100"
+              />
+            )}
           </div>
           <div>
             <label htmlFor="buy-filter-assigned" className="mb-1 block text-xs font-medium text-slate-400">
@@ -707,7 +780,7 @@ export default function BuyPage() {
         <details className="hb-card group p-4">
           <summary className="cursor-pointer list-none text-sm font-medium text-slate-300 marker:hidden">
             <span className="inline-block transition-transform group-open:rotate-90">▸</span> Manage list{" "}
-            <span className="text-xs font-normal text-slate-500">tags, recurring, undo, cleanup</span>
+            <span className="text-xs font-normal text-slate-500">tags, stores, recurring, undo, cleanup</span>
           </summary>
 
           <div className="mt-4 space-y-6 border-t border-slate-800 pt-4">
@@ -762,6 +835,65 @@ export default function BuyPage() {
                   type="button"
                   disabled={catalogBusy}
                   onClick={() => void handleSaveCatalog()}
+                  className="rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                >
+                  {catalogBusy ? "Saving…" : "Save catalog"}
+                </button>
+              </div>
+            </section>
+
+            <section aria-labelledby="stores-heading">
+              <h2 id="stores-heading" className="text-sm font-semibold text-white">
+                Store catalog
+              </h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Once saved, new items can only use these stores (unknown stores are dropped). Leave empty to keep
+                typing any store name.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {draftCatalogStores.map((s) => (
+                  <span
+                    key={s}
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-700 px-3 py-1 text-sm text-slate-100"
+                  >
+                    {s}
+                    <button
+                      type="button"
+                      className="rounded p-0.5 text-slate-300 hover:bg-slate-600 hover:text-white"
+                      onClick={() => setDraftCatalogStores((d) => d.filter((x) => x !== s))}
+                      aria-label={`Remove ${s}`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                {draftCatalogStores.length === 0 && <span className="text-sm text-slate-500">No stores yet.</span>}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <input
+                  value={newCatalogStore}
+                  onChange={(e) => setNewCatalogStore(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      appendDraftStore();
+                    }
+                  }}
+                  placeholder="e.g. Costco"
+                  aria-label="New catalog store"
+                  className="min-w-[10rem] flex-1 hb-input px-3 py-2 text-sm text-slate-100"
+                />
+                <button
+                  type="button"
+                  onClick={appendDraftStore}
+                  className="rounded-lg hb-btn-soft px-3 py-2 text-sm text-slate-200"
+                >
+                  Add
+                </button>
+                <button
+                  type="button"
+                  disabled={catalogBusy}
+                  onClick={() => void handleSaveStoreCatalog()}
                   className="rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                 >
                   {catalogBusy ? "Saving…" : "Save catalog"}
@@ -882,6 +1014,7 @@ export default function BuyPage() {
         actor={actor}
         roster={guildRoster}
         catalogTags={catalogTags}
+        catalogStores={catalogStores}
         onClose={() => setEditItem(null)}
         onSave={handleSaveEdit}
       />

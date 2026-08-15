@@ -63,23 +63,25 @@ Bind each feature to a text channel. Feature commands only work in the bound cha
 
 ## Buy list
 
-Shared shopping-style checklist with assignees and optional tags.
+Shared shopping-style checklist with assignees, optional tags, and a store catalog.
 
 ### Discord
 
 `/buy-add`, `/buy-list` (filters + pagination + buttons), `/buy-complete`, `/buy-delete`, `/buy-edit`, `/buy-clear-completed`
 
+Store text on Discord is matched to the store catalog when one is saved (unknown names are dropped, same as tags).
+
 ### Web UI (`/buy`)
 
 - Add items with assignee (Discord roster when available)
-- Tag catalog editor; filter and sort lists (including **created** sort)
+- Tag and store catalogs; filter and sort lists (including **created** sort)
 - Complete, remove, clear completed; **bulk complete/delete** (checkboxes on each page)
 - **Stale age** hint on rows (`createdAt` from API)
 - Pagination and **undo**
 
 ### API (high level)
 
-`GET/POST` items, tag catalog `GET/PUT`, pagination, **`GET /api/buy/stale?days=&limit=`** for aging items, **`POST …/bulk-complete`** and **`POST …/bulk-delete`** (body: `actorUserId`, `ids[]`), mutations with `actorUserId`.
+`GET/POST` items, tag catalog `GET/PUT`, store catalog `GET/PUT /api/buy/stores`, pagination, **`GET /api/buy/stale?days=&limit=`** for aging items, **`POST …/bulk-complete`** and **`POST …/bulk-delete`** (body: `actorUserId`, `ids[]`), mutations with `actorUserId`.
 
 ---
 

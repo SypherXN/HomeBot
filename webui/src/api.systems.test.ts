@@ -6,6 +6,7 @@ import {
   getBudgetNotifications,
   getBudgetNotificationCount,
   getBuy,
+  getBuyStoreCatalog,
   getCalendarRange,
   getHealth,
   getMeta,
@@ -20,6 +21,7 @@ import {
   postMoneyPayment,
   postUndo,
   postWishlistItem,
+  putBuyStoreCatalog,
 } from "./api";
 import { createHomeBotFetchMock, getCalls } from "./test/fetchMock";
 
@@ -69,6 +71,18 @@ describe("API client — all subsystems", () => {
 
     await getBuy(TOKEN, 0);
     expect(lastCall().url).toContain("/api/buy/items");
+  });
+
+  it("buy: store catalog GET and PUT", async () => {
+    await getBuyStoreCatalog(TOKEN);
+    expect(lastCall().url).toContain("/api/buy/stores");
+    expect(lastCall().method).toBe("GET");
+
+    await putBuyStoreCatalog(TOKEN, ["Costco", "Trader Joe's"]);
+    expect(lastCall().url).toContain("/api/buy/stores");
+    expect(lastCall().method).toBe("PUT");
+    const body = JSON.parse(lastCall().body ?? "{}") as { stores?: string[] };
+    expect(body.stores).toEqual(["Costco", "Trader Joe's"]);
   });
 
   it("wishlist: POST sends owner as digit string", async () => {

@@ -75,6 +75,13 @@ public static class HomeBotApiRegistration
             return Results.Ok(new { tags, catalogEnforced = tags.Count > 0 });
         });
 
+        app.MapGet("/api/buy/stores", () =>
+        {
+            var buy = root.GetRequiredService<BuyService>();
+            var stores = buy.GetBuyStoreCatalog();
+            return Results.Ok(new { stores, catalogEnforced = stores.Count > 0 });
+        });
+
         app.MapGet("/api/buy/stale", (HttpRequest request) =>
         {
             var buy = root.GetRequiredService<BuyService>();
@@ -476,6 +483,16 @@ public static class HomeBotApiRegistration
             var buy = root.GetRequiredService<BuyService>();
             buy.SetBuyTagCatalog(body.Tags);
             return Results.Ok(new { ok = true, tags = buy.GetBuyTagCatalog() });
+        });
+
+        w.MapPut("/buy/stores", (BuyStoreCatalogPutRequest? body) =>
+        {
+            if (body?.Stores is null)
+                return ApiResults.BadRequest("Request body with 'stores' array is required.", "missing_body");
+
+            var buy = root.GetRequiredService<BuyService>();
+            buy.SetBuyStoreCatalog(body.Stores);
+            return Results.Ok(new { ok = true, stores = buy.GetBuyStoreCatalog() });
         });
 
         w.MapPut("/wishlist/tags", (WishlistTagCatalogPutRequest? body) =>

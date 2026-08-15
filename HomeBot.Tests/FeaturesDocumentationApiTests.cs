@@ -97,6 +97,7 @@ public sealed class FeaturesDocumentationApiTests : IDisposable
         Assert.Contains("/api/meals/recipes", text, StringComparison.Ordinal);
         Assert.Contains("/api/search", text, StringComparison.Ordinal);
         Assert.Contains("/api/buy/stale", text, StringComparison.Ordinal);
+        Assert.Contains("/api/buy/stores", text, StringComparison.Ordinal);
         Assert.Contains("/api/ops/health", text, StringComparison.Ordinal);
     }
 

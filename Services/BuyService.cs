@@ -6,8 +6,11 @@ using Microsoft.Data.Sqlite;
 public class BuyService
 {
     private const string BuyTagsCatalogKey = "buy_allowed_tags";
+    private const string BuyStoresCatalogKey = "buy_allowed_stores";
     private const int MaxCatalogTags = 48;
+    private const int MaxCatalogStores = 48;
     private const int MaxTagTokenLength = 48;
+    private const int MaxStoreNameLength = 50;
 
     private readonly DatabaseService _db;
     private readonly UndoService _undo;
@@ -38,6 +41,7 @@ public class BuyService
         var finalQuantity = string.IsNullOrWhiteSpace(quantity) ? "1" : quantity;
 
         var normalizedTags = NormalizeTagsForPersistence(tags);
+        var normalizedStore = NormalizeStoreForPersistence(store);
 
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
@@ -47,7 +51,7 @@ public class BuyService
 
         cmd.Parameters.AddWithValue("$name", name);
         cmd.Parameters.AddWithValue("$quantity", finalQuantity);
-        cmd.Parameters.AddWithValue("$store", store);
+        cmd.Parameters.AddWithValue("$store", normalizedStore);
 
         if (assignedTo.HasValue)
             cmd.Parameters.AddWithValue("$assignedTo", (long)assignedTo.Value);
@@ -300,7 +304,7 @@ public class BuyService
         if (!string.IsNullOrWhiteSpace(store))
         {
             updates.Add("Store = $store");
-            cmd.Parameters.AddWithValue("$store", store);
+            cmd.Parameters.AddWithValue("$store", NormalizeStoreForPersistence(store));
         }
 
         if (assignedTo.HasValue)
@@ -380,6 +384,48 @@ public class BuyService
     }
 
     /// <summary>
+    /// Allowed store names for the household (CSV in Settings). Empty catalog keeps free-form store text.
+    /// Display casing is preserved; matching is case-insensitive.
+    /// </summary>
+    public IReadOnlyList<string> GetBuyStoreCatalog()
+    {
+        var raw = _config.Get(BuyStoresCatalogKey);
+        if (string.IsNullOrWhiteSpace(raw))
+            return Array.Empty<string>();
+
+        return raw
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(TryNormalizeCatalogStoreName)
+            .OfType<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+            .Take(MaxCatalogStores)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Replaces the buy store catalog (human names, max 50 chars, no commas; max 48 stores).
+    /// </summary>
+    public void SetBuyStoreCatalog(IReadOnlyList<string> stores)
+    {
+        var normalized = new List<string>();
+        foreach (var t in stores)
+        {
+            var s = TryNormalizeCatalogStoreName(t);
+            if (s is null)
+                continue;
+            if (normalized.Any(x => x.Equals(s, StringComparison.OrdinalIgnoreCase)))
+                continue;
+            normalized.Add(s);
+            if (normalized.Count >= MaxCatalogStores)
+                break;
+        }
+
+        normalized.Sort(StringComparer.OrdinalIgnoreCase);
+        _config.Set(BuyStoresCatalogKey, string.Join(",", normalized));
+    }
+
+    /// <summary>
     /// When the catalog is non-empty, only those tags are kept. Otherwise all normalized tokens are kept.
     /// </summary>
     private string NormalizeTagsForPersistence(string tags)
@@ -397,6 +443,43 @@ public class BuyService
 
         var allowed = new HashSet<string>(catalog, StringComparer.Ordinal);
         return string.Join(",", parts.Where(p => allowed.Contains(p)));
+    }
+
+    /// <summary>
+    /// When the catalog is non-empty, persist the canonical catalog spelling or empty.
+    /// Otherwise keep collapsed free-form store text.
+    /// </summary>
+    private string NormalizeStoreForPersistence(string store)
+    {
+        if (string.IsNullOrWhiteSpace(store))
+            return "";
+
+        var collapsed = CollapseWhitespace(store);
+        var catalog = GetBuyStoreCatalog();
+        if (catalog.Count == 0)
+            return collapsed;
+
+        return catalog.FirstOrDefault(c => c.Equals(collapsed, StringComparison.OrdinalIgnoreCase)) ?? "";
+    }
+
+    private static string? TryNormalizeCatalogStoreName(string raw)
+    {
+        var s = CollapseWhitespace(raw);
+        if (s.Length == 0 || s.Length > MaxStoreNameLength)
+            return null;
+        if (s.Contains(',', StringComparison.Ordinal))
+            return null;
+        if (s.Any(char.IsControl))
+            return null;
+        if (!s.Any(char.IsLetterOrDigit))
+            return null;
+        return s;
+    }
+
+    private static string CollapseWhitespace(string raw)
+    {
+        var parts = raw.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        return string.Join(" ", parts);
     }
 
     /// <summary>Active items older than <paramref name="olderThanDays"/> by CreatedAt.</summary>

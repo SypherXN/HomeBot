@@ -65,7 +65,7 @@ flowchart TB
 | Service | Role |
 |---------|------|
 | `DatabaseService` | Connection string, `CREATE TABLE IF NOT EXISTS`, runs migrations |
-| `ConfigService` | Key/value `Settings` table (`page_size`, `timezone`, tag catalogs, …) |
+| `ConfigService` | Key/value `Settings` table (`page_size`, `timezone`, tag catalogs, buy store catalog, …) |
 | `ChannelBindingService` | `ChannelBindings` — feature → Discord channel id |
 | `UndoService` | `ActionLog` append + restore |
 | `BuyService`, `WishlistService`, `MoneyService`, `CalendarService`, `BudgetService` | Feature domains |

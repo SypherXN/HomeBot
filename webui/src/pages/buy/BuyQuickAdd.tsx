@@ -9,6 +9,7 @@ type Props = {
   actor: string;
   roster: DiscordGuildRosterState;
   catalogTags: string[];
+  catalogStores: string[];
   /** Names already on the list (for autocomplete). */
   listItems: BuyListItem[];
   /** Recurring staples → one-tap "probably need" chips. */
@@ -36,6 +37,7 @@ export default function BuyQuickAdd({
   actor,
   roster,
   catalogTags,
+  catalogStores,
   listItems,
   recurring,
   onAdd,
@@ -201,12 +203,34 @@ export default function BuyQuickAdd({
 
         {detailsOpen && (
           <div className="grid gap-3 border-t border-slate-800 pt-3 sm:grid-cols-2">
-            <input
-              value={store}
-              onChange={(e) => setStore(e.target.value)}
-              placeholder="Store (e.g. Costco)"
-              className="hb-input px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
-            />
+            {catalogStores.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Store">
+                {catalogStores.map((s) => {
+                  const on = store.toLowerCase() === s.toLowerCase();
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setStore(on ? "" : s)}
+                      className={`rounded-full border px-2.5 py-1 text-xs ${
+                        on
+                          ? "border-blue-500 bg-blue-900/50 text-blue-100"
+                          : "border-slate-600 bg-slate-950 text-slate-300 hover:border-slate-500"
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <input
+                value={store}
+                onChange={(e) => setStore(e.target.value)}
+                placeholder="Store (e.g. Costco)"
+                className="hb-input px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
+              />
+            )}
             <div>
               {catalogTags.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">

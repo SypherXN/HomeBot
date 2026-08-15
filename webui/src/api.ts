@@ -219,6 +219,25 @@ export function putBuyTagCatalog(token: string, tags: string[]) {
   });
 }
 
+export type BuyStoreCatalogResponse = {
+  stores: string[];
+  catalogEnforced: boolean;
+};
+
+/** Allowed buy stores (empty = free-form store text still accepted on writes). */
+export function getBuyStoreCatalog(token: string) {
+  return apiJson<BuyStoreCatalogResponse>("/api/buy/stores", { token });
+}
+
+/** Replace allowed buy store names (display casing kept; max 48 stores, 50 chars each). */
+export function putBuyStoreCatalog(token: string, stores: string[]) {
+  return apiJson<{ ok: boolean; stores: string[] }>("/api/buy/stores", {
+    token,
+    method: "PUT",
+    body: { stores },
+  });
+}
+
 /** Active items only (`Status = active`); paginated by server page size. */
 export function getBuyItems(
   token: string,

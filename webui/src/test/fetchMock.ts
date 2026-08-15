@@ -61,6 +61,9 @@ export function createHomeBotFetchMock(
     if (url.includes("/api/buy/tags")) {
       return jsonResponse({ tags: [], catalogEnforced: false });
     }
+    if (url.includes("/api/buy/stores")) {
+      return jsonResponse({ stores: [], catalogEnforced: false });
+    }
     if (url.includes("/api/wishlist/tags")) {
       return jsonResponse({ tags: [], catalogEnforced: false });
     }

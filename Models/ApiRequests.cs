@@ -9,6 +9,12 @@ public sealed class BuyTagCatalogPutRequest
     public List<string>? Tags { get; set; }
 }
 
+/// <summary>PUT /api/buy/stores — replaces the allowed buy-store names (comma list in Settings).</summary>
+public sealed class BuyStoreCatalogPutRequest
+{
+    public List<string>? Stores { get; set; }
+}
+
 /// <summary>PUT /api/wishlist/tags — replaces allowed wishlist tag tokens.</summary>
 public sealed class WishlistTagCatalogPutRequest
 {

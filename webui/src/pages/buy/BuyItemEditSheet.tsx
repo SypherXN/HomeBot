@@ -10,6 +10,7 @@ type Props = {
   actor: string;
   roster: DiscordGuildRosterState;
   catalogTags: string[];
+  catalogStores: string[];
   onClose: () => void;
   onSave: (item: BuyListItem, input: {
     name: string;
@@ -22,7 +23,16 @@ type Props = {
 };
 
 /** Edit an item in a bottom sheet (mobile) / dialog (desktop) instead of inline. */
-export default function BuyItemEditSheet({ item, token, actor, roster, catalogTags, onClose, onSave }: Props) {
+export default function BuyItemEditSheet({
+  item,
+  token,
+  actor,
+  roster,
+  catalogTags,
+  catalogStores,
+  onClose,
+  onSave,
+}: Props) {
   const [name, setName] = useState("");
   const [qty, setQty] = useState("");
   const [store, setStore] = useState("");
@@ -35,11 +45,17 @@ export default function BuyItemEditSheet({ item, token, actor, roster, catalogTa
     if (!item) return;
     setName(item.name);
     setQty(item.quantity || "1");
-    setStore(item.store || "");
+    const rawStore = item.store || "";
+    if (catalogStores.length > 0) {
+      const hit = catalogStores.find((s) => s.toLowerCase() === rawStore.trim().toLowerCase());
+      setStore(hit ?? "");
+    } else {
+      setStore(rawStore);
+    }
     setNotes(item.notes || "");
     setAssigned(item.assignedTo != null ? String(item.assignedTo) : "");
     setTagPick(item.tags ? [...item.tags] : []);
-  }, [item]);
+  }, [item, catalogStores]);
 
   if (!item) return null;
 
@@ -73,7 +89,7 @@ export default function BuyItemEditSheet({ item, token, actor, roster, catalogTa
             className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
           />
         </label>
-        <div className="grid grid-cols-2 gap-3">
+        <div className={catalogStores.length === 0 ? "grid grid-cols-2 gap-3" : undefined}>
           <label className="block text-xs text-slate-400">
             Quantity
             <input
@@ -82,15 +98,41 @@ export default function BuyItemEditSheet({ item, token, actor, roster, catalogTa
               className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
             />
           </label>
-          <label className="block text-xs text-slate-400">
-            Store
-            <input
-              value={store}
-              onChange={(e) => setStore(e.target.value)}
-              className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
-            />
-          </label>
+          {catalogStores.length === 0 && (
+            <label className="block text-xs text-slate-400">
+              Store
+              <input
+                value={store}
+                onChange={(e) => setStore(e.target.value)}
+                className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
+              />
+            </label>
+          )}
         </div>
+        {catalogStores.length > 0 && (
+          <div>
+            <span className="mb-1 block text-xs text-slate-400">Store</span>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Store">
+              {catalogStores.map((s) => {
+                const on = store.toLowerCase() === s.toLowerCase();
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setStore(on ? "" : s)}
+                    className={`rounded-full border px-2.5 py-1 text-xs ${
+                      on
+                        ? "border-blue-500 bg-blue-900/50 text-blue-100"
+                        : "border-slate-600 bg-slate-950 text-slate-300 hover:border-slate-500"
+                    }`}
+                  >
+                    {s}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <label className="block text-xs text-slate-400">
           Notes
           <textarea

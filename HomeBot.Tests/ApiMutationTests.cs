@@ -148,6 +148,51 @@ public sealed class ApiMutationTests : IDisposable
     }
 
     [Fact]
+    public async Task Buy_stores_catalog_get_and_put()
+    {
+        var stores = await _client.GetFromJsonAsync<JsonElement>("/api/buy/stores");
+        Assert.True(stores.TryGetProperty("stores", out var arr));
+        Assert.Equal(JsonValueKind.Array, arr.ValueKind);
+        Assert.False(stores.GetProperty("catalogEnforced").GetBoolean());
+
+        var put = await _client.PutAsJsonAsync(
+            "/api/buy/stores",
+            new { stores = new[] { "Costco", "Trader Joe's", "costco" } });
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+        var body = await put.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.GetProperty("ok").GetBoolean());
+        var saved = body.GetProperty("stores");
+        Assert.Equal(2, saved.GetArrayLength());
+
+        var stores2 = await _client.GetFromJsonAsync<JsonElement>("/api/buy/stores");
+        Assert.True(stores2.GetProperty("catalogEnforced").GetBoolean());
+
+        var postKnown = await _client.PostAsJsonAsync(
+            $"/api/buy/items?actorUserId={Actor}",
+            new { name = "ApiTestStoreCatalogMilk", store = "costco" });
+        Assert.True(
+            postKnown.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created,
+            await postKnown.Content.ReadAsStringAsync());
+
+        var list = await _client.GetFromJsonAsync<JsonElement>("/api/buy/items?page=0");
+        var milk = list.GetProperty("items").EnumerateArray()
+            .First(i => i.GetProperty("name").GetString() == "ApiTestStoreCatalogMilk");
+        Assert.Equal("Costco", milk.GetProperty("store").GetString());
+
+        var postUnknown = await _client.PostAsJsonAsync(
+            $"/api/buy/items?actorUserId={Actor}",
+            new { name = "ApiTestStoreCatalogUnknown", store = "NotAPlace" });
+        Assert.True(
+            postUnknown.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created,
+            await postUnknown.Content.ReadAsStringAsync());
+
+        var list2 = await _client.GetFromJsonAsync<JsonElement>("/api/buy/items?page=0");
+        var unknown = list2.GetProperty("items").EnumerateArray()
+            .First(i => i.GetProperty("name").GetString() == "ApiTestStoreCatalogUnknown");
+        Assert.Equal("", unknown.GetProperty("store").GetString());
+    }
+
+    [Fact]
     public async Task Buy_crud_flow_via_http()
     {
         const string name = "ApiTestBuyItem";
