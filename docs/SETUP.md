@@ -576,23 +576,14 @@ HomeBot uses **three separate** GitHub Actions workflows. Only some need your VM
 |----------|---------|-----------|--------------|
 | **[CI](../.github/workflows/ci.yml)** | Every push/PR to **`main`** | **No** | **`dotnet test`** + **`npm run lint`**, **`test`**, **`build`** — validates the repo on GitHub’s runners. |
 | **[Deploy Web UI to GitHub Pages](../.github/workflows/pages-webui.yml)** | Push to **`main`** when **`webui/**`** changes (or manual) | **No** for the build; **yes** for a *working* site (API must be live + CORS) | Builds static **`webui/dist`** and publishes to Pages. Set **`HOMEBOT_API_PUBLIC_URL`** ([Step H](#step-h--github-pages-web-ui)). |
-| **[Deploy VM](../.github/workflows/deploy-vm.yml)** | Push to **`main`** (optional) | **Yes**, when enabled | SSH to your server and runs **`update-homebot.sh`**. **Off by default** — see below. |
 
-**Update the bot on your VM (manual — always works after install):**
+**Update the bot on your VM (manual — GitHub does not SSH to the server):**
 
 ```bash
 sudo bash /opt/homebot/app/scripts/ubuntu/update-homebot.sh
 ```
 
 Same as [Section 8.8](#88-updates-after-git-pull). Your **`.env`** and **`homebot.db`** are not overwritten.
-
-**Optional — automatic VM deploy after each push:**
-
-1. **Settings** → **Secrets and variables** → **Actions** → **Secrets:** **`DEPLOY_HOST`**, **`DEPLOY_USER`**, **`DEPLOY_SSH_KEY`** (SSH private key; public key in **`~/.ssh/authorized_keys`** on the VM).
-2. **Variables:** **`DEPLOY_VM_ENABLED`** = **`true`**
-3. Optional secret **`DEPLOY_APP_DIR`** if the clone is not **`/opt/homebot/app`**.
-
-The SSH user needs passwordless **`sudo`** for **`update-homebot.sh`**. Until **`DEPLOY_VM_ENABLED`** is set, **Deploy VM** runs tests only and **skips** deploy (so missing secrets do not fail CI).
 
 Detail: **[OPS.md](OPS.md)** · **[UBUNTU_DEPLOY.md](UBUNTU_DEPLOY.md) §5**.
 
@@ -1077,8 +1068,6 @@ sudo bash /opt/homebot/app/scripts/ubuntu/update-homebot.sh
 
 (Manual equivalent: `git pull`, `dotnet publish`, `systemctl restart` — see [UBUNTU_DEPLOY.md](UBUNTU_DEPLOY.md).)
 
-**Optional:** enable GitHub **Deploy VM** so pushes to **`main`** run the same script over SSH — [§2.5 Updates after push](#updates-after-you-push-to-github) and **[OPS.md](OPS.md)**.
-
 ### 8.9 Optional: restart on any crash
 
 In the unit file, change **`Restart=on-failure`** to **`Restart=always`**, then:
@@ -1561,13 +1550,13 @@ Triggers: pushes to **`main`** that change **`webui/**`**, or **Actions → Depl
 
 The **build** job must pass before **deploy** runs. A green deploy does **not** mean the site works in the browser until your VM API is up, **HTTPS** is configured, **`HOMEBOT_API_PUBLIC_URL`** matches **`YOUR_API_PUBLIC`**, and **CORS** includes your Pages origin ([Step I](#step-i--cors-on-the-server), [Section 13](#13-optional--github-pages-static-web-ui)).
 
-### 16.4 Optional — Deploy VM (`deploy-vm.yml`)
+### 16.4 VM API updates
 
-**[`.github/workflows/deploy-vm.yml`](../.github/workflows/deploy-vm.yml)** can SSH to your Ubuntu server after tests pass and run **`scripts/ubuntu/update-homebot.sh`**.
+GitHub Actions does **not** SSH to the Ubuntu server. After CI is green, update the bot on the VM:
 
-**Disabled by default.** Set repository variable **`DEPLOY_VM_ENABLED`** = **`true`** only after you add secrets **`DEPLOY_HOST`**, **`DEPLOY_USER`**, **`DEPLOY_SSH_KEY`**. Without the variable, the workflow runs tests and **skips** deploy (missing secrets will not fail the run).
-
-Full checklist: [§2.5 Updates after push](#updates-after-you-push-to-github) · **[OPS.md](OPS.md)**.
+```bash
+sudo bash /opt/homebot/app/scripts/ubuntu/update-homebot.sh
+```
 
 ---
 
@@ -1593,8 +1582,7 @@ Full checklist: [§2.5 Updates after push](#updates-after-you-push-to-github) ·
 | **Deploy Web UI to GitHub Pages** **build** failed | Same local commands as CI **`webui`**. Confirm **Pages → Source: GitHub Actions**. |
 | Pages loads but API calls **`localhost`** | Set **`HOMEBOT_API_PUBLIC_URL`** to **`YOUR_API_PUBLIC`**, re-run **Deploy Web UI to GitHub Pages**. |
 | Pages **CORS** errors | **`HOMEBOT_ALLOWED_ORIGINS`** on the VM must include **`YOUR_PAGES_ORIGIN`** (no path) — [Step I](#step-i--cors-on-the-server). |
-| **Deploy VM** job skipped | Normal until **`DEPLOY_VM_ENABLED=true`**. Manual update: `sudo bash /opt/homebot/app/scripts/ubuntu/update-homebot.sh`. |
-| **Deploy VM** “missing server host” | Add secrets **`DEPLOY_HOST`**, **`DEPLOY_USER`**, **`DEPLOY_SSH_KEY`**, then set **`DEPLOY_VM_ENABLED=true`**. |
+| API still on an old commit after a push | GitHub Pages updates the Web UI automatically. The VM API needs a manual `sudo bash /opt/homebot/app/scripts/ubuntu/update-homebot.sh`. |
 
 ---
 

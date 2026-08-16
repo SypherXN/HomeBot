@@ -246,7 +246,7 @@ Stop a running `HomeBot` process if the build cannot overwrite `HomeBot.dll`.
 
 **[`.github/workflows/ci.yml`](.github/workflows/ci.yml)** on push/PR to **`main`**: .NET restore, Release build, **`dotnet test`**; **`npm ci`**, **`npm run lint`**, **`npm run test`**, **`npm run build`** for the Web UI (Node **22**).
 
-Optional **[`.github/workflows/deploy-vm.yml`](.github/workflows/deploy-vm.yml)** deploys **`main`** to a self-hosted VM after tests (see **[docs/OPS.md](docs/OPS.md)**).
+The VM API is updated manually with **`scripts/ubuntu/update-homebot.sh`** (see **[docs/OPS.md](docs/OPS.md)**).
 
 ### Production Web UI build
 

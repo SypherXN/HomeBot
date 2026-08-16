@@ -151,7 +151,7 @@ public sealed class BudgetPolishApiTests : IDisposable
         var list = await _client.GetFromJsonAsync<JsonElement>("/api/budget/transactions?month=2026-02&page=0");
         var row = list.GetProperty("items").EnumerateArray().First(t => t.GetProperty("id").GetInt32() == txId);
         Assert.Equal(14, row.GetProperty("amount").GetDouble());
-        Assert.Equal(other, row.GetProperty("spentByUserId").GetUInt64());
+        Assert.Equal(other.ToString(), row.GetProperty("spentByUserId").GetString());
         Assert.Equal("2026-02-20", row.GetProperty("transactionDate").GetString());
         Assert.Contains("dining", row.GetProperty("tags").EnumerateArray().Select(t => t.GetString()));
     }

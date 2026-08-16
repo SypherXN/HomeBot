@@ -95,15 +95,15 @@ The Web UI **Diagnostics** page (`/health`) calls these when you are signed in a
 
 ---
 
-## Optional VM deploy workflow
+## VM updates
 
-**`.github/workflows/deploy-vm.yml`** runs tests on **`main`**, then (when enabled) SSHs to your server and runs **`scripts/ubuntu/update-homebot.sh`** (`git pull`, `dotnet publish`, restart **`homebot.service`**).
+GitHub Actions does not SSH to the server. After a push, update the API on the VM:
 
-**Enable deploy:** **Settings → Secrets and variables → Actions → Variables** → set **`DEPLOY_VM_ENABLED`** = **`true`**. Without this variable, the workflow runs tests only and **skips** deploy (so pushes do not fail when you have not configured a VM yet).
+```bash
+sudo bash /opt/homebot/app/scripts/ubuntu/update-homebot.sh
+```
 
-**Required secrets:** **`DEPLOY_HOST`** (public IP or hostname), **`DEPLOY_USER`** (SSH user, e.g. **`ubuntu`**), **`DEPLOY_SSH_KEY`** (private key; the matching public key must be in **`~/.ssh/authorized_keys`** on the VM). Optional **`DEPLOY_APP_DIR`** (default **`/opt/homebot/app`**).
-
-The SSH user needs passwordless **`sudo`** for **`update-homebot.sh`** (same as manual updates). Trigger manually via **Actions → Deploy VM** or on every push to **`main`** when **`DEPLOY_VM_ENABLED`** is set.
+That script runs `git pull`, `dotnet publish`, and restarts **`homebot.service`**. Your **`.env`** and **`homebot.db`** are left in place.
 
 ## Renewals
 
