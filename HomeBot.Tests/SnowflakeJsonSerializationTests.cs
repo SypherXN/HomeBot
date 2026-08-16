@@ -125,4 +125,23 @@ public sealed class SnowflakeJsonSerializationTests
         };
         Assert.Contains("\"Assigned\":null", JsonSerializer.Serialize(none));
     }
+
+    [Fact]
+    public void BudgetAuditEntryModel_writes_actor_user_id_as_json_string()
+    {
+        var model = new BudgetAuditEntryModel
+        {
+            Id = 1,
+            EntityType = "transaction",
+            EntityId = 9,
+            ActorUserId = LargeSnowflake,
+            Action = "create",
+            DataJson = null,
+            CreatedAt = "2026-08-16",
+        };
+
+        var json = JsonSerializer.Serialize(model);
+        Assert.Contains($"\"ActorUserId\":\"{LargeSnowflake}\"", json);
+        Assert.DoesNotContain($"\"ActorUserId\":{LargeSnowflake}", json);
+    }
 }

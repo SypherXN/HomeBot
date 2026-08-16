@@ -25,7 +25,7 @@ export default function BudgetCategorizeRulesPanel({ token }: Props) {
     if (!tok) return;
     try {
       const [r, cats] = await Promise.all([getBudgetCategorizeRules(tok), getBudgetCategories(tok)]);
-      setRules(r.rules);
+      setRules(Array.isArray(r?.rules) ? r.rules : []);
       setCategories(cats.map((c) => ({ id: c.id, name: c.name })));
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));

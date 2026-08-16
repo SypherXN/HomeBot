@@ -7,8 +7,13 @@ type Props = {
   roster?: DiscordGuildRosterState | null;
 };
 
-function actorLabel(actorUserId: string, roster?: DiscordGuildRosterState | null): string {
-  return lookupMemberUsername(roster?.data, actorUserId, null) ?? `User ${actorUserId.slice(-4)}`;
+function actorLabel(actorUserId: string | number | null | undefined, roster?: DiscordGuildRosterState | null): string {
+  const lookedUp = lookupMemberUsername(roster?.data, actorUserId, null);
+  if (lookedUp) return lookedUp;
+  const id = String(actorUserId ?? "").trim();
+  if (id.length >= 4) return `User ${id.slice(-4)}`;
+  if (id) return `User ${id}`;
+  return "Someone";
 }
 
 function parseData(dataJson: string | null): Record<string, unknown> | null {

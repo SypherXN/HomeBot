@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 /// <summary>DTOs for household budgeting (separate from Money IOU tracking).</summary>
 public sealed class BudgetCategoryModel
 {
@@ -25,6 +27,7 @@ public sealed class BudgetTransactionSplitModel
 {
     public int Id { get; set; }
     public int? CategoryId { get; set; }
+    [JsonConverter(typeof(SnowflakeUlongNullableJsonConverter))]
     public ulong? SpentByUserId { get; set; }
     public double Amount { get; set; }
 }
@@ -37,6 +40,7 @@ public sealed class BudgetTransactionListItemModel
     public string? AmountInput { get; set; }
     public int? CategoryId { get; set; }
     public string? CategoryName { get; set; }
+    [JsonConverter(typeof(SnowflakeUlongJsonConverter))]
     public ulong SpentByUserId { get; set; }
     public string SpentByMemberLabel { get; set; } = "";
     public int? AccountId { get; set; }
@@ -87,6 +91,7 @@ public sealed class BudgetMonthNoteModel
     public string Month { get; set; } = "";
     public string Note { get; set; } = "";
     public string? ClosedAt { get; set; }
+    [JsonConverter(typeof(SnowflakeUlongNullableJsonConverter))]
     public ulong? ClosedBy { get; set; }
 }
 
@@ -135,6 +140,7 @@ public sealed class BudgetRecurringModel
     public double Amount { get; set; }
     public string? AmountInput { get; set; }
     public int? CategoryId { get; set; }
+    [JsonConverter(typeof(SnowflakeUlongJsonConverter))]
     public ulong SpentByUserId { get; set; }
     public string Cadence { get; set; } = "monthly";
     public string NextRunDate { get; set; } = "";
@@ -150,6 +156,7 @@ public sealed class BudgetAuditEntryModel
     public int Id { get; set; }
     public string EntityType { get; set; } = "";
     public int EntityId { get; set; }
+    [JsonConverter(typeof(SnowflakeUlongJsonConverter))]
     public ulong ActorUserId { get; set; }
     public string Action { get; set; } = "";
     public string? DataJson { get; set; }
