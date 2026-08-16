@@ -122,16 +122,28 @@ export default function BuyPage() {
     }
     setCatalogBusy(true);
     try {
-      const [tags, stores] = await Promise.all([getBuyTagCatalog(tok), getBuyStoreCatalog(tok)]);
-      setCatalogTags(tags.tags);
-      setDraftCatalogTags([...tags.tags]);
-      setCatalogStores(stores.stores);
-      setDraftCatalogStores([...stores.stores]);
-    } catch {
-      setCatalogTags([]);
-      setDraftCatalogTags([]);
-      setCatalogStores([]);
-      setDraftCatalogStores([]);
+      await Promise.all([
+        getBuyTagCatalog(tok)
+          .then((r) => {
+            const tags = Array.isArray(r.tags) ? r.tags : [];
+            setCatalogTags(tags);
+            setDraftCatalogTags([...tags]);
+          })
+          .catch(() => {
+            setCatalogTags([]);
+            setDraftCatalogTags([]);
+          }),
+        getBuyStoreCatalog(tok)
+          .then((r) => {
+            const stores = Array.isArray(r.stores) ? r.stores : [];
+            setCatalogStores(stores);
+            setDraftCatalogStores([...stores]);
+          })
+          .catch(() => {
+            setCatalogStores([]);
+            setDraftCatalogStores([]);
+          }),
+      ]);
     } finally {
       setCatalogBusy(false);
     }
@@ -336,9 +348,10 @@ export default function BuyPage() {
     setCatalogBusy(true);
     try {
       const r = await putBuyTagCatalog(tok, draftCatalogTags);
-      setCatalogTags(r.tags);
-      setDraftCatalogTags([...r.tags]);
-      setFilterTag((ft) => (ft && !r.tags.includes(ft) ? "" : ft));
+      const tags = Array.isArray(r.tags) ? r.tags : [];
+      setCatalogTags(tags);
+      setDraftCatalogTags([...tags]);
+      setFilterTag((ft) => (ft && !tags.includes(ft) ? "" : ft));
       showBanner("ok", "Tag catalog saved.");
       await loadList();
     } catch (err) {
@@ -367,18 +380,25 @@ export default function BuyPage() {
     setCatalogBusy(true);
     try {
       const r = await putBuyStoreCatalog(tok, draftCatalogStores);
-      setCatalogStores(r.stores);
-      setDraftCatalogStores([...r.stores]);
+      const stores = Array.isArray(r.stores) ? r.stores : [];
+      setCatalogStores(stores);
+      setDraftCatalogStores([...stores]);
       setFilterStore((fs) => {
         if (!fs) return fs;
-        if (r.stores.length === 0) return fs;
-        const hit = r.stores.find((s) => s.toLowerCase() === fs.toLowerCase());
+        if (stores.length === 0) return fs;
+        const hit = stores.find((s) => s.toLowerCase() === fs.toLowerCase());
         return hit ?? "";
       });
       showBanner("ok", "Store catalog saved.");
       await loadList();
     } catch (err) {
-      showBanner("err", err instanceof Error ? err.message : String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      showBanner(
+        "err",
+        msg.startsWith("404 ")
+          ? "Store catalog needs a HomeBot server update. After the API restarts, try saving again."
+          : msg
+      );
     } finally {
       setCatalogBusy(false);
     }
@@ -390,6 +410,24 @@ export default function BuyPage() {
 
   const activeFilters = [filterTag, filterStore, filterAssigned].filter(Boolean).length;
   const items = useMemo(() => data?.items ?? [], [data?.items]);
+
+  const tagFilterOptions = useMemo(() => {
+    const fromItems = [...new Set(items.flatMap((i) => i.tags ?? []))];
+    fromItems.sort((a, b) => a.localeCompare(b));
+    if (catalogTags.length === 0) return fromItems;
+    const seen = new Set(catalogTags);
+    return [...catalogTags, ...fromItems.filter((t) => !seen.has(t))];
+  }, [catalogTags, items]);
+
+  const storeFilterOptions = useMemo(() => {
+    const fromItems = [
+      ...new Set(items.map((i) => i.store?.trim()).filter((s): s is string => Boolean(s))),
+    ];
+    fromItems.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    if (catalogStores.length === 0) return fromItems;
+    const seen = new Set(catalogStores.map((s) => s.toLowerCase()));
+    return [...catalogStores, ...fromItems.filter((s) => !seen.has(s.toLowerCase()))];
+  }, [catalogStores, items]);
 
   const groups = useMemo(() => {
     if (groupMode === "all" || items.length === 0) return [{ key: "", items }];
@@ -591,7 +629,7 @@ export default function BuyPage() {
               className="h-10 w-full hb-input px-3 text-sm text-slate-100"
             >
               <option value="">All items</option>
-              {catalogTags.map((t) => (
+              {tagFilterOptions.map((t) => (
                 <option key={t} value={t}>
                   {t}
                 </option>
@@ -613,7 +651,7 @@ export default function BuyPage() {
                 className="h-10 w-full hb-input px-3 text-sm text-slate-100"
               >
                 <option value="">All stores</option>
-                {catalogStores.map((s) => (
+                {storeFilterOptions.map((s) => (
                   <option key={s} value={s}>
                     {s}
                   </option>

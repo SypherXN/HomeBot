@@ -224,9 +224,27 @@ export type BuyStoreCatalogResponse = {
   catalogEnforced: boolean;
 };
 
+function catalogStringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((x): x is string => typeof x === "string") : [];
+}
+
+function isHttpErrorStatus(err: unknown, status: number): boolean {
+  return err instanceof Error && err.message.startsWith(`${status} `);
+}
+
 /** Allowed buy stores (empty = free-form store text still accepted on writes). */
-export function getBuyStoreCatalog(token: string) {
-  return apiJson<BuyStoreCatalogResponse>("/api/buy/stores", { token });
+export async function getBuyStoreCatalog(token: string): Promise<BuyStoreCatalogResponse> {
+  try {
+    const r = await apiJson<Partial<BuyStoreCatalogResponse>>("/api/buy/stores", { token });
+    const stores = catalogStringList(r?.stores);
+    return { stores, catalogEnforced: Boolean(r?.catalogEnforced) && stores.length > 0 };
+  } catch (err) {
+    // Older API builds do not have this route yet; treat as an empty catalog.
+    if (isHttpErrorStatus(err, 404)) {
+      return { stores: [], catalogEnforced: false };
+    }
+    throw err;
+  }
 }
 
 /** Replace allowed buy store names (display casing kept; max 48 stores, 50 chars each). */

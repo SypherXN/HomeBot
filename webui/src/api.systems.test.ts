@@ -85,6 +85,16 @@ describe("API client — all subsystems", () => {
     expect(body.stores).toEqual(["Costco", "Trader Joe's"]);
   });
 
+  it("buy: store catalog GET treats 404 as an empty catalog", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("not found", { status: 404, statusText: "Not Found" }))
+    );
+    const r = await getBuyStoreCatalog(TOKEN);
+    expect(r.stores).toEqual([]);
+    expect(r.catalogEnforced).toBe(false);
+  });
+
   it("wishlist: POST sends owner as digit string", async () => {
     await postWishlistItem(TOKEN, ACTOR, { name: "Book", ownerUserId: ACTOR });
     const body = JSON.parse(lastCall().body ?? "{}") as { ownerUserId?: string };
