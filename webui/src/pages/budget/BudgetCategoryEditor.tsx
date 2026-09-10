@@ -5,6 +5,7 @@ import {
   postBudgetCategory,
   type BudgetCategory,
 } from "../../api";
+import ColorSwatchPicker from "./ColorSwatchPicker";
 
 type Props = {
   token: string;
@@ -15,16 +16,19 @@ type Props = {
 
 export default function BudgetCategoryEditor({ token, actor, categories, onSaved }: Props) {
   const [newName, setNewName] = useState("");
+  const [newColor, setNewColor] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [editVisibility, setEditVisibility] = useState("household");
   const [editTax, setEditTax] = useState(false);
+  const [editColor, setEditColor] = useState("");
 
   function startEdit(c: BudgetCategory) {
     setEditingId(c.id);
     setEditName(c.name);
     setEditVisibility(c.visibility === "personal" ? "personal" : "household");
     setEditTax(c.isTaxDeductible);
+    setEditColor(c.color ?? "");
   }
 
   return (
@@ -52,7 +56,8 @@ export default function BudgetCategoryEditor({ token, actor, categories, onSaved
                   Tax-deductible
                 </label>
               </div>
-              <div className="flex gap-2">
+              <ColorSwatchPicker value={editColor} onChange={setEditColor} />
+              <div className="mt-2 flex gap-2">
                 <button
                   type="button"
                   className="text-xs text-blue-400"
@@ -62,6 +67,7 @@ export default function BudgetCategoryEditor({ token, actor, categories, onSaved
                       name: editName.trim(),
                       visibility: editVisibility,
                       isTaxDeductible: editTax,
+                      color: editColor,
                     });
                     setEditingId(null);
                     await onSaved();
@@ -76,7 +82,8 @@ export default function BudgetCategoryEditor({ token, actor, categories, onSaved
             </li>
           ) : (
             <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 text-slate-300">
-              <span>
+              <span className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: c.color || "#64748b" }} />
                 {c.name}
                 {c.visibility === "personal" ? " (personal)" : ""}
                 {c.isTaxDeductible ? " · tax" : ""}
@@ -105,15 +112,17 @@ export default function BudgetCategoryEditor({ token, actor, categories, onSaved
       </ul>
       {actor && (
         <form
-          className="flex gap-2"
+          className="space-y-2"
           onSubmit={async (e) => {
             e.preventDefault();
             if (!newName.trim()) return;
-            await postBudgetCategory(token, actor, { name: newName.trim() });
+            await postBudgetCategory(token, actor, { name: newName.trim(), color: newColor || undefined });
             setNewName("");
+            setNewColor("");
             await onSaved();
           }}
         >
+          <div className="flex gap-2">
           <input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
@@ -123,6 +132,8 @@ export default function BudgetCategoryEditor({ token, actor, categories, onSaved
           <button type="submit" className="rounded-lg bg-slate-700 px-4 py-2 text-white">
             Add
           </button>
+          </div>
+          <ColorSwatchPicker value={newColor} onChange={setNewColor} />
         </form>
       )}
     </div>

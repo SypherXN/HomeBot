@@ -45,6 +45,7 @@ export default function BudgetAccountsStrip({ accounts, onManage }: Props) {
               <Link
                 to={`/budget/accounts/${a.id}`}
                 className="block rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 transition-colors hover:border-slate-700"
+                style={a.color ? { borderLeftColor: a.color, borderLeftWidth: 3 } : undefined}
               >
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="truncate text-sm text-slate-300">{a.name}</span>

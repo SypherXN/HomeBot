@@ -176,6 +176,8 @@ public partial class BudgetService
         ulong actor)
     {
         var amount = EvaluateAmount(amountInput);
+        if (fromAccountId == toAccountId)
+            throw new ArgumentException("Transfer requires two different accounts.");
         using var conn = _db.GetConnection();
         conn.Open();
         using var tx = conn.BeginTransaction();
@@ -217,7 +219,9 @@ public partial class BudgetService
         int? accountId,
         bool applyAccountId,
         bool applyReceiptUrl,
-        ulong actor)
+        ulong actor,
+        int? transferToAccountId = null,
+        bool applyTransferToAccountId = false)
     {
         var existing = GetTransactionById(id);
         if (existing == null)
@@ -231,19 +235,29 @@ public partial class BudgetService
         if (!string.IsNullOrWhiteSpace(amountInput))
             amount = EvaluateAmount(amountInput);
 
-        var effectiveAmount = amount ?? existing.Amount;
-        var effectiveType = existing.Type;
+        var newAmount = amount ?? existing.Amount;
+        var isTransfer = string.Equals(existing.Type, "transfer", StringComparison.OrdinalIgnoreCase);
+        var defaultAccountId = BudgetAccountBalance.ResolveDefaultAccountId(conn);
 
-        if (applyAccountId && !string.Equals(effectiveType, "transfer", StringComparison.OrdinalIgnoreCase))
+        int? newFrom = existing.AccountId;
+        int? newTo = existing.TransferToAccountId;
+        if (applyAccountId)
+            newFrom = isTransfer ? accountId : (accountId ?? defaultAccountId);
+        if (applyTransferToAccountId)
+            newTo = transferToAccountId;
+
+        if (isTransfer && (applyAccountId || applyTransferToAccountId))
         {
-            var oldAcc = existing.AccountId ?? GetDefaultAccountId(conn);
-            var newAcc = accountId ?? GetDefaultAccountId(conn);
-            if (oldAcc != newAcc)
-            {
-                ReverseAccountDelta(conn, tx, oldAcc, effectiveType, existing.Amount);
-                ApplyAccountDelta(conn, tx, newAcc, effectiveType, effectiveAmount, null);
-            }
+            if (newFrom is null || newTo is null || newFrom == newTo)
+                throw new ArgumentException("Transfer requires two different accounts.");
         }
+
+        var balancesChanged = Math.Abs(newAmount - existing.Amount) > 0.0001
+            || !Nullable.Equals(newFrom, existing.AccountId)
+            || !Nullable.Equals(newTo, existing.TransferToAccountId);
+
+        if (balancesChanged)
+            BudgetAccountBalance.RevertTransaction(conn, tx, existing, defaultAccountId);
 
         var sets = new List<string>();
         var cmd = conn.CreateCommand();
@@ -296,13 +310,19 @@ public partial class BudgetService
             cmd.Parameters.AddWithValue("$cleared", string.IsNullOrWhiteSpace(clearedAt) ? DBNull.Value : clearedAt);
         }
 
-        if (applyAccountId && !string.Equals(effectiveType, "transfer", StringComparison.OrdinalIgnoreCase))
+        if (applyAccountId)
         {
             sets.Add("AccountId=$acc");
-            cmd.Parameters.AddWithValue("$acc", accountId ?? GetDefaultAccountId(conn));
+            cmd.Parameters.AddWithValue("$acc", (object?)newFrom ?? DBNull.Value);
+        }
+        if (applyTransferToAccountId && isTransfer)
+        {
+            sets.Add("TransferToAccountId=$to");
+            cmd.Parameters.AddWithValue("$to", (object?)newTo ?? DBNull.Value);
         }
 
-        if (sets.Count == 0 && splits == null && tags == null && !applyAccountId && !applyReceiptUrl)
+        if (sets.Count == 0 && splits == null && tags == null && !applyAccountId && !applyReceiptUrl &&
+            !applyTransferToAccountId)
             return false;
 
         if (sets.Count > 0)
@@ -324,6 +344,19 @@ public partial class BudgetService
             DeleteTags(conn, tx, id);
             if (tags.Count > 0)
                 SaveTags(conn, tx, id, tags);
+        }
+
+        if (balancesChanged)
+        {
+            var updated = new BudgetTransactionListItemModel
+            {
+                Id = existing.Id,
+                Type = existing.Type,
+                Amount = newAmount,
+                AccountId = newFrom,
+                TransferToAccountId = newTo
+            };
+            BudgetAccountBalance.ApplyTransaction(conn, tx, updated, defaultAccountId);
         }
 
         tx.Commit();

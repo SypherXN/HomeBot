@@ -8,6 +8,7 @@ import {
 } from "../../api";
 import { defaultTransactionDateForMonth } from "../../lib/budgetTransactionDate";
 import BudgetOpeningBalanceWizard from "./BudgetOpeningBalanceWizard";
+import ColorSwatchPicker from "./ColorSwatchPicker";
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -32,6 +33,13 @@ export default function BudgetAccountsPanel({
   const [accounts, setAccounts] = useState(accountsProp);
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState("checking");
+  const [newCurrency, setNewCurrency] = useState("USD");
+  const [newColor, setNewColor] = useState("");
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editType, setEditType] = useState("checking");
+  const [editCurrency, setEditCurrency] = useState("USD");
+  const [editColor, setEditColor] = useState("");
   const [xferFrom, setXferFrom] = useState("");
   const [xferTo, setXferTo] = useState("");
   const [xferAmount, setXferAmount] = useState("");
@@ -58,8 +66,7 @@ export default function BudgetAccountsPanel({
   }, [month]);
 
   const activeAccounts = accounts.filter((a) => a.isActive !== false);
-  const showOpeningWizard =
-    activeAccounts.length > 0 && activeAccounts.every((a) => Math.abs(a.currentBalance) < 0.01);
+  const showOpeningWizard = activeAccounts.length > 0;
 
   async function handleAddAccount(e: React.FormEvent) {
     e.preventDefault();
@@ -67,8 +74,14 @@ export default function BudgetAccountsPanel({
     setBusy(true);
     setError(null);
     try {
-      await postBudgetAccount(token, actor, { name: newName.trim(), accountType: newType });
+      await postBudgetAccount(token, actor, {
+        name: newName.trim(),
+        accountType: newType,
+        currency: newCurrency,
+        color: newColor || undefined,
+      });
       setNewName("");
+      setNewColor("");
       await onSaved();
       await reloadAccounts();
     } catch (err) {
@@ -135,6 +148,35 @@ export default function BudgetAccountsPanel({
     }
   }
 
+  function startEdit(a: BudgetAccount) {
+    setEditId(a.id);
+    setEditName(a.name);
+    setEditType(a.accountType);
+    setEditCurrency(a.currency || "USD");
+    setEditColor(a.color ?? "");
+  }
+
+  async function handleSaveEdit(id: number) {
+    if (!actor || !editName.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await patchBudgetAccount(token, actor, id, {
+        name: editName.trim(),
+        accountType: editType,
+        currency: editCurrency,
+        color: editColor,
+      });
+      setEditId(null);
+      await onSaved();
+      await reloadAccounts();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section className="hb-card p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -166,43 +208,93 @@ export default function BudgetAccountsPanel({
           {accounts.map((a) => (
             <li
               key={a.id}
-              className={`flex flex-wrap items-center justify-between gap-2 rounded border px-3 py-2 ${
+              className={`rounded border px-3 py-2 ${
                 a.isActive === false
                   ? "border-slate-800/60 text-slate-500"
                   : "border-slate-800 text-slate-300"
               }`}
             >
-              <span>
-                {a.name}{" "}
-                <span className="text-xs text-slate-500">
-                  ({a.accountType}
-                  {a.currency !== "USD" ? ` · ${a.currency}` : ""})
-                  {a.isActive === false ? " · archived" : ""}
-                </span>
-              </span>
-              <span className="flex items-center gap-2">
-                <span className="font-medium text-white">${formatMoney(a.currentBalance)}</span>
-                {actor && a.isActive !== false && (
-                  <button
-                    type="button"
-                    className="text-xs text-slate-400 hover:text-slate-200"
-                    disabled={busy}
-                    onClick={() => void handleArchive(a.id)}
-                  >
-                    Archive
-                  </button>
-                )}
-                {actor && a.isActive === false && (
-                  <button
-                    type="button"
-                    className="text-xs text-blue-400"
-                    disabled={busy}
-                    onClick={() => void handleRestore(a.id)}
-                  >
-                    Restore
-                  </button>
-                )}
-              </span>
+              {editId === a.id ? (
+                <div className="space-y-2">
+                  <input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full hb-input px-2 py-1 text-sm text-slate-100"
+                  />
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <select
+                      value={editType}
+                      onChange={(e) => setEditType(e.target.value)}
+                      className="hb-input px-2 py-1 text-sm text-slate-100"
+                    >
+                      <option value="checking">Checking</option>
+                      <option value="savings">Savings</option>
+                      <option value="credit">Credit</option>
+                      <option value="cash">Cash</option>
+                    </select>
+                    <select
+                      value={editCurrency}
+                      onChange={(e) => setEditCurrency(e.target.value)}
+                      className="hb-input px-2 py-1 text-sm text-slate-100"
+                    >
+                      {["USD", "EUR", "GBP", "CAD", "AUD", "JPY"].map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <ColorSwatchPicker value={editColor} onChange={setEditColor} />
+                  <div className="flex gap-2">
+                    <button type="button" className="text-xs text-blue-400" disabled={busy} onClick={() => void handleSaveEdit(a.id)}>
+                      Save
+                    </button>
+                    <button type="button" className="text-xs text-slate-400" onClick={() => setEditId(null)}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: a.color || "#64748b" }} />
+                    {a.name}{" "}
+                    <span className="text-xs text-slate-500">
+                      ({a.accountType}
+                      {a.currency !== "USD" ? ` · ${a.currency}` : ""})
+                      {a.isActive === false ? " · archived" : ""}
+                    </span>
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="font-medium text-white">${formatMoney(a.currentBalance)}</span>
+                    {actor && (
+                      <button type="button" className="text-xs text-blue-400" disabled={busy} onClick={() => startEdit(a)}>
+                        Edit
+                      </button>
+                    )}
+                    {actor && a.isActive !== false && (
+                      <button
+                        type="button"
+                        className="text-xs text-slate-400 hover:text-slate-200"
+                        disabled={busy}
+                        onClick={() => void handleArchive(a.id)}
+                      >
+                        Archive
+                      </button>
+                    )}
+                    {actor && a.isActive === false && (
+                      <button
+                        type="button"
+                        className="text-xs text-blue-400"
+                        disabled={busy}
+                        onClick={() => void handleRestore(a.id)}
+                      >
+                        Restore
+                      </button>
+                    )}
+                  </span>
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -231,6 +323,18 @@ export default function BudgetAccountsPanel({
               <option value="credit">Credit</option>
               <option value="cash">Cash</option>
             </select>
+            <select
+              value={newCurrency}
+              onChange={(e) => setNewCurrency(e.target.value)}
+              className="w-full hb-input px-2 py-1 text-sm text-slate-100"
+            >
+              {["USD", "EUR", "GBP", "CAD", "AUD", "JPY"].map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            <ColorSwatchPicker value={newColor} onChange={setNewColor} />
             <button
               type="submit"
               disabled={busy}

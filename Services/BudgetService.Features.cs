@@ -11,8 +11,17 @@ public partial class BudgetService
         conn.Open();
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            SELECT Id, Name, AccountType, Currency, CreditLimit, CurrentBalance, IsActive
-            FROM BudgetAccounts" + (activeOnly ? " WHERE IsActive=1" : "") + " ORDER BY Id";
+            SELECT a.Id, a.Name, a.AccountType, a.Currency, a.CreditLimit, a.CurrentBalance, a.IsActive, a.Color,
+                   t.Id, t.Amount, t.TransactionDate
+            FROM BudgetAccounts a
+            LEFT JOIN (
+                SELECT AccountId, MIN(Id) AS OpeningId
+                FROM BudgetTransactions
+                WHERE Type = 'opening_balance'
+                GROUP BY AccountId
+            ) o ON o.AccountId = a.Id
+            LEFT JOIN BudgetTransactions t ON t.Id = o.OpeningId" +
+            (activeOnly ? " WHERE a.IsActive=1" : "") + " ORDER BY a.Id";
         var list = new List<BudgetAccountModel>();
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
@@ -25,7 +34,11 @@ public partial class BudgetService
                 Currency = reader.GetString(3),
                 CreditLimit = reader.IsDBNull(4) ? null : reader.GetDouble(4),
                 CurrentBalance = reader.GetDouble(5),
-                IsActive = reader.FieldCount > 6 ? reader.GetInt64(6) != 0 : true
+                IsActive = reader.GetInt64(6) != 0,
+                Color = reader.IsDBNull(7) ? null : reader.GetString(7),
+                OpeningBalanceTransactionId = reader.IsDBNull(8) ? null : reader.GetInt32(8),
+                OpeningBalanceAmount = reader.IsDBNull(9) ? null : reader.GetDouble(9),
+                OpeningBalanceDate = reader.IsDBNull(10) ? null : reader.GetString(10)
             });
         }
 
@@ -45,22 +58,72 @@ public partial class BudgetService
         return ok;
     }
 
-    public int CreateAccount(string name, string accountType, string currency, double? creditLimit, ulong actor)
+    public int CreateAccount(string name, string accountType, string currency, double? creditLimit, ulong actor,
+        string? color = null)
     {
         using var conn = _db.GetConnection();
         conn.Open();
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            INSERT INTO BudgetAccounts (Name, AccountType, Currency, CreditLimit)
-            VALUES ($n, $t, $c, $lim)";
+            INSERT INTO BudgetAccounts (Name, AccountType, Currency, CreditLimit, Color)
+            VALUES ($n, $t, $c, $lim, $color)";
         cmd.Parameters.AddWithValue("$n", name.Trim());
-        cmd.Parameters.AddWithValue("$t", accountType);
-        cmd.Parameters.AddWithValue("$c", string.IsNullOrWhiteSpace(currency) ? "USD" : currency.ToUpperInvariant());
+        cmd.Parameters.AddWithValue("$t", string.IsNullOrWhiteSpace(accountType) ? "checking" : accountType.Trim());
+        cmd.Parameters.AddWithValue("$c", string.IsNullOrWhiteSpace(currency) ? "USD" : currency.Trim().ToUpperInvariant());
         cmd.Parameters.AddWithValue("$lim", (object?)creditLimit ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$color", DbColor(color));
         cmd.ExecuteNonQuery();
         var id = ReadLastId(conn);
         Audit(actor, "account", id, "create");
         return id;
+    }
+
+    public bool UpdateAccount(
+        int id,
+        string? name,
+        string? accountType,
+        string? currency,
+        double? creditLimit,
+        string? color,
+        bool applyColor,
+        ulong actor)
+    {
+        using var conn = _db.GetConnection();
+        conn.Open();
+        var sets = new List<string>();
+        var cmd = conn.CreateCommand();
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            sets.Add("Name=$n");
+            cmd.Parameters.AddWithValue("$n", name.Trim());
+        }
+        if (!string.IsNullOrWhiteSpace(accountType))
+        {
+            sets.Add("AccountType=$t");
+            cmd.Parameters.AddWithValue("$t", accountType.Trim());
+        }
+        if (!string.IsNullOrWhiteSpace(currency))
+        {
+            sets.Add("Currency=$c");
+            cmd.Parameters.AddWithValue("$c", currency.Trim().ToUpperInvariant());
+        }
+        if (creditLimit.HasValue)
+        {
+            sets.Add("CreditLimit=$lim");
+            cmd.Parameters.AddWithValue("$lim", creditLimit.Value);
+        }
+        if (applyColor)
+        {
+            sets.Add("Color=$color");
+            cmd.Parameters.AddWithValue("$color", DbColor(color));
+        }
+        if (sets.Count == 0)
+            return false;
+        cmd.CommandText = $"UPDATE BudgetAccounts SET {string.Join(", ", sets)} WHERE Id=$id";
+        cmd.Parameters.AddWithValue("$id", id);
+        var ok = cmd.ExecuteNonQuery() > 0;
+        if (ok) Audit(actor, "account", id, "update");
+        return ok;
     }
 
     // ——— Tags ———
@@ -213,12 +276,7 @@ public partial class BudgetService
     {
         if (!DateTime.TryParse(r.NextRunDate, out var next))
             next = DateTime.UtcNow;
-        next = r.Cadence switch
-        {
-            "weekly" => next.AddDays(7),
-            "yearly" => next.AddYears(1),
-            _ => next.AddMonths(1)
-        };
+        next = AddCadence(next, r.Cadence);
         using var conn = _db.GetConnection();
         conn.Open();
         var cmd = conn.CreateCommand();
@@ -226,6 +284,27 @@ public partial class BudgetService
         cmd.Parameters.AddWithValue("$d", next.ToString("yyyy-MM-dd"));
         cmd.Parameters.AddWithValue("$id", r.Id);
         cmd.ExecuteNonQuery();
+    }
+
+    private static DateTime AddCadence(DateTime next, string cadence) => cadence switch
+    {
+        "weekly" => next.AddDays(7),
+        "yearly" => next.AddYears(1),
+        _ => next.AddMonths(1)
+    };
+
+    private static string ClampNextRunDate(string nextRunDate, string cadence)
+    {
+        if (!DateTime.TryParse(nextRunDate, out var next))
+            return nextRunDate;
+        var today = DateTime.UtcNow.Date;
+        var cad = (cadence ?? "monthly").Trim().ToLowerInvariant();
+        var guard = 0;
+        while (next.Date < today && guard++ < 2400)
+            next = AddCadence(next, cad);
+        if (next.Date < today)
+            next = today;
+        return next.ToString("yyyy-MM-dd");
     }
 
     // ——— Bills ———
@@ -236,7 +315,7 @@ public partial class BudgetService
         conn.Open();
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            SELECT Id, Name, AmountEstimate, DueDay, CategoryId, CalendarItemId, IsActive
+            SELECT Id, Name, AmountEstimate, DueDay, CategoryId, CalendarItemId, IsActive, Color
             FROM BudgetBills" + (activeOnly ? " WHERE IsActive=1" : "") + " ORDER BY DueDay, Name";
         var list = new List<BudgetBillModel>();
         using var reader = cmd.ExecuteReader();
@@ -250,34 +329,38 @@ public partial class BudgetService
                 DueDay = reader.GetInt32(3),
                 CategoryId = reader.IsDBNull(4) ? null : reader.GetInt32(4),
                 CalendarItemId = reader.IsDBNull(5) ? null : reader.GetInt32(5),
-                IsActive = reader.GetInt64(6) != 0
+                IsActive = reader.GetInt64(6) != 0,
+                Color = reader.IsDBNull(7) ? null : reader.GetString(7)
             });
         }
 
         return list;
     }
 
-    public int CreateBill(string name, double amountEstimate, int dueDay, int? categoryId, int? calendarItemId, ulong actor)
+    public int CreateBill(string name, double amountEstimate, int dueDay, int? categoryId, int? calendarItemId, ulong actor,
+        string? color = null)
     {
         dueDay = Math.Clamp(dueDay, 1, 28);
         using var conn = _db.GetConnection();
         conn.Open();
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            INSERT INTO BudgetBills (Name, AmountEstimate, DueDay, CategoryId, CalendarItemId)
-            VALUES ($n, $amt, $day, $cat, $cal)";
+            INSERT INTO BudgetBills (Name, AmountEstimate, DueDay, CategoryId, CalendarItemId, Color)
+            VALUES ($n, $amt, $day, $cat, $cal, $color)";
         cmd.Parameters.AddWithValue("$n", name.Trim());
         cmd.Parameters.AddWithValue("$amt", amountEstimate);
         cmd.Parameters.AddWithValue("$day", dueDay);
-        cmd.Parameters.AddWithValue("$cat", (object?)categoryId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$cat", DbCategoryId(categoryId));
         cmd.Parameters.AddWithValue("$cal", (object?)calendarItemId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$color", DbColor(color));
         cmd.ExecuteNonQuery();
         var id = ReadLastId(conn);
         Audit(actor, "bill", id, "create");
         return id;
     }
 
-    public bool UpdateBill(int id, string? name, double? amountEstimate, int? dueDay, int? categoryId, ulong actor)
+    public bool UpdateBill(int id, string? name, double? amountEstimate, int? dueDay, int? categoryId, ulong actor,
+        string? color = null, bool applyColor = false)
     {
         using var conn = _db.GetConnection();
         conn.Open();
@@ -301,7 +384,12 @@ public partial class BudgetService
         if (categoryId.HasValue)
         {
             sets.Add("CategoryId=$cat");
-            cmd.Parameters.AddWithValue("$cat", categoryId.Value);
+            cmd.Parameters.AddWithValue("$cat", DbCategoryId(categoryId));
+        }
+        if (applyColor)
+        {
+            sets.Add("Color=$color");
+            cmd.Parameters.AddWithValue("$color", DbColor(color));
         }
         if (sets.Count == 0) return false;
         cmd.CommandText = $"UPDATE BudgetBills SET {string.Join(", ", sets)} WHERE Id=$id";
@@ -347,7 +435,9 @@ public partial class BudgetService
         string? type,
         string? note,
         string? merchant,
-        ulong actor)
+        ulong actor,
+        int? accountId = null,
+        bool applyAccountId = false)
     {
         using var conn = _db.GetConnection();
         conn.Open();
@@ -364,27 +454,42 @@ public partial class BudgetService
         if (categoryId.HasValue)
         {
             sets.Add("CategoryId=$cat");
-            cmd.Parameters.AddWithValue("$cat", categoryId.Value);
+            cmd.Parameters.AddWithValue("$cat", DbCategoryId(categoryId));
         }
         if (spentByUserId.HasValue)
         {
             sets.Add("SpentByUserId=$user");
             cmd.Parameters.AddWithValue("$user", (long)spentByUserId.Value);
         }
+        string? normalizedCadence = null;
         if (cadence != null)
         {
+            normalizedCadence = cadence.Trim().ToLowerInvariant();
+            if (normalizedCadence is not ("weekly" or "monthly" or "yearly"))
+                normalizedCadence = "monthly";
             sets.Add("Cadence=$cad");
-            cmd.Parameters.AddWithValue("$cad", cadence);
+            cmd.Parameters.AddWithValue("$cad", normalizedCadence);
         }
         if (nextRunDate != null)
         {
+            var cadForNext = normalizedCadence;
+            if (string.IsNullOrWhiteSpace(cadForNext))
+            {
+                var read = conn.CreateCommand();
+                read.CommandText = "SELECT Cadence FROM BudgetRecurring WHERE Id=$id";
+                read.Parameters.AddWithValue("$id", id);
+                cadForNext = read.ExecuteScalar() as string ?? "monthly";
+            }
             sets.Add("NextRunDate=$next");
-            cmd.Parameters.AddWithValue("$next", nextRunDate);
+            cmd.Parameters.AddWithValue("$next", ClampNextRunDate(nextRunDate, cadForNext));
         }
         if (type != null)
         {
+            var t = type.Trim().ToLowerInvariant();
+            if (t is not ("expense" or "income"))
+                t = "expense";
             sets.Add("Type=$type");
-            cmd.Parameters.AddWithValue("$type", type);
+            cmd.Parameters.AddWithValue("$type", t);
         }
         if (note != null)
         {
@@ -395,6 +500,11 @@ public partial class BudgetService
         {
             sets.Add("Merchant=$merchant");
             cmd.Parameters.AddWithValue("$merchant", merchant);
+        }
+        if (applyAccountId)
+        {
+            sets.Add("AccountId=$acc");
+            cmd.Parameters.AddWithValue("$acc", DbAccountId(accountId));
         }
         if (sets.Count == 0) return false;
         cmd.CommandText = $"UPDATE BudgetRecurring SET {string.Join(", ", sets)} WHERE Id=$id";
@@ -408,8 +518,30 @@ public partial class BudgetService
     {
         using var conn = _db.GetConnection();
         conn.Open();
+        string? cadence = null;
+        string? nextRun = null;
+        if (isActive)
+        {
+            var read = conn.CreateCommand();
+            read.CommandText = "SELECT Cadence, NextRunDate FROM BudgetRecurring WHERE Id=$id";
+            read.Parameters.AddWithValue("$id", id);
+            using var reader = read.ExecuteReader();
+            if (!reader.Read())
+                return false;
+            cadence = reader.GetString(0);
+            nextRun = reader.GetString(1);
+        }
+
         var cmd = conn.CreateCommand();
-        cmd.CommandText = "UPDATE BudgetRecurring SET IsActive=$a WHERE Id=$id";
+        if (isActive && DateTime.TryParse(nextRun, out _))
+        {
+            cmd.CommandText = "UPDATE BudgetRecurring SET IsActive=$a, NextRunDate=$d WHERE Id=$id";
+            cmd.Parameters.AddWithValue("$d", ClampNextRunDate(nextRun!, cadence ?? "monthly"));
+        }
+        else
+        {
+            cmd.CommandText = "UPDATE BudgetRecurring SET IsActive=$a WHERE Id=$id";
+        }
         cmd.Parameters.AddWithValue("$a", isActive ? 1 : 0);
         cmd.Parameters.AddWithValue("$id", id);
         var ok = cmd.ExecuteNonQuery() > 0;

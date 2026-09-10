@@ -378,5 +378,57 @@ public static class DatabaseSchemaMigrations
                 );
             ");
         }),
+
+        new SchemaMigrationRunner.Migration("011_budget_edit_colors", conn =>
+        {
+            SchemaMigrationRunner.TryAddColumn(conn,
+                "ALTER TABLE BudgetAccounts ADD COLUMN Color TEXT");
+            SchemaMigrationRunner.TryAddColumn(conn,
+                "ALTER TABLE BudgetGoals ADD COLUMN Color TEXT");
+            SchemaMigrationRunner.TryAddColumn(conn,
+                "ALTER TABLE BudgetBills ADD COLUMN Color TEXT");
+            CollapseStackedOpeningBalances(conn);
+        }),
     };
+
+    /// <summary>
+    /// Older opening-balance saves inserted a new row each time. Keep the oldest
+    /// transaction per account and remove extras so balances are not stacked.
+    /// </summary>
+    private static void CollapseStackedOpeningBalances(SqliteConnection conn)
+    {
+        using var list = conn.CreateCommand();
+        list.CommandText = @"
+            SELECT AccountId, Id, Amount
+            FROM BudgetTransactions
+            WHERE Type = 'opening_balance' AND AccountId IS NOT NULL
+            ORDER BY AccountId, Id";
+        var extras = new List<(int AccountId, int Id, double Amount)>();
+        var seenAccount = new HashSet<int>();
+        using (var reader = list.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                var accountId = reader.GetInt32(0);
+                var id = reader.GetInt32(1);
+                var amount = reader.GetDouble(2);
+                if (!seenAccount.Add(accountId))
+                    extras.Add((accountId, id, amount));
+            }
+        }
+
+        foreach (var extra in extras)
+        {
+            using var bal = conn.CreateCommand();
+            bal.CommandText = "UPDATE BudgetAccounts SET CurrentBalance = CurrentBalance - $d WHERE Id = $acc";
+            bal.Parameters.AddWithValue("$d", extra.Amount);
+            bal.Parameters.AddWithValue("$acc", extra.AccountId);
+            bal.ExecuteNonQuery();
+
+            using var del = conn.CreateCommand();
+            del.CommandText = "DELETE FROM BudgetTransactions WHERE Id = $id";
+            del.Parameters.AddWithValue("$id", extra.Id);
+            del.ExecuteNonQuery();
+        }
+    }
 }

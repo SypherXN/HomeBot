@@ -94,9 +94,17 @@ public static class BudgetApiRegistration
             return Results.Ok(root.GetRequiredService<BudgetService>().GetTrends(months, groupBy));
         });
 
-        app.MapGet("/api/budget/recurring", () => Results.Ok(root.GetRequiredService<BudgetService>().GetRecurring()));
+        app.MapGet("/api/budget/recurring", (HttpRequest request) =>
+        {
+            var includeInactive = string.Equals(request.Query["includeInactive"], "true", StringComparison.OrdinalIgnoreCase);
+            return Results.Ok(root.GetRequiredService<BudgetService>().GetRecurring(activeOnly: !includeInactive));
+        });
 
-        app.MapGet("/api/budget/bills", () => Results.Ok(root.GetRequiredService<BudgetService>().GetBills()));
+        app.MapGet("/api/budget/bills", (HttpRequest request) =>
+        {
+            var includeInactive = string.Equals(request.Query["includeInactive"], "true", StringComparison.OrdinalIgnoreCase);
+            return Results.Ok(root.GetRequiredService<BudgetService>().GetBills(activeOnly: !includeInactive));
+        });
 
         app.MapGet("/api/budget/bills/skips", (HttpRequest request) =>
         {
@@ -221,16 +229,23 @@ public static class BudgetApiRegistration
             if (body is null)
                 return ApiResults.BadRequest("body required.", "missing_body");
             var svc = root.GetRequiredService<BudgetService>();
-            var id = svc.CreateTransfer(
-                body.AmountInput,
-                body.FromAccountId,
-                body.ToAccountId,
-                body.TransactionDate ?? DateTime.UtcNow.ToString("yyyy-MM-dd"),
-                body.Note,
-                actor);
-            await BudgetApiDiscordNotify.TransferCreatedAsync(
-                root, svc, body.AmountInput, body.FromAccountId, body.ToAccountId, actor);
-            return Results.Created($"/api/budget/transactions/{id}", new { id });
+            try
+            {
+                var id = svc.CreateTransfer(
+                    body.AmountInput,
+                    body.FromAccountId,
+                    body.ToAccountId,
+                    body.TransactionDate ?? DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                    body.Note,
+                    actor);
+                await BudgetApiDiscordNotify.TransferCreatedAsync(
+                    root, svc, body.AmountInput, body.FromAccountId, body.ToAccountId, actor);
+                return Results.Created($"/api/budget/transactions/{id}", new { id });
+            }
+            catch (ArgumentException ex)
+            {
+                return ApiResults.BadRequest(ex.Message, "validation_error");
+            }
         });
 
         w.MapPatch("/budget/transactions/{id:int}", (HttpRequest http, int id, BudgetTransactionUpdateRequest? body) =>
@@ -239,33 +254,58 @@ public static class BudgetApiRegistration
                 return err!;
             if (body is null)
                 return ApiResults.BadRequest("body required.", "missing_body");
-            var ok = root.GetRequiredService<BudgetService>().UpdateTransaction(
-                id,
-                body.AmountInput,
-                body.CategoryId,
-                body.SpentByUserId,
-                body.TransactionDate,
-                body.Note,
-                body.ReceiptUrl,
-                body.Merchant,
-                body.IsPending,
-                body.ClearedAt,
-                body.Splits,
-                body.Tags,
-                body.AccountId,
-                applyAccountId: body.AccountId.HasValue,
-                applyReceiptUrl: body.ReceiptUrl != null,
-                actor);
-            return ok ? Results.Ok(new { ok = true }) : ApiResults.NotFound("Transaction not found.", "not_found");
+            try
+            {
+                var ok = root.GetRequiredService<BudgetService>().UpdateTransaction(
+                    id,
+                    body.AmountInput,
+                    body.CategoryId,
+                    body.SpentByUserId,
+                    body.TransactionDate,
+                    body.Note,
+                    body.ReceiptUrl,
+                    body.Merchant,
+                    body.IsPending,
+                    body.ClearedAt,
+                    body.Splits,
+                    body.Tags,
+                    body.AccountId,
+                    applyAccountId: body.AccountId.HasValue,
+                    applyReceiptUrl: body.ReceiptUrl != null,
+                    actor,
+                    body.TransferToAccountId,
+                    applyTransferToAccountId: body.TransferToAccountId.HasValue);
+                return ok ? Results.Ok(new { ok = true }) : ApiResults.NotFound("Transaction not found.", "not_found");
+            }
+            catch (ArgumentException ex)
+            {
+                return ApiResults.BadRequest(ex.Message, "validation_error");
+            }
         });
 
         w.MapPatch("/budget/accounts/{id:int}", (HttpRequest http, int id, BudgetAccountUpdateRequest? body) =>
         {
             if (!HomeBotApiRegistrationTryActor.TryActor(http.Query, out var actor, out var err))
                 return err!;
-            if (body is null || !body.IsActive.HasValue)
-                return ApiResults.BadRequest("isActive is required.", "missing_fields");
-            var ok = root.GetRequiredService<BudgetService>().SetAccountActive(id, body.IsActive.Value, actor);
+            if (body is null)
+                return ApiResults.BadRequest("body required.", "missing_body");
+            var svc = root.GetRequiredService<BudgetService>();
+            var ok = false;
+            var hasFields = !string.IsNullOrWhiteSpace(body.Name)
+                || !string.IsNullOrWhiteSpace(body.AccountType)
+                || !string.IsNullOrWhiteSpace(body.Currency)
+                || body.CreditLimit.HasValue
+                || body.Color != null;
+            if (hasFields)
+            {
+                ok = svc.UpdateAccount(
+                    id, body.Name, body.AccountType, body.Currency, body.CreditLimit, body.Color,
+                    applyColor: body.Color != null, actor);
+            }
+            if (body.IsActive.HasValue)
+                ok = svc.SetAccountActive(id, body.IsActive.Value, actor) || ok;
+            if (!hasFields && !body.IsActive.HasValue)
+                return ApiResults.BadRequest("No account fields to update.", "missing_fields");
             return ok ? Results.Ok(new { ok = true }) : ApiResults.NotFound("Account not found.", "not_found");
         });
 
@@ -315,9 +355,16 @@ public static class BudgetApiRegistration
                 return err!;
             if (body is null || string.IsNullOrWhiteSpace(body.AmountInput))
                 return ApiResults.BadRequest("amountInput is required.", "missing_amount");
-            var txId = root.GetRequiredService<BudgetService>().SetOpeningBalance(
-                id, body.AmountInput, body.TransactionDate, actor);
-            return Results.Created($"/api/budget/transactions/{txId}", new { id = txId });
+            try
+            {
+                var txId = root.GetRequiredService<BudgetService>().SetOpeningBalance(
+                    id, body.AmountInput, body.TransactionDate, actor);
+                return Results.Created($"/api/budget/transactions/{txId}", new { id = txId });
+            }
+            catch (ArgumentException ex)
+            {
+                return ApiResults.BadRequest(ex.Message, "validation_error");
+            }
         });
 
         w.MapPost("/budget/goals", (HttpRequest http, BudgetGoalCreateRequest? body) =>
@@ -327,7 +374,7 @@ public static class BudgetApiRegistration
             if (body is null || string.IsNullOrWhiteSpace(body.Name))
                 return ApiResults.BadRequest("name required.", "missing_name");
             var id = root.GetRequiredService<BudgetService>().CreateGoal(
-                body.Name, body.TargetAmount, body.CurrentAmount, body.TargetDate, body.CategoryId, actor);
+                body.Name, body.TargetAmount, body.CurrentAmount, body.TargetDate, body.CategoryId, actor, body.Color);
             return Results.Created($"/api/budget/goals/{id}", new { id });
         });
 
@@ -338,7 +385,8 @@ public static class BudgetApiRegistration
             if (body is null)
                 return ApiResults.BadRequest("body required.", "missing_body");
             var ok = root.GetRequiredService<BudgetService>().UpdateGoal(
-                id, body.Name, body.TargetAmount, body.CurrentAmount, body.TargetDate, body.CategoryId, actor);
+                id, body.Name, body.TargetAmount, body.CurrentAmount, body.TargetDate, body.CategoryId, actor,
+                body.Color, applyColor: body.Color != null);
             return ok ? Results.Ok(new { ok = true }) : ApiResults.NotFound("Goal not found.", "not_found");
         });
 
@@ -397,7 +445,7 @@ public static class BudgetApiRegistration
             }
 
             var id = svc.CreateBill(
-                body.Name, body.AmountEstimate, body.DueDay, body.CategoryId, calId, actor);
+                body.Name, body.AmountEstimate, body.DueDay, body.CategoryId, calId, actor, body.Color);
             await BudgetApiDiscordNotify.BillCreatedAsync(root, body.Name.Trim(), body.DueDay, linkedCalendar);
             return Results.Created($"/api/budget/bills/{id}", new { id, calendarItemId = calId });
         });
@@ -468,7 +516,8 @@ public static class BudgetApiRegistration
             if (body is null)
                 return ApiResults.BadRequest("body required.", "missing_body");
             var svc = root.GetRequiredService<BudgetService>();
-            var ok = svc.UpdateBill(id, body.Name, body.AmountEstimate, body.DueDay, body.CategoryId, actor);
+            var ok = svc.UpdateBill(id, body.Name, body.AmountEstimate, body.DueDay, body.CategoryId, actor,
+                body.Color, applyColor: body.Color != null);
             if (body.IsActive.HasValue)
                 ok = svc.SetBillActive(id, body.IsActive.Value, actor) || ok;
             return ok ? Results.Ok(new { ok = true }) : ApiResults.NotFound("Bill not found.", "not_found");
@@ -483,7 +532,8 @@ public static class BudgetApiRegistration
             var svc = root.GetRequiredService<BudgetService>();
             var ok = svc.UpdateRecurring(
                 id, body.AmountInput, body.CategoryId, body.SpentByUserId,
-                body.Cadence, body.NextRunDate, body.Type, body.Note, body.Merchant, actor);
+                body.Cadence, body.NextRunDate, body.Type, body.Note, body.Merchant, actor,
+                body.AccountId, applyAccountId: body.AccountId.HasValue);
             if (body.IsActive.HasValue)
                 ok = svc.SetRecurringActive(id, body.IsActive.Value, actor) || ok;
             return ok ? Results.Ok(new { ok = true }) : ApiResults.NotFound("Recurring rule not found.", "not_found");
@@ -496,7 +546,7 @@ public static class BudgetApiRegistration
             if (body is null || string.IsNullOrWhiteSpace(body.Name))
                 return ApiResults.BadRequest("name required.", "missing_name");
             var id = root.GetRequiredService<BudgetService>().CreateAccount(
-                body.Name, body.AccountType ?? "checking", body.Currency ?? "USD", body.CreditLimit, actor);
+                body.Name, body.AccountType ?? "checking", body.Currency ?? "USD", body.CreditLimit, actor, body.Color);
             return Results.Created($"/api/budget/accounts/{id}", new { id });
         });
 

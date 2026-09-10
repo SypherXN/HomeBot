@@ -315,8 +315,8 @@ export default function BudgetPage() {
           getBudgetAudit(tok, 50).catch(() => [] as BudgetAuditEntry[]),
           getBudgetTaxSummary(tok, Number(month.slice(0, 4))).catch(() => [] as BudgetTaxSummaryLine[]),
           getBudgetExchangeRates(tok).catch(() => [] as BudgetExchangeRate[]),
-          getBudgetBills(tok).catch(() => [] as BudgetBill[]),
-          getBudgetRecurring(tok).catch(() => [] as BudgetRecurring[]),
+          getBudgetBills(tok, true).catch(() => [] as BudgetBill[]),
+          getBudgetRecurring(tok, true).catch(() => [] as BudgetRecurring[]),
           getBudgetAccounts(tok).catch(() => [] as BudgetAccount[]),
           getBudgetBillSkips(tok, month).catch(() => ({ billIds: [] as number[] })),
         ]);
@@ -1345,6 +1345,7 @@ export default function BudgetPage() {
                 token={tok}
                 actor={actor}
                 categories={categories}
+                accounts={accounts}
                 roster={roster}
                 bills={bills}
                 recurring={recurring}

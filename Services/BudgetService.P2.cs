@@ -7,8 +7,8 @@ public partial class BudgetService
     public int SetOpeningBalance(int accountId, string amountInput, string? asOfDate, ulong actor)
     {
         var amount = EvaluateAmount(amountInput);
-        if (amount <= 0)
-            throw new ArgumentException("Amount must be positive.");
+        if (amount < 0)
+            throw new ArgumentException("Amount cannot be negative.");
 
         var date = string.IsNullOrWhiteSpace(asOfDate)
             ? DateTime.UtcNow.ToString("yyyy-MM-dd")
@@ -17,6 +17,34 @@ public partial class BudgetService
         using var conn = _db.GetConnection();
         conn.Open();
         using var tx = conn.BeginTransaction();
+
+        var existingId = FindOpeningBalanceTransactionId(conn, tx, accountId);
+        if (existingId is { } id)
+        {
+            if (!BudgetAccountBalance.TryLoadTransaction(conn, id, out var row, tx))
+                throw new InvalidOperationException("Opening balance transaction not found.");
+            row.AccountId = accountId;
+            BudgetAccountBalance.RevertTransaction(conn, tx, row, accountId);
+
+            var upd = conn.CreateCommand();
+            upd.Transaction = tx;
+            upd.CommandText = @"
+                UPDATE BudgetTransactions
+                SET Amount=$amt, AmountInput=$input, TransactionDate=$date, AccountId=$acc
+                WHERE Id=$id";
+            upd.Parameters.AddWithValue("$amt", amount);
+            upd.Parameters.AddWithValue("$input", amountInput);
+            upd.Parameters.AddWithValue("$date", date);
+            upd.Parameters.AddWithValue("$acc", accountId);
+            upd.Parameters.AddWithValue("$id", id);
+            upd.ExecuteNonQuery();
+
+            row.Amount = amount;
+            BudgetAccountBalance.ApplyTransaction(conn, tx, row, accountId);
+            tx.Commit();
+            Audit(actor, "account", accountId, "opening_balance", new { amount, transactionId = id });
+            return id;
+        }
 
         var cmd = conn.CreateCommand();
         cmd.Transaction = tx;
@@ -31,12 +59,25 @@ public partial class BudgetService
         cmd.Parameters.AddWithValue("$date", date);
         cmd.ExecuteNonQuery();
 
-        var id = ReadLastId(conn);
+        var newId = ReadLastId(conn);
         ApplyAccountDelta(conn, tx, accountId, "opening_balance", amount, null);
         tx.Commit();
 
-        Audit(actor, "account", accountId, "opening_balance", new { amount, transactionId = id });
-        return id;
+        Audit(actor, "account", accountId, "opening_balance", new { amount, transactionId = newId });
+        return newId;
+    }
+
+    private static int? FindOpeningBalanceTransactionId(SqliteConnection conn, SqliteTransaction tx, int accountId)
+    {
+        var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = @"
+            SELECT Id FROM BudgetTransactions
+            WHERE Type='opening_balance' AND AccountId=$acc
+            ORDER BY Id ASC LIMIT 1";
+        cmd.Parameters.AddWithValue("$acc", accountId);
+        var v = cmd.ExecuteScalar();
+        return v == null || v is DBNull ? null : Convert.ToInt32(v);
     }
 
     // ——— Envelope roll ———

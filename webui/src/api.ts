@@ -494,6 +494,24 @@ export function postBudgetCategorizeRule(
   });
 }
 
+export function patchBudgetCategorizeRule(
+  token: string,
+  id: number,
+  body: {
+    matchField?: string;
+    matchContains?: string;
+    categoryId?: number;
+    priority?: number;
+    isActive?: boolean;
+  }
+) {
+  return apiJson<{ ok: boolean }>(`/api/budget/categorize-rules/${id}`, {
+    token,
+    method: "PATCH",
+    body,
+  });
+}
+
 export function deleteBudgetCategorizeRule(token: string, id: number) {
   return apiJson<{ ok: boolean }>(`/api/budget/categorize-rules/${id}`, { token, method: "DELETE" });
 }
@@ -1506,6 +1524,7 @@ export type BudgetGoal = {
   targetDate: string | null;
   categoryId: number | null;
   percentComplete: number;
+  color?: string | null;
 };
 
 export type BudgetAccount = {
@@ -1516,6 +1535,10 @@ export type BudgetAccount = {
   creditLimit: number | null;
   currentBalance: number;
   isActive?: boolean;
+  color?: string | null;
+  openingBalanceTransactionId?: number | null;
+  openingBalanceAmount?: number | null;
+  openingBalanceDate?: string | null;
 };
 
 function budgetQuery(path: string, params: Record<string, string | undefined>): string {
@@ -1669,6 +1692,7 @@ export function patchBudgetTransaction(
     tags?: string[];
     splits?: BudgetSplitInput[];
     accountId?: number;
+    transferToAccountId?: number;
   }
 ) {
   const path = mergeQuery(`/api/budget/transactions/${id}`, { actorUserId });
@@ -1794,6 +1818,7 @@ export function postBudgetGoal(
     currentAmount?: number;
     targetDate?: string;
     categoryId?: number;
+    color?: string;
   }
 ) {
   const path = mergeQuery("/api/budget/goals", { actorUserId });
@@ -1810,6 +1835,7 @@ export function patchBudgetGoal(
     currentAmount?: number;
     targetDate?: string | null;
     categoryId?: number | null;
+    color?: string | null;
   }
 ) {
   const path = mergeQuery(`/api/budget/goals/${id}`, { actorUserId });
@@ -1832,7 +1858,14 @@ export function patchBudgetAccount(
   token: string,
   actorUserId: string,
   id: number,
-  body: { isActive: boolean }
+  body: {
+    isActive?: boolean;
+    name?: string;
+    accountType?: string;
+    currency?: string;
+    creditLimit?: number;
+    color?: string | null;
+  }
 ) {
   const path = mergeQuery(`/api/budget/accounts/${id}`, { actorUserId });
   return apiJson<unknown>(path, { token, method: "PATCH", body });
@@ -1868,7 +1901,7 @@ export async function downloadCalendarIcs(
 export function postBudgetAccount(
   token: string,
   actorUserId: string,
-  body: { name: string; accountType?: string; currency?: string; creditLimit?: number }
+  body: { name: string; accountType?: string; currency?: string; creditLimit?: number; color?: string }
 ) {
   const path = mergeQuery("/api/budget/accounts", { actorUserId });
   return apiJson<{ id: number }>(path, { token, method: "POST", body });
@@ -1919,6 +1952,7 @@ export type BudgetBill = {
   categoryId: number | null;
   calendarItemId: number | null;
   isActive: boolean;
+  color?: string | null;
 };
 
 export type BudgetRecurring = {
@@ -1958,12 +1992,14 @@ export function getBudgetTrends(token: string, months = 6, groupBy: "category" |
   return apiJson<BudgetTrendPoint[]>(path, { token });
 }
 
-export function getBudgetBills(token: string) {
-  return apiJson<BudgetBill[]>("/api/budget/bills", { token });
+export function getBudgetBills(token: string, includeInactive = false) {
+  const path = includeInactive ? "/api/budget/bills?includeInactive=true" : "/api/budget/bills";
+  return apiJson<BudgetBill[]>(path, { token });
 }
 
-export function getBudgetRecurring(token: string) {
-  return apiJson<BudgetRecurring[]>("/api/budget/recurring", { token });
+export function getBudgetRecurring(token: string, includeInactive = false) {
+  const path = includeInactive ? "/api/budget/recurring?includeInactive=true" : "/api/budget/recurring";
+  return apiJson<BudgetRecurring[]>(path, { token });
 }
 
 export function postBudgetBill(
@@ -1975,6 +2011,7 @@ export function postBudgetBill(
     dueDay: number;
     categoryId?: number;
     createCalendarReminder?: boolean;
+    color?: string;
   }
 ) {
   const path = mergeQuery("/api/budget/bills", { actorUserId });
@@ -1996,6 +2033,7 @@ export function patchBudgetBill(
     dueDay?: number;
     categoryId?: number;
     isActive?: boolean;
+    color?: string | null;
   }
 ) {
   const path = mergeQuery(`/api/budget/bills/${id}`, { actorUserId });
@@ -2031,6 +2069,7 @@ export function postBudgetRecurring(
     type?: string;
     note?: string;
     merchant?: string;
+    accountId?: number;
   }
 ) {
   const path = mergeQuery("/api/budget/recurring", { actorUserId });
@@ -2049,7 +2088,10 @@ export function patchBudgetRecurring(
     cadence?: string;
     nextRunDate?: string;
     type?: string;
+    note?: string;
+    merchant?: string;
     isActive?: boolean;
+    accountId?: number | null;
   }
 ) {
   const path = mergeQuery(`/api/budget/recurring/${id}`, { actorUserId });

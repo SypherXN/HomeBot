@@ -189,7 +189,7 @@ public partial class BudgetService
         conn.Open();
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            SELECT Id, Name, TargetAmount, CurrentAmount, TargetDate, CategoryId
+            SELECT Id, Name, TargetAmount, CurrentAmount, TargetDate, CategoryId, Color
             FROM BudgetGoals ORDER BY Id";
         var list = new List<BudgetGoalModel>();
         using var reader = cmd.ExecuteReader();
@@ -205,6 +205,7 @@ public partial class BudgetService
                 CurrentAmount = current,
                 TargetDate = reader.IsDBNull(4) ? null : reader.GetString(4),
                 CategoryId = reader.IsDBNull(5) ? null : reader.GetInt32(5),
+                Color = reader.IsDBNull(6) ? null : reader.GetString(6),
                 PercentComplete = target > 0 ? Math.Round(current / target * 100, 1) : 0
             });
         }
@@ -212,19 +213,21 @@ public partial class BudgetService
         return list;
     }
 
-    public int CreateGoal(string name, double targetAmount, double currentAmount, string? targetDate, int? categoryId, ulong actor)
+    public int CreateGoal(string name, double targetAmount, double currentAmount, string? targetDate, int? categoryId, ulong actor,
+        string? color = null)
     {
         using var conn = _db.GetConnection();
         conn.Open();
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            INSERT INTO BudgetGoals (Name, TargetAmount, CurrentAmount, TargetDate, CategoryId)
-            VALUES ($n, $target, $cur, $date, $cat)";
+            INSERT INTO BudgetGoals (Name, TargetAmount, CurrentAmount, TargetDate, CategoryId, Color)
+            VALUES ($n, $target, $cur, $date, $cat, $color)";
         cmd.Parameters.AddWithValue("$n", name.Trim());
         cmd.Parameters.AddWithValue("$target", targetAmount);
         cmd.Parameters.AddWithValue("$cur", currentAmount);
         cmd.Parameters.AddWithValue("$date", (object?)targetDate ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$cat", (object?)categoryId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$cat", DbCategoryId(categoryId));
+        cmd.Parameters.AddWithValue("$color", DbColor(color));
         cmd.ExecuteNonQuery();
         var id = ReadLastId(conn);
         Audit(actor, "goal", id, "create");
@@ -232,7 +235,7 @@ public partial class BudgetService
     }
 
     public bool UpdateGoal(int id, string? name, double? targetAmount, double? currentAmount, string? targetDate, int? categoryId,
-        ulong actor)
+        ulong actor, string? color = null, bool applyColor = false)
     {
         using var conn = _db.GetConnection();
         conn.Open();
@@ -261,7 +264,12 @@ public partial class BudgetService
         if (categoryId.HasValue)
         {
             sets.Add("CategoryId=$cat");
-            cmd.Parameters.AddWithValue("$cat", categoryId.Value);
+            cmd.Parameters.AddWithValue("$cat", DbCategoryId(categoryId));
+        }
+        if (applyColor)
+        {
+            sets.Add("Color=$color");
+            cmd.Parameters.AddWithValue("$color", DbColor(color));
         }
 
         if (sets.Count == 0) return false;

@@ -81,3 +81,12 @@ public sealed class BudgetCategorizeRuleCreateRequest
     public int CategoryId { get; set; }
     public int Priority { get; set; }
 }
+
+public sealed class BudgetCategorizeRuleUpdateRequest
+{
+    public string? MatchField { get; set; }
+    public string? MatchContains { get; set; }
+    public int? CategoryId { get; set; }
+    public int? Priority { get; set; }
+    public bool? IsActive { get; set; }
+}

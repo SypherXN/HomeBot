@@ -3,6 +3,7 @@ import {
   deleteBudgetCategorizeRule,
   getBudgetCategories,
   getBudgetCategorizeRules,
+  patchBudgetCategorizeRule,
   postBudgetCategorizeRule,
   type BudgetCategorizeRule,
 } from "../../api";
@@ -20,6 +21,10 @@ export default function BudgetCategorizeRulesPanel({ token }: Props) {
   const [matchField, setMatchField] = useState<"merchant" | "note">("merchant");
   const [categoryId, setCategoryId] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editField, setEditField] = useState<"merchant" | "note">("merchant");
+  const [editContains, setEditContains] = useState("");
+  const [editCategory, setEditCategory] = useState("");
 
   const load = useCallback(async () => {
     if (!tok) return;
@@ -45,19 +50,81 @@ export default function BudgetCategorizeRulesPanel({ token }: Props) {
       {err ? <p className="text-red-300">{err}</p> : null}
       <ul className="space-y-1 text-slate-400">
         {rules.filter((r) => r.isActive).map((r) => (
-          <li key={r.id} className="flex flex-wrap items-center gap-2">
-            <span className="text-slate-200">
-              {titleCase(r.matchField)} contains &quot;{r.matchContains}&quot; → {titleCase(r.categoryName)}
-            </span>
-            <button
-              type="button"
-              className="text-xs text-red-400 hover:underline"
-              onClick={() => {
-                void deleteBudgetCategorizeRule(tok, r.id).then(load);
-              }}
-            >
-              Remove
-            </button>
+          <li key={r.id} className="rounded border border-slate-800/80 px-2 py-2">
+            {editId === r.id ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={editField}
+                  onChange={(e) => setEditField(e.target.value as "merchant" | "note")}
+                  className="hb-input px-2 py-1 text-slate-100"
+                >
+                  <option value="merchant">Merchant</option>
+                  <option value="note">Note</option>
+                </select>
+                <input
+                  value={editContains}
+                  onChange={(e) => setEditContains(e.target.value)}
+                  className="min-w-[8rem] flex-1 hb-input px-2 py-1 text-slate-100"
+                />
+                <select
+                  value={editCategory}
+                  onChange={(e) => setEditCategory(e.target.value)}
+                  className="hb-input px-2 py-1 text-slate-100"
+                >
+                  {categories.map((c) => (
+                    <option key={c.id} value={String(c.id)}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="text-xs text-blue-400 hover:underline"
+                  onClick={() => {
+                    void patchBudgetCategorizeRule(tok, r.id, {
+                      matchField: editField,
+                      matchContains: editContains.trim(),
+                      categoryId: parseInt(editCategory, 10),
+                    }).then(() => {
+                      setEditId(null);
+                      return load();
+                    });
+                  }}
+                >
+                  Save
+                </button>
+                <button type="button" className="text-xs text-slate-400" onClick={() => setEditId(null)}>
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-slate-200">
+                  {titleCase(r.matchField)} contains &quot;{r.matchContains}&quot; → {titleCase(r.categoryName)}
+                </span>
+                <button
+                  type="button"
+                  className="text-xs text-blue-400 hover:underline"
+                  onClick={() => {
+                    setEditId(r.id);
+                    setEditField(r.matchField === "note" ? "note" : "merchant");
+                    setEditContains(r.matchContains);
+                    setEditCategory(String(r.categoryId));
+                  }}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className="text-xs text-red-400 hover:underline"
+                  onClick={() => {
+                    void deleteBudgetCategorizeRule(tok, r.id).then(load);
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            )}
           </li>
         ))}
       </ul>

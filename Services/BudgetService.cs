@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
@@ -169,4 +170,29 @@ public partial class BudgetService
         idCmd.CommandText = "SELECT last_insert_rowid()";
         return Convert.ToInt32(idCmd.ExecuteScalar());
     }
+
+    /// <summary>Empty or invalid colors become null so existing rows stay valid.</summary>
+    private static string? NormalizeColor(string? color)
+    {
+        if (string.IsNullOrWhiteSpace(color))
+            return null;
+        var t = color.Trim();
+        if (t.Length == 6 && t.All(Uri.IsHexDigit))
+            t = "#" + t;
+        if (t.Length is 4 or 7 && t[0] == '#')
+            return t;
+        return null;
+    }
+
+    private static object DbColor(string? color)
+    {
+        var n = NormalizeColor(color);
+        return n is null ? DBNull.Value : n;
+    }
+
+    private static object DbCategoryId(int? categoryId) =>
+        categoryId is null or <= 0 ? DBNull.Value : categoryId.Value;
+
+    private static object DbAccountId(int? accountId) =>
+        accountId is null or <= 0 ? DBNull.Value : accountId.Value;
 }

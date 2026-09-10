@@ -132,6 +132,40 @@ public sealed class BudgetServicePolishTests : IDisposable
     }
 
     [Fact]
+    public void UpdateTransfer_reverses_old_and_applies_new()
+    {
+        var checking = _budget.CreateAccount("Checking", "checking", "USD", null, Actor);
+        var savings = _budget.CreateAccount("Savings", "savings", "USD", null, Actor);
+        var cash = _budget.CreateAccount("Cash", "cash", "USD", null, Actor);
+        var transferId = _budget.CreateTransfer("80", checking, savings, "2026-03-01", "move", Actor);
+
+        Assert.True(_budget.UpdateTransaction(
+            transferId,
+            "20",
+            null,
+            null,
+            "2026-03-02",
+            "moved",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            cash,
+            true,
+            false,
+            Actor,
+            savings,
+            true));
+
+        var after = _budget.GetAccounts();
+        Assert.Equal(0, Assert.Single(after, a => a.Id == checking).CurrentBalance);
+        Assert.Equal(20, Assert.Single(after, a => a.Id == savings).CurrentBalance);
+        Assert.Equal(-20, Assert.Single(after, a => a.Id == cash).CurrentBalance);
+    }
+
+    [Fact]
     public void UpdateTransaction_changes_date_spender_and_tags()
     {
         var catId = _budget.CreateCategory("Food", null, null, "household", false, Actor);
@@ -185,7 +219,7 @@ public sealed class BudgetServicePolishTests : IDisposable
     {
         var catId = _budget.CreateCategory("Sub", null, null, "household", false, Actor);
         var today = DateTime.UtcNow.ToString("yyyy-MM-dd");
-        _budget.CreateRecurring(
+        var recId = _budget.CreateRecurring(
             "9.99",
             catId,
             Actor,
@@ -201,6 +235,13 @@ public sealed class BudgetServicePolishTests : IDisposable
 
         var txs = _budget.GetTransactions(0, today[..7], null, null, "household");
         Assert.Contains(txs.Items, t => t.Amount == 9.99 && t.CategoryId == catId);
+
+        _budget.UpdateRecurring(recId, "12.00", catId, null, "monthly", today, null, null, null, Actor);
+        var afterEdit = _budget.GetTransactions(0, today[..7], null, null, "household");
+        Assert.Equal(1, afterEdit.Items.Count(t => t.CategoryId == catId));
+        var rec = Assert.Single(_budget.GetRecurring(), r => r.Id == recId);
+        Assert.Equal(12, rec.Amount);
+        Assert.Equal(today, rec.NextRunDate);
     }
 
     [Fact]

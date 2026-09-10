@@ -275,6 +275,217 @@ public sealed class BudgetPolishApiTests : IDisposable
         Assert.DoesNotContain("2026-04-01", csv);
     }
 
+    [Fact]
+    public async Task Goal_patch_updates_name_target_date_category_and_color()
+    {
+        var catId = await CreateCategoryAsync("Travel");
+        var goal = await _client.PostAsJsonAsync(
+            $"/api/budget/goals?actorUserId={Actor}",
+            new { name = "Trip", targetAmount = 1000, currentAmount = 50, color = "#3b82f6" });
+        var goalId = (await goal.Content.ReadFromJsonAsync<Dictionary<string, int>>())!["id"];
+
+        var patch = await _client.PatchAsJsonAsync(
+            $"/api/budget/goals/{goalId}?actorUserId={Actor}",
+            new
+            {
+                name = "Japan trip",
+                targetAmount = 2500,
+                targetDate = "2027-06-01",
+                categoryId = catId,
+                color = "#ef4444",
+            });
+        Assert.Equal(HttpStatusCode.OK, patch.StatusCode);
+
+        var list = await _client.GetFromJsonAsync<JsonElement>("/api/budget/goals");
+        var row = list.EnumerateArray().First(g => g.GetProperty("id").GetInt32() == goalId);
+        Assert.Equal("Japan trip", row.GetProperty("name").GetString());
+        Assert.Equal(2500, row.GetProperty("targetAmount").GetDouble());
+        Assert.Equal("2027-06-01", row.GetProperty("targetDate").GetString());
+        Assert.Equal(catId, row.GetProperty("categoryId").GetInt32());
+        Assert.Equal("#ef4444", row.GetProperty("color").GetString());
+    }
+
+    [Fact]
+    public async Task Bills_include_inactive_and_can_be_restored()
+    {
+        var post = await _client.PostAsJsonAsync(
+            $"/api/budget/bills?actorUserId={Actor}",
+            new { name = "Internet", amountEstimate = 80, dueDay = 5, color = "#8b5cf6" });
+        var billId = (await post.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+
+        await _client.PatchAsJsonAsync(
+            $"/api/budget/bills/{billId}?actorUserId={Actor}",
+            new { isActive = false });
+
+        var active = await _client.GetFromJsonAsync<JsonElement>("/api/budget/bills");
+        Assert.DoesNotContain(active.EnumerateArray(), b => b.GetProperty("id").GetInt32() == billId);
+
+        var all = await _client.GetFromJsonAsync<JsonElement>("/api/budget/bills?includeInactive=true");
+        var archived = all.EnumerateArray().First(b => b.GetProperty("id").GetInt32() == billId);
+        Assert.False(archived.GetProperty("isActive").GetBoolean());
+        Assert.Equal("#8b5cf6", archived.GetProperty("color").GetString());
+
+        await _client.PatchAsJsonAsync(
+            $"/api/budget/bills/{billId}?actorUserId={Actor}",
+            new { isActive = true });
+        var restored = await _client.GetFromJsonAsync<JsonElement>("/api/budget/bills");
+        Assert.Contains(restored.EnumerateArray(), b => b.GetProperty("id").GetInt32() == billId);
+    }
+
+    [Fact]
+    public async Task Account_patch_renames_type_currency_and_color()
+    {
+        var post = await _client.PostAsJsonAsync(
+            $"/api/budget/accounts?actorUserId={Actor}",
+            new { name = "Old", accountType = "checking", currency = "USD" });
+        var id = (await post.Content.ReadFromJsonAsync<Dictionary<string, int>>())!["id"];
+
+        var patch = await _client.PatchAsJsonAsync(
+            $"/api/budget/accounts/{id}?actorUserId={Actor}",
+            new { name = "Euro cash", accountType = "cash", currency = "EUR", color = "#10b981" });
+        Assert.Equal(HttpStatusCode.OK, patch.StatusCode);
+
+        var list = await _client.GetFromJsonAsync<JsonElement>("/api/budget/accounts");
+        var row = list.EnumerateArray().First(a => a.GetProperty("id").GetInt32() == id);
+        Assert.Equal("Euro cash", row.GetProperty("name").GetString());
+        Assert.Equal("cash", row.GetProperty("accountType").GetString());
+        Assert.Equal("EUR", row.GetProperty("currency").GetString());
+        Assert.Equal("#10b981", row.GetProperty("color").GetString());
+    }
+
+    [Fact]
+    public async Task Transfer_patch_reverses_and_applies_new_accounts_and_amount()
+    {
+        var chkId = (await (await _client.PostAsJsonAsync(
+            $"/api/budget/accounts?actorUserId={Actor}",
+            new { name = "Checking", accountType = "checking" })).Content.ReadFromJsonAsync<Dictionary<string, int>>())!["id"];
+        var savId = (await (await _client.PostAsJsonAsync(
+            $"/api/budget/accounts?actorUserId={Actor}",
+            new { name = "Savings", accountType = "savings" })).Content.ReadFromJsonAsync<Dictionary<string, int>>())!["id"];
+        var cashId = (await (await _client.PostAsJsonAsync(
+            $"/api/budget/accounts?actorUserId={Actor}",
+            new { name = "Cash", accountType = "cash" })).Content.ReadFromJsonAsync<Dictionary<string, int>>())!["id"];
+
+        var xfer = await _client.PostAsJsonAsync(
+            $"/api/budget/transfers?actorUserId={Actor}",
+            new { amountInput = "40", fromAccountId = chkId, toAccountId = savId, transactionDate = "2026-08-01" });
+        var txId = (await xfer.Content.ReadFromJsonAsync<Dictionary<string, int>>())!["id"];
+
+        var patch = await _client.PatchAsJsonAsync(
+            $"/api/budget/transactions/{txId}?actorUserId={Actor}",
+            new { amountInput = "15", accountId = savId, transferToAccountId = cashId });
+        Assert.Equal(HttpStatusCode.OK, patch.StatusCode);
+
+        var accounts = await _client.GetFromJsonAsync<JsonElement>("/api/budget/accounts");
+        double Bal(int id)
+        {
+            foreach (var a in accounts.EnumerateArray())
+            {
+                if (a.GetProperty("id").GetInt32() == id)
+                    return a.GetProperty("currentBalance").GetDouble();
+            }
+            throw new InvalidOperationException($"account {id} missing");
+        }
+
+        Assert.Equal(0, Bal(chkId));
+        Assert.Equal(-15, Bal(savId));
+        Assert.Equal(15, Bal(cashId));
+    }
+
+    [Fact]
+    public async Task Opening_balance_second_save_updates_instead_of_stacking()
+    {
+        var accId = (await (await _client.PostAsJsonAsync(
+            $"/api/budget/accounts?actorUserId={Actor}",
+            new { name = "Checking", accountType = "checking" })).Content.ReadFromJsonAsync<Dictionary<string, int>>())!["id"];
+
+        var first = await _client.PostAsJsonAsync(
+            $"/api/budget/accounts/{accId}/opening-balance?actorUserId={Actor}",
+            new { amountInput = "100", transactionDate = "2026-01-01" });
+        var firstId = (await first.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+
+        var second = await _client.PostAsJsonAsync(
+            $"/api/budget/accounts/{accId}/opening-balance?actorUserId={Actor}",
+            new { amountInput = "175", transactionDate = "2026-01-15" });
+        var secondId = (await second.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+        Assert.Equal(firstId, secondId);
+
+        var accounts = await _client.GetFromJsonAsync<JsonElement>("/api/budget/accounts");
+        var row = accounts.EnumerateArray().First(a => a.GetProperty("id").GetInt32() == accId);
+        Assert.Equal(175, row.GetProperty("currentBalance").GetDouble());
+        Assert.Equal(175, row.GetProperty("openingBalanceAmount").GetDouble());
+        Assert.Equal("2026-01-15", row.GetProperty("openingBalanceDate").GetString());
+    }
+
+    [Fact]
+    public async Task Categorize_rule_can_be_patched()
+    {
+        var catA = await CreateCategoryAsync("Groceries");
+        var catB = await CreateCategoryAsync("Dining");
+        var created = await _client.PostAsJsonAsync(
+            "/api/budget/categorize-rules",
+            new { matchField = "merchant", matchContains = "ShopA", categoryId = catA });
+        var ruleId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
+
+        var patch = await _client.PatchAsJsonAsync(
+            $"/api/budget/categorize-rules/{ruleId}",
+            new { matchContains = "ShopB", categoryId = catB, matchField = "note" });
+        Assert.Equal(HttpStatusCode.OK, patch.StatusCode);
+
+        var rules = await _client.GetFromJsonAsync<JsonElement>("/api/budget/categorize-rules");
+        var row = rules.GetProperty("rules").EnumerateArray().First(r => r.GetProperty("id").GetInt32() == ruleId);
+        Assert.Equal("ShopB", row.GetProperty("matchContains").GetString());
+        Assert.Equal("note", row.GetProperty("matchField").GetString());
+        Assert.Equal(catB, row.GetProperty("categoryId").GetInt32());
+    }
+
+    [Fact]
+    public async Task Recurring_edit_keeps_next_run_and_resume_skips_missed()
+    {
+        var catId = await CreateCategoryAsync("Sub");
+        var keepNext = DateTime.UtcNow.Date.AddDays(21).ToString("yyyy-MM-dd");
+        var post = await _client.PostAsJsonAsync(
+            $"/api/budget/recurring?actorUserId={Actor}",
+            new
+            {
+                amountInput = "9.99",
+                categoryId = catId,
+                spentByUserId = Actor.ToString(),
+                cadence = "monthly",
+                nextRunDate = keepNext,
+            });
+        var recId = (await post.Content.ReadFromJsonAsync<Dictionary<string, int>>())!["id"];
+
+        await _client.PatchAsJsonAsync(
+            $"/api/budget/recurring/{recId}?actorUserId={Actor}",
+            new { amountInput = "11.00", categoryId = catId, nextRunDate = keepNext });
+
+        var list = await _client.GetFromJsonAsync<JsonElement>("/api/budget/recurring");
+        var row = list.EnumerateArray().First(r => r.GetProperty("id").GetInt32() == recId);
+        Assert.Equal(11, row.GetProperty("amount").GetDouble());
+        Assert.Equal(keepNext, row.GetProperty("nextRunDate").GetString());
+
+        await _client.PatchAsJsonAsync(
+            $"/api/budget/recurring/{recId}?actorUserId={Actor}",
+            new { isActive = false });
+        var hidden = await _client.GetFromJsonAsync<JsonElement>("/api/budget/recurring");
+        Assert.DoesNotContain(hidden.EnumerateArray(), r => r.GetProperty("id").GetInt32() == recId);
+
+        await _client.PatchAsJsonAsync(
+            $"/api/budget/recurring/{recId}?actorUserId={Actor}",
+            new { isActive = true });
+        var pausedPast = await _client.PatchAsJsonAsync(
+            $"/api/budget/recurring/{recId}?actorUserId={Actor}",
+            new { nextRunDate = "2020-01-01", isActive = true });
+        Assert.Equal(HttpStatusCode.OK, pausedPast.StatusCode);
+
+        var after = await _client.GetFromJsonAsync<JsonElement>("/api/budget/recurring?includeInactive=true");
+        var resumed = after.EnumerateArray().First(r => r.GetProperty("id").GetInt32() == recId);
+        Assert.True(resumed.GetProperty("isActive").GetBoolean());
+        var next = resumed.GetProperty("nextRunDate").GetString();
+        Assert.True(string.CompareOrdinal(next, DateTime.UtcNow.ToString("yyyy-MM-dd")) >= 0);
+    }
+
     private async Task<int> CreateCategoryAsync(string name)
     {
         var res = await _client.PostAsJsonAsync(

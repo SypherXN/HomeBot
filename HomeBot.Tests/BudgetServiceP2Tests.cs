@@ -53,6 +53,12 @@ public sealed class BudgetServiceP2Tests : IDisposable
 
         var account = Assert.Single(_budget.GetAccounts(), a => a.Id == accountId);
         Assert.Equal(500, account.CurrentBalance);
+
+        var txId = _budget.SetOpeningBalance(accountId, "700", "2026-05-02", Actor);
+        var after = Assert.Single(_budget.GetAccounts(), a => a.Id == accountId);
+        Assert.Equal(700, after.CurrentBalance);
+        Assert.Equal(txId, after.OpeningBalanceTransactionId);
+        Assert.Equal(700, after.OpeningBalanceAmount);
     }
 
     [Fact]

@@ -217,11 +217,17 @@ public sealed class BudgetTransactionUpdateRequest
     public List<BudgetTransactionSplitModel>? Splits { get; set; }
     public List<string>? Tags { get; set; }
     public int? AccountId { get; set; }
+    public int? TransferToAccountId { get; set; }
 }
 
 public sealed class BudgetAccountUpdateRequest
 {
     public bool? IsActive { get; set; }
+    public string? Name { get; set; }
+    public string? AccountType { get; set; }
+    public string? Currency { get; set; }
+    public double? CreditLimit { get; set; }
+    public string? Color { get; set; }
 }
 
 public sealed class BudgetTransferCreateRequest
@@ -268,6 +274,7 @@ public sealed class BudgetGoalCreateRequest
     public double CurrentAmount { get; set; }
     public string? TargetDate { get; set; }
     public int? CategoryId { get; set; }
+    public string? Color { get; set; }
 }
 
 public sealed class BudgetGoalUpdateRequest
@@ -277,6 +284,7 @@ public sealed class BudgetGoalUpdateRequest
     public double? CurrentAmount { get; set; }
     public string? TargetDate { get; set; }
     public int? CategoryId { get; set; }
+    public string? Color { get; set; }
 }
 
 public sealed class BudgetIncomePlanSetRequest
@@ -326,6 +334,7 @@ public sealed class BudgetBillCreateRequest
     public int? CalendarItemId { get; set; }
     /// <summary>When true, creates a monthly calendar reminder on the bill due day and links it.</summary>
     public bool CreateCalendarReminder { get; set; }
+    public string? Color { get; set; }
 }
 
 public sealed class BudgetBillUpdateRequest
@@ -335,6 +344,7 @@ public sealed class BudgetBillUpdateRequest
     public int? DueDay { get; set; }
     public int? CategoryId { get; set; }
     public bool? IsActive { get; set; }
+    public string? Color { get; set; }
 }
 
 public sealed class BudgetBillPayRequest
@@ -356,6 +366,7 @@ public sealed class BudgetRecurringUpdateRequest
     public string? Note { get; set; }
     public string? Merchant { get; set; }
     public bool? IsActive { get; set; }
+    public int? AccountId { get; set; }
 }
 
 public sealed class BudgetAccountCreateRequest
@@ -364,6 +375,7 @@ public sealed class BudgetAccountCreateRequest
     public string? AccountType { get; set; }
     public string? Currency { get; set; }
     public double? CreditLimit { get; set; }
+    public string? Color { get; set; }
 }
 
 public sealed class BudgetExchangeRateSetRequest

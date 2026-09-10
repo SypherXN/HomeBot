@@ -69,6 +69,55 @@ public partial class BudgetService
         return cmd.ExecuteNonQuery() > 0;
     }
 
+    public bool UpdateCategorizeRule(
+        int id,
+        string? matchField,
+        string? matchContains,
+        int? categoryId,
+        int? priority,
+        bool? isActive)
+    {
+        using var conn = _db.GetConnection();
+        conn.Open();
+        var sets = new List<string>();
+        using var cmd = conn.CreateCommand();
+        if (matchField != null)
+        {
+            sets.Add("MatchField = $f");
+            cmd.Parameters.AddWithValue("$f", NormalizeMatchField(matchField));
+        }
+        if (matchContains != null)
+        {
+            var needle = matchContains.Trim();
+            if (needle.Length == 0)
+                throw new ArgumentException("matchContains is required.");
+            sets.Add("MatchContains = $m");
+            cmd.Parameters.AddWithValue("$m", needle);
+        }
+        if (categoryId.HasValue)
+        {
+            if (categoryId.Value <= 0)
+                throw new ArgumentException("categoryId is required.");
+            sets.Add("CategoryId = $c");
+            cmd.Parameters.AddWithValue("$c", categoryId.Value);
+        }
+        if (priority.HasValue)
+        {
+            sets.Add("Priority = $p");
+            cmd.Parameters.AddWithValue("$p", priority.Value);
+        }
+        if (isActive.HasValue)
+        {
+            sets.Add("IsActive = $a");
+            cmd.Parameters.AddWithValue("$a", isActive.Value ? 1 : 0);
+        }
+        if (sets.Count == 0)
+            return false;
+        cmd.CommandText = $"UPDATE BudgetCategorizeRules SET {string.Join(", ", sets)} WHERE Id = $id";
+        cmd.Parameters.AddWithValue("$id", id);
+        return cmd.ExecuteNonQuery() > 0;
+    }
+
     public int? ResolveCategoryFromRules(string? merchant, string? note)
     {
         var rules = GetCategorizeRules(activeOnly: true);

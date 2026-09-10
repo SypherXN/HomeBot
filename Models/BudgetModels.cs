@@ -21,6 +21,10 @@ public sealed class BudgetAccountModel
     public double? CreditLimit { get; set; }
     public double CurrentBalance { get; set; }
     public bool IsActive { get; set; } = true;
+    public string? Color { get; set; }
+    public int? OpeningBalanceTransactionId { get; set; }
+    public double? OpeningBalanceAmount { get; set; }
+    public string? OpeningBalanceDate { get; set; }
 }
 
 public sealed class BudgetTransactionSplitModel
@@ -104,6 +108,7 @@ public sealed class BudgetGoalModel
     public string? TargetDate { get; set; }
     public int? CategoryId { get; set; }
     public double PercentComplete { get; set; }
+    public string? Color { get; set; }
 }
 
 public sealed class BudgetIncomePlanModel
@@ -132,6 +137,7 @@ public sealed class BudgetBillModel
     public int? CategoryId { get; set; }
     public int? CalendarItemId { get; set; }
     public bool IsActive { get; set; }
+    public string? Color { get; set; }
 }
 
 public sealed class BudgetRecurringModel

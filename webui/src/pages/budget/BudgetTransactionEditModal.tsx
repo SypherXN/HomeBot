@@ -48,6 +48,7 @@ export default function BudgetTransactionEditModal({
   const [useSplits, setUseSplits] = useState(false);
   const [splits, setSplits] = useState<SplitRow[]>([]);
   const [accountId, setAccountId] = useState("");
+  const [transferToId, setTransferToId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,6 +75,7 @@ export default function BudgetTransactionEditModal({
         : [{ categoryId: "", spentByUserId: row.spentByUserId, amount: "" }]
     );
     setAccountId(row.accountId != null ? String(row.accountId) : "");
+    setTransferToId(row.transferToAccountId != null ? String(row.transferToAccountId) : "");
     setError(null);
   }, [open, row]);
 
@@ -113,7 +115,12 @@ export default function BudgetTransactionEditModal({
           .filter(Boolean),
         splits: splitPayload,
         accountId:
-          row!.type !== "transfer" && accountId ? Number(accountId) : undefined,
+          row!.type === "transfer"
+            ? Number(accountId)
+            : accountId
+              ? Number(accountId)
+              : undefined,
+        transferToAccountId: row!.type === "transfer" && transferToId ? Number(transferToId) : undefined,
       });
       await onSaved();
       onClose();
@@ -164,6 +171,42 @@ export default function BudgetTransactionEditModal({
               </option>
             ))}
           </select>
+          {row.type === "transfer" && accounts.length > 0 && (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="block text-xs text-slate-400">
+                From
+                <select
+                  value={accountId}
+                  onChange={(e) => setAccountId(e.target.value)}
+                  required
+                  className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
+                >
+                  <option value="">From account</option>
+                  {accounts.map((a) => (
+                    <option key={`from-${a.id}`} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs text-slate-400">
+                To
+                <select
+                  value={transferToId}
+                  onChange={(e) => setTransferToId(e.target.value)}
+                  required
+                  className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
+                >
+                  <option value="">To account</option>
+                  {accounts.map((a) => (
+                    <option key={`to-${a.id}`} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
           {row.type !== "transfer" && accounts.length > 0 && (
             <select
               value={accountId}

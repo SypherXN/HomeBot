@@ -65,8 +65,11 @@ export default function BudgetGoalsCard({ token, actor, goals, availableToBudget
             <div className="flex items-center gap-2">
               <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-800">
                 <div
-                  className={`h-full transition-all ${g.percentComplete >= 100 ? "bg-emerald-500" : "bg-gradient-to-r from-blue-600 to-blue-700"}`}
-                  style={{ width: `${Math.min(100, g.percentComplete)}%` }}
+                  className={`h-full transition-all ${g.percentComplete >= 100 ? "bg-emerald-500" : g.color ? "" : "bg-gradient-to-r from-blue-600 to-blue-700"}`}
+                  style={{
+                    width: `${Math.min(100, g.percentComplete)}%`,
+                    backgroundColor: g.percentComplete >= 100 ? undefined : g.color || undefined,
+                  }}
                 />
               </div>
               {actor && g.percentComplete < 100 && (

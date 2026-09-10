@@ -120,6 +120,26 @@ public static class MediumFeaturesApiRegistration
             }
         });
 
+        w.MapPatch("/budget/categorize-rules/{id:int}", (int id, BudgetCategorizeRuleUpdateRequest? body) =>
+        {
+            var idErr = Validation.ValidateId(id);
+            if (idErr != null)
+                return ApiResults.Validation(idErr);
+            if (body is null)
+                return ApiResults.BadRequest("body required.", "missing_body");
+            try
+            {
+                if (!root.GetRequiredService<BudgetService>().UpdateCategorizeRule(
+                    id, body.MatchField, body.MatchContains, body.CategoryId, body.Priority, body.IsActive))
+                    return ApiResults.NotFound("Rule not found.");
+                return Results.Ok(new { ok = true });
+            }
+            catch (ArgumentException ex)
+            {
+                return ApiResults.Validation(ex.Message);
+            }
+        });
+
         w.MapDelete("/budget/categorize-rules/{id:int}", (int id) =>
         {
             var idErr = Validation.ValidateId(id);

@@ -70,9 +70,12 @@ public static class BudgetAccountBalance
         }
     }
 
-    public static bool TryLoadTransaction(SqliteConnection conn, int id, out BudgetTransactionListItemModel row)
+    public static bool TryLoadTransaction(SqliteConnection conn, int id, out BudgetTransactionListItemModel row,
+        SqliteTransaction? tx = null)
     {
         var cmd = conn.CreateCommand();
+        if (tx != null)
+            cmd.Transaction = tx;
         cmd.CommandText = @"
             SELECT Type, Amount, AccountId, TransferToAccountId
             FROM BudgetTransactions
