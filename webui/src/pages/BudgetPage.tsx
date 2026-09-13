@@ -1395,7 +1395,9 @@ export default function BudgetPage() {
               </section>
 
               {actor && (
-                <BudgetOpeningBalanceWizard token={tok} actor={actor} accounts={accounts} onSaved={load} />
+                <section className="hb-card p-4">
+                  <BudgetOpeningBalanceWizard token={tok} actor={actor} accounts={accounts} onSaved={load} />
+                </section>
               )}
 
               <BudgetMonthClose
