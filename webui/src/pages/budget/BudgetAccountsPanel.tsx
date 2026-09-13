@@ -35,17 +35,21 @@ export default function BudgetAccountsPanel({
   const [newType, setNewType] = useState("checking");
   const [newCurrency, setNewCurrency] = useState("USD");
   const [newColor, setNewColor] = useState("");
+  const [newLimit, setNewLimit] = useState("");
   const [editId, setEditId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [editType, setEditType] = useState("checking");
   const [editCurrency, setEditCurrency] = useState("USD");
   const [editColor, setEditColor] = useState("");
+  const [editLimit, setEditLimit] = useState("");
   const [xferFrom, setXferFrom] = useState("");
   const [xferTo, setXferTo] = useState("");
   const [xferAmount, setXferAmount] = useState("");
   const [xferNote, setXferNote] = useState("");
   const [xferDate, setXferDate] = useState(() => defaultTransactionDateForMonth(month));
   const [busy, setBusy] = useState(false);
+  const [colorEditId, setColorEditId] = useState<number | null>(null);
+  const [colorBusyId, setColorBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const reloadAccounts = useCallback(async () => {
@@ -79,9 +83,11 @@ export default function BudgetAccountsPanel({
         accountType: newType,
         currency: newCurrency,
         color: newColor || undefined,
+        creditLimit: newType === "credit" && newLimit.trim() ? Number(newLimit) : undefined,
       });
       setNewName("");
       setNewColor("");
+      setNewLimit("");
       await onSaved();
       await reloadAccounts();
     } catch (err) {
@@ -154,6 +160,7 @@ export default function BudgetAccountsPanel({
     setEditType(a.accountType);
     setEditCurrency(a.currency || "USD");
     setEditColor(a.color ?? "");
+    setEditLimit(a.creditLimit != null ? String(a.creditLimit) : "");
   }
 
   async function handleSaveEdit(id: number) {
@@ -166,6 +173,7 @@ export default function BudgetAccountsPanel({
         accountType: editType,
         currency: editCurrency,
         color: editColor,
+        creditLimit: editType === "credit" && editLimit.trim() ? Number(editLimit) : undefined,
       });
       setEditId(null);
       await onSaved();
@@ -174,6 +182,21 @@ export default function BudgetAccountsPanel({
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleColorChange(id: number, color: string) {
+    if (!actor) return;
+    setColorBusyId(id);
+    setError(null);
+    try {
+      await patchBudgetAccount(token, actor, id, { color });
+      await onSaved();
+      await reloadAccounts();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setColorBusyId(null);
     }
   }
 
@@ -244,6 +267,15 @@ export default function BudgetAccountsPanel({
                       ))}
                     </select>
                   </div>
+                  {editType === "credit" && (
+                    <input
+                      value={editLimit}
+                      onChange={(e) => setEditLimit(e.target.value)}
+                      placeholder="Credit limit"
+                      inputMode="decimal"
+                      className="w-full hb-input px-2 py-1 text-sm text-slate-100"
+                    />
+                  )}
                   <ColorSwatchPicker value={editColor} onChange={setEditColor} />
                   <div className="flex gap-2">
                     <button type="button" className="text-xs text-blue-400" disabled={busy} onClick={() => void handleSaveEdit(a.id)}>
@@ -255,9 +287,26 @@ export default function BudgetAccountsPanel({
                   </div>
                 </div>
               ) : (
+                <div className="space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: a.color || "#64748b" }} />
+                    {actor ? (
+                      <button
+                        type="button"
+                        title="Change color"
+                        aria-label={`Change color for ${a.name}`}
+                        aria-expanded={colorEditId === a.id}
+                        disabled={colorBusyId === a.id}
+                        onClick={() => setColorEditId((id) => (id === a.id ? null : a.id))}
+                        className="h-5 w-5 shrink-0 rounded-full border border-slate-600 hover:ring-2 hover:ring-white/70 disabled:opacity-50"
+                        style={{ backgroundColor: a.color || "#64748b" }}
+                      />
+                    ) : (
+                      <span
+                        className="h-5 w-5 shrink-0 rounded-full border border-slate-700"
+                        style={{ backgroundColor: a.color || "#64748b" }}
+                      />
+                    )}
                     {a.name}{" "}
                     <span className="text-xs text-slate-500">
                       ({a.accountType}
@@ -293,6 +342,14 @@ export default function BudgetAccountsPanel({
                       </button>
                     )}
                   </span>
+                </div>
+                {colorEditId === a.id && actor && (
+                  <ColorSwatchPicker
+                    value={a.color ?? ""}
+                    onChange={(color) => void handleColorChange(a.id, color)}
+                    label={colorBusyId === a.id ? "Saving color…" : "Account color"}
+                  />
+                )}
                 </div>
               )}
             </li>
@@ -334,6 +391,15 @@ export default function BudgetAccountsPanel({
                 </option>
               ))}
             </select>
+            {newType === "credit" && (
+              <input
+                value={newLimit}
+                onChange={(e) => setNewLimit(e.target.value)}
+                placeholder="Credit limit (optional)"
+                inputMode="decimal"
+                className="w-full hb-input px-2 py-1 text-sm text-slate-100"
+              />
+            )}
             <ColorSwatchPicker value={newColor} onChange={setNewColor} />
             <button
               type="submit"

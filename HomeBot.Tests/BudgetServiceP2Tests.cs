@@ -62,6 +62,36 @@ public sealed class BudgetServiceP2Tests : IDisposable
     }
 
     [Fact]
+    public void SetOpeningBalance_credit_card_positive_input_stores_debt_as_negative()
+    {
+        var cardId = _budget.CreateAccount("Visa", "credit", "USD", 2000, Actor);
+        _budget.SetOpeningBalance(cardId, "450", "2026-05-01", Actor);
+
+        var card = Assert.Single(_budget.GetAccounts(), a => a.Id == cardId);
+        Assert.Equal(-450, card.CurrentBalance);
+        Assert.Equal(-450, card.OpeningBalanceAmount);
+
+        var summary = _budget.GetMonthSummary("2026-05", null, null, null);
+        Assert.Equal(0, summary.TotalIncome);
+        Assert.Equal(0, summary.TotalExpenses);
+    }
+
+    [Fact]
+    public void Transfer_to_credit_card_reduces_debt_after_opening_balance()
+    {
+        var checking = _budget.CreateAccount("Checking", "checking", "USD", null, Actor);
+        var cardId = _budget.CreateAccount("Visa", "credit", "USD", 2000, Actor);
+        _budget.SetOpeningBalance(checking, "1000", "2026-05-01", Actor);
+        _budget.SetOpeningBalance(cardId, "500", "2026-05-01", Actor);
+
+        _budget.CreateTransfer("200", checking, cardId, "2026-05-02", "payment", Actor);
+
+        var accounts = _budget.GetAccounts();
+        Assert.Equal(800, Assert.Single(accounts, a => a.Id == checking).CurrentBalance);
+        Assert.Equal(-300, Assert.Single(accounts, a => a.Id == cardId).CurrentBalance);
+    }
+
+    [Fact]
     public void RollEnvelopes_targets_mode_copies_targets_and_leave_amounts()
     {
         var catId = _budget.CreateCategory("Groceries", null, null, "household", false, Actor);

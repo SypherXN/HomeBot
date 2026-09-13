@@ -9,6 +9,25 @@ type Props = {
   onSaved: () => Promise<void>;
 };
 
+function isCredit(a: BudgetAccount): boolean {
+  return a.accountType === "credit";
+}
+
+function displayOpeningAmount(a: BudgetAccount): string {
+  if (a.openingBalanceAmount == null) return "";
+  const n = isCredit(a) ? Math.abs(a.openingBalanceAmount) : a.openingBalanceAmount;
+  return String(n);
+}
+
+/** Credit cards store debt as a negative balance; the form asks for the amount owed. */
+function payloadAmount(account: BudgetAccount, input: string): string {
+  const raw = input.trim().replace(/,/g, "");
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n === 0) return raw;
+  if (isCredit(account) && n > 0) return String(-n);
+  return raw;
+}
+
 /** Sets or updates starting balances. Stays on screen so every account can be filled. */
 export default function BudgetOpeningBalanceWizard({ token, actor, accounts, onSaved }: Props) {
   const active = accounts.filter((a) => a.isActive !== false);
@@ -26,7 +45,7 @@ export default function BudgetOpeningBalanceWizard({ token, actor, accounts, onS
         if (a.isActive === false) continue;
         const key = String(a.id);
         if (key in next) continue;
-        next[key] = a.openingBalanceAmount != null ? String(a.openingBalanceAmount) : "";
+        next[key] = displayOpeningAmount(a);
         changed = true;
       }
       return changed ? next : prev;
@@ -44,7 +63,7 @@ export default function BudgetOpeningBalanceWizard({ token, actor, accounts, onS
     setSuccess(null);
     try {
       await postBudgetOpeningBalance(token, actor, account.id, {
-        amountInput: amount,
+        amountInput: payloadAmount(account, amount),
         transactionDate: date || undefined,
       });
       const had = account.openingBalanceTransactionId != null;
@@ -65,8 +84,8 @@ export default function BudgetOpeningBalanceWizard({ token, actor, accounts, onS
     <div className="rounded-lg border border-slate-700/80 bg-slate-950/40 p-3">
       <h3 className="text-sm font-medium text-slate-200">Opening balances</h3>
       <p className="mt-1 text-xs text-slate-500">
-        This stays on the page so you can set every account. Starting amounts do not count as income. Saving again
-        updates that account&apos;s opening entry instead of adding another one.
+        This stays on the page so you can set every account. Checking and savings use cash on hand. Credit cards use
+        the amount you currently owe (stored as a negative balance). Starting amounts do not count as income.
         {missing > 0 ? ` ${missing} account${missing === 1 ? "" : "s"} still need${missing === 1 ? "s" : ""} one.` : ""}
       </p>
       <label className="mt-3 block text-xs text-slate-400">
@@ -81,15 +100,20 @@ export default function BudgetOpeningBalanceWizard({ token, actor, accounts, onS
       <ul className="mt-3 space-y-2">
         {active.map((a) => {
           const key = String(a.id);
+          const credit = isCredit(a);
           const hasExisting = a.openingBalanceTransactionId != null;
           const value = amounts[key] ?? "";
+          const owed = hasExisting && credit ? Math.abs(a.openingBalanceAmount ?? 0) : null;
           return (
             <li key={a.id} className="flex flex-wrap items-center gap-2 rounded border border-slate-800 px-2 py-2">
               <span className="min-w-[7rem] flex-1 text-sm text-slate-200">
                 {a.name}
+                {credit && <span className="ml-1 text-xs text-slate-500">· credit</span>}
                 {hasExisting ? (
                   <span className="ml-1 text-xs text-slate-500">
-                    (open ${formatMoney(a.openingBalanceAmount ?? 0)})
+                    {credit
+                      ? `(owe $${formatMoney(owed ?? 0)})`
+                      : `(open $${formatMoney(a.openingBalanceAmount ?? 0)})`}
                   </span>
                 ) : (
                   <span className="ml-1 text-xs text-amber-400/90">needs opening</span>
@@ -98,7 +122,7 @@ export default function BudgetOpeningBalanceWizard({ token, actor, accounts, onS
               <input
                 value={value}
                 onChange={(e) => setAmounts((prev) => ({ ...prev, [key]: e.target.value }))}
-                placeholder="Amount"
+                placeholder={credit ? "Amount owed" : "Amount"}
                 inputMode="decimal"
                 className="w-28 hb-input px-2 py-1.5 text-sm text-slate-100"
               />

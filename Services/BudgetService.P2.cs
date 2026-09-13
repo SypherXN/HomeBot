@@ -6,10 +6,6 @@ public partial class BudgetService
 
     public int SetOpeningBalance(int accountId, string amountInput, string? asOfDate, ulong actor)
     {
-        var amount = EvaluateAmount(amountInput);
-        if (amount < 0)
-            throw new ArgumentException("Amount cannot be negative.");
-
         var date = string.IsNullOrWhiteSpace(asOfDate)
             ? DateTime.UtcNow.ToString("yyyy-MM-dd")
             : asOfDate.Trim();
@@ -17,6 +13,8 @@ public partial class BudgetService
         using var conn = _db.GetConnection();
         conn.Open();
         using var tx = conn.BeginTransaction();
+
+        var amount = NormalizeOpeningBalanceAmount(conn, tx, accountId, EvaluateAmount(amountInput));
 
         var existingId = FindOpeningBalanceTransactionId(conn, tx, accountId);
         if (existingId is { } id)
@@ -65,6 +63,22 @@ public partial class BudgetService
 
         Audit(actor, "account", accountId, "opening_balance", new { amount, transactionId = newId });
         return newId;
+    }
+
+    /// <summary>
+    /// Credit-card opening balances represent debt (negative). A positive entry means "amount owed."
+    /// </summary>
+    private static double NormalizeOpeningBalanceAmount(
+        SqliteConnection conn, SqliteTransaction tx, int accountId, double amount)
+    {
+        var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "SELECT AccountType FROM BudgetAccounts WHERE Id=$id";
+        cmd.Parameters.AddWithValue("$id", accountId);
+        var type = cmd.ExecuteScalar() as string ?? "";
+        if (type.Equals("credit", StringComparison.OrdinalIgnoreCase) && amount > 0)
+            return -amount;
+        return amount;
     }
 
     private static int? FindOpeningBalanceTransactionId(SqliteConnection conn, SqliteTransaction tx, int accountId)
