@@ -28,7 +28,7 @@ function payloadAmount(account: BudgetAccount, input: string): string {
   return raw;
 }
 
-/** Sets or updates starting balances. Stays on screen so every account can be filled. */
+/** Sets or updates starting balances. Collapsed once every account has one. */
 export default function BudgetOpeningBalanceWizard({ token, actor, accounts, onSaved }: Props) {
   const active = accounts.filter((a) => a.isActive !== false);
   const [amounts, setAmounts] = useState<Record<string, string>>({});
@@ -36,6 +36,8 @@ export default function BudgetOpeningBalanceWizard({ token, actor, accounts, onS
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const missing = active.filter((a) => a.openingBalanceTransactionId == null).length;
+  const [open, setOpen] = useState(missing > 0);
 
   useEffect(() => {
     setAmounts((prev) => {
@@ -78,15 +80,25 @@ export default function BudgetOpeningBalanceWizard({ token, actor, accounts, onS
     }
   }
 
-  const missing = active.filter((a) => a.openingBalanceTransactionId == null).length;
-
   return (
-    <div className="rounded-lg border border-slate-700/80 bg-slate-950/40 p-3">
-      <h3 className="text-sm font-medium text-slate-200">Opening balances</h3>
-      <p className="mt-1 text-xs text-slate-500">
-        This stays on the page so you can set every account. Checking and savings use cash on hand. Credit cards use
-        the amount you currently owe (stored as a negative balance). Starting amounts do not count as income.
-        {missing > 0 ? ` ${missing} account${missing === 1 ? "" : "s"} still need${missing === 1 ? "s" : ""} one.` : ""}
+    <details
+      className="group rounded-lg border border-slate-700/80 bg-slate-950/40 p-3"
+      open={open}
+      onToggle={(e) => setOpen(e.currentTarget.open)}
+    >
+      <summary className="cursor-pointer list-none text-sm font-medium text-slate-200 marker:hidden">
+        <span className="inline-block transition-transform group-open:rotate-90">▸</span> Opening balances{" "}
+        {missing > 0 ? (
+          <span className="text-xs font-normal text-amber-400/90">
+            {missing} account{missing === 1 ? "" : "s"} still need{missing === 1 ? "s" : ""} one
+          </span>
+        ) : (
+          <span className="text-xs font-normal text-slate-500">all set</span>
+        )}
+      </summary>
+      <p className="mt-2 text-xs text-slate-500">
+        Checking and savings use cash on hand. Credit cards use the amount you currently owe (stored as a negative
+        balance). Starting amounts do not count as income.
       </p>
       <label className="mt-3 block text-xs text-slate-400">
         As of
@@ -140,6 +152,6 @@ export default function BudgetOpeningBalanceWizard({ token, actor, accounts, onS
       </ul>
       {error && <p className="mt-2 text-xs text-red-300">{error}</p>}
       {success && <p className="mt-2 text-xs text-emerald-300">{success}</p>}
-    </div>
+    </details>
   );
 }

@@ -12,6 +12,18 @@ export function formatSignedMoney(n: number): string {
   return `${n < 0 ? "−" : "+"}$${formatMoney(Math.abs(n))}`;
 }
 
+/** Checking/savings — used for income and transfer-from (not credit cards). */
+export function isDepositAccount(accountType: string | null | undefined): boolean {
+  const t = (accountType ?? "").toLowerCase();
+  return t === "checking" || t === "savings";
+}
+
+/** Income and reimbursements both credit a checking/savings account. */
+export function isIncomeLikeType(type: string | null | undefined): boolean {
+  const t = (type ?? "").toLowerCase();
+  return t === "income" || t === "reimbursement";
+}
+
 export function formatMonthLong(ym: string): string {
   const [y, m] = ym.split("-").map(Number);
   if (!y || !m) return ym;

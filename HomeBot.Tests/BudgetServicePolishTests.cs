@@ -60,6 +60,79 @@ public sealed class BudgetServicePolishTests : IDisposable
     }
 
     [Fact]
+    public void Transfer_from_checking_can_overdraw()
+    {
+        var checking = _budget.CreateAccount("Checking", "checking", "USD", null, Actor);
+        var savings = _budget.CreateAccount("Savings", "savings", "USD", null, Actor);
+        _budget.SetOpeningBalance(checking, "50", "2026-03-01", Actor);
+
+        _budget.CreateTransfer("80", checking, savings, "2026-03-02", "overdraft", Actor);
+
+        var after = _budget.GetAccounts();
+        Assert.Equal(-30, Assert.Single(after, a => a.Id == checking).CurrentBalance);
+        Assert.Equal(80, Assert.Single(after, a => a.Id == savings).CurrentBalance);
+    }
+
+    [Fact]
+    public void Transfer_from_credit_is_rejected()
+    {
+        var checking = _budget.CreateAccount("Checking", "checking", "USD", null, Actor);
+        var card = _budget.CreateAccount("Visa", "credit", "USD", 2000, Actor);
+        Assert.Throws<ArgumentException>(() =>
+            _budget.CreateTransfer("20", card, checking, "2026-03-01", "bad", Actor));
+    }
+
+    [Fact]
+    public void Income_on_credit_is_rejected()
+    {
+        var card = _budget.CreateAccount("Visa", "credit", "USD", 2000, Actor);
+        Assert.Throws<ArgumentException>(() =>
+            _budget.CreateTransaction(
+                "income",
+                "100",
+                null,
+                Actor,
+                "2026-03-01",
+                null,
+                null,
+                null,
+                card,
+                false,
+                "USD",
+                1,
+                null,
+                null,
+                Actor));
+    }
+
+    [Fact]
+    public void Income_defaults_to_checking_not_credit()
+    {
+        var card = _budget.CreateAccount("Visa", "credit", "USD", 2000, Actor);
+        _budget.CreateAccount("Checking", "checking", "USD", null, Actor);
+        _budget.CreateTransaction(
+            "income",
+            "250",
+            null,
+            Actor,
+            "2026-03-01",
+            null,
+            null,
+            null,
+            null,
+            false,
+            "USD",
+            1,
+            null,
+            null,
+            Actor);
+
+        var after = _budget.GetAccounts();
+        Assert.Equal(0, Assert.Single(after, a => a.Id == card).CurrentBalance);
+        Assert.Contains(after, a => a.AccountType == "checking" && Math.Abs(a.CurrentBalance - 250) < 0.001);
+    }
+
+    [Fact]
     public void SetEnvelope_persists_target_for_month()
     {
         var catId = _budget.CreateCategory("Rent", null, null, "household", false, Actor);
@@ -79,6 +152,34 @@ public sealed class BudgetServicePolishTests : IDisposable
 
         var cats = _budget.GetCategories();
         Assert.DoesNotContain(cats, c => c.Id == catId);
+    }
+
+    [Fact]
+    public void Personal_category_spend_is_included_in_summaries()
+    {
+        var checking = _budget.CreateAccount("Checking", "checking", "USD", null, Actor);
+        var catId = _budget.CreateCategory("Coffee", null, null, "personal", false, Actor);
+        _budget.CreateTransaction(
+            "expense",
+            "4.50",
+            catId,
+            Actor,
+            "2026-09-13",
+            null,
+            null,
+            "Cafe",
+            checking,
+            false,
+            "USD",
+            1,
+            null,
+            null,
+            Actor);
+
+        var summary = _budget.GetMonthSummary("2026-09", null, null, "household");
+        Assert.Equal(4.50, summary.TotalExpenses, 2);
+        var txs = _budget.GetTransactions(0, "2026-09", null, null, "household");
+        Assert.Contains(txs.Items, t => t.CategoryId == catId);
     }
 
     [Fact]
@@ -152,17 +253,17 @@ public sealed class BudgetServicePolishTests : IDisposable
             null,
             null,
             null,
-            cash,
+            checking,
             true,
             false,
             Actor,
-            savings,
+            cash,
             true));
 
         var after = _budget.GetAccounts();
-        Assert.Equal(0, Assert.Single(after, a => a.Id == checking).CurrentBalance);
-        Assert.Equal(20, Assert.Single(after, a => a.Id == savings).CurrentBalance);
-        Assert.Equal(-20, Assert.Single(after, a => a.Id == cash).CurrentBalance);
+        Assert.Equal(-20, Assert.Single(after, a => a.Id == checking).CurrentBalance);
+        Assert.Equal(0, Assert.Single(after, a => a.Id == savings).CurrentBalance);
+        Assert.Equal(20, Assert.Single(after, a => a.Id == cash).CurrentBalance);
     }
 
     [Fact]
@@ -264,5 +365,21 @@ public sealed class BudgetServicePolishTests : IDisposable
         var month = DateTime.UtcNow.ToString("yyyy-MM");
         var txs = _budget.GetTransactions(0, month, null, null, "household");
         Assert.Contains(txs.Items, t => t.Id == txId);
+    }
+
+    [Fact]
+    public void ReorderAccounts_changes_list_order()
+    {
+        var alpha = _budget.CreateAccount("Alpha", "checking", "USD", null, Actor);
+        var beta = _budget.CreateAccount("Beta", "savings", "USD", null, Actor);
+
+        var before = _budget.GetAccounts().Select(a => a.Id).ToList();
+        Assert.Contains(alpha, before);
+        Assert.Contains(beta, before);
+
+        var reversed = before.AsEnumerable().Reverse().ToList();
+        _budget.ReorderAccounts(reversed, Actor);
+
+        Assert.Equal(reversed, _budget.GetAccounts().Select(a => a.Id).ToList());
     }
 }

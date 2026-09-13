@@ -20,6 +20,7 @@ public partial class BudgetService
         var m = NormalizeMonth(month);
         var all = LoadAllTransactions();
         IEnumerable<BudgetTransactionListItemModel> q = all;
+        _ = scope;
 
         q = q.Where(t => MonthContainsDate(m, t.TransactionDate));
 
@@ -28,10 +29,6 @@ public partial class BudgetService
 
         if (categoryId.HasValue)
             q = q.Where(t => t.CategoryId == categoryId || t.Splits.Any(s => s.CategoryId == categoryId));
-
-        if (scope != "all")
-            q = q.Where(t => string.IsNullOrEmpty(t.CategoryName) ||
-                             !PersonalCategoryNames.Contains(t.CategoryName));
 
         if (!string.IsNullOrWhiteSpace(merchant))
             q = q.Where(t => (t.Merchant ?? "").Contains(merchant, StringComparison.OrdinalIgnoreCase));
@@ -77,8 +74,6 @@ public partial class BudgetService
         var m = NormalizeMonth(month ?? tx.TransactionDate);
         var list = LoadAllTransactions()
             .Where(t => MonthContainsDate(m, t.TransactionDate))
-            .Where(t => string.IsNullOrEmpty(t.CategoryName) ||
-                        !PersonalCategoryNames.Contains(t.CategoryName))
             .OrderByDescending(t => t.TransactionDate)
             .ThenByDescending(t => t.Id)
             .ToList();
@@ -88,15 +83,6 @@ public partial class BudgetService
         conn.Open();
         var pageSize = GetPageSize(conn);
         return index / pageSize;
-    }
-
-    private HashSet<string> PersonalCategoryNames
-    {
-        get
-        {
-            return GetCategories().Where(c => c.Visibility == "personal").Select(c => c.Name)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        }
     }
 
     private static double EffectiveAmount(BudgetTransactionListItemModel t) =>
@@ -117,17 +103,42 @@ public partial class BudgetService
         double exchangeRateToHome,
         List<BudgetTransactionSplitModel>? splits,
         List<string>? tags,
-        ulong actor)
+        ulong actor,
+        List<BudgetShareChargeInput>? shareCharges = null,
+        List<BudgetSharePaymentInput>? sharePayments = null)
     {
         var amount = EvaluateAmount(amountInput);
         if (amount <= 0 && type != "transfer")
             throw new ArgumentException("Amount must be positive.");
 
+        if (sharePayments is { Count: > 0 } && type.Equals("income", StringComparison.OrdinalIgnoreCase))
+            type = "reimbursement";
+        var isExpense = type.Equals("expense", StringComparison.OrdinalIgnoreCase);
+        var isIncomeLike = IsIncomeLikeType(type);
+        if (!isExpense && shareCharges is { Count: > 0 })
+            throw new ArgumentException("Charges to others can only be added on an expense.");
+        if (!isIncomeLike && sharePayments is { Count: > 0 })
+            throw new ArgumentException("Reimbursements can only be applied to money received.");
+        if (type.Equals("reimbursement", StringComparison.OrdinalIgnoreCase) &&
+            (sharePayments == null || !sharePayments.Any(p => p.Amount > ShareMoneyEpsilon)))
+            throw new ArgumentException("Pick at least one charge this reimbursement covers.");
+
         using var conn = _db.GetConnection();
         conn.Open();
         using var tx = conn.BeginTransaction();
 
-        var accId = accountId ?? GetDefaultAccountId(conn);
+        int accId;
+        if (isIncomeLike)
+        {
+            var action = type.Equals("reimbursement", StringComparison.OrdinalIgnoreCase) ? "Reimbursement" : "Income";
+            accId = accountId ?? FindDefaultDepositAccountId(conn)
+                ?? throw new ArgumentException($"{action} must use a checking or savings account.");
+            EnsureDepositAccount(conn, tx, accId, action);
+        }
+        else
+        {
+            accId = accountId ?? GetDefaultAccountId(conn);
+        }
         if (!categoryId.HasValue)
             categoryId = ResolveCategoryFromRules(merchant, note);
 
@@ -158,6 +169,10 @@ public partial class BudgetService
             SaveSplits(conn, tx, id, splits);
         if (tags is { Count: > 0 })
             SaveTags(conn, tx, id, tags);
+        if (isExpense && shareCharges is { Count: > 0 })
+            SaveShareCharges(conn, tx, id, amount, shareCharges);
+        if (isIncomeLike && sharePayments is { Count: > 0 })
+            SaveSharePayments(conn, tx, id, amount, sharePayments);
 
         ApplyAccountDelta(conn, tx, accId, type, amount, null);
         tx.Commit();
@@ -181,6 +196,7 @@ public partial class BudgetService
         using var conn = _db.GetConnection();
         conn.Open();
         using var tx = conn.BeginTransaction();
+        EnsureDepositAccount(conn, tx, fromAccountId, "Transfers");
         var cmd = conn.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText = @"
@@ -221,7 +237,11 @@ public partial class BudgetService
         bool applyReceiptUrl,
         ulong actor,
         int? transferToAccountId = null,
-        bool applyTransferToAccountId = false)
+        bool applyTransferToAccountId = false,
+        List<BudgetShareChargeInput>? shareCharges = null,
+        bool applyShareCharges = false,
+        List<BudgetSharePaymentInput>? sharePayments = null,
+        bool applySharePayments = false)
     {
         var existing = GetTransactionById(id);
         if (existing == null)
@@ -250,7 +270,26 @@ public partial class BudgetService
         {
             if (newFrom is null || newTo is null || newFrom == newTo)
                 throw new ArgumentException("Transfer requires two different accounts.");
+            EnsureDepositAccount(conn, tx, newFrom.Value, "Transfers");
         }
+
+        if (IsIncomeLikeType(existing.Type) && applyAccountId && newFrom is { } incomeAcc)
+            EnsureDepositAccount(conn, tx, incomeAcc, existing.Type.Equals("reimbursement", StringComparison.OrdinalIgnoreCase) ? "Reimbursement" : "Income");
+
+        var nextType = existing.Type;
+        if (applySharePayments && IsIncomeLikeType(existing.Type))
+            nextType = sharePayments is { Count: > 0 } ? "reimbursement" : "income";
+        if (applyShareCharges && !string.Equals(existing.Type, "expense", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Charges to others can only be added on an expense.");
+        if (applySharePayments && !IsIncomeLikeType(existing.Type))
+            throw new ArgumentException("Reimbursements can only be applied to money received.");
+
+        var shareOwed = applyShareCharges
+            ? (shareCharges ?? new List<BudgetShareChargeInput>()).Where(c => c.Amount > ShareMoneyEpsilon).Sum(c => c.Amount)
+            : ExistingShareChargeTotal(existing);
+        if (string.Equals(existing.Type, "expense", StringComparison.OrdinalIgnoreCase) &&
+            shareOwed > newAmount + ShareMoneyEpsilon)
+            throw new ArgumentException("Charges to others cannot exceed the expense.");
 
         var balancesChanged = Math.Abs(newAmount - existing.Amount) > 0.0001
             || !Nullable.Equals(newFrom, existing.AccountId)
@@ -320,9 +359,14 @@ public partial class BudgetService
             sets.Add("TransferToAccountId=$to");
             cmd.Parameters.AddWithValue("$to", (object?)newTo ?? DBNull.Value);
         }
+        if (!string.Equals(nextType, existing.Type, StringComparison.OrdinalIgnoreCase))
+        {
+            sets.Add("Type=$shareType");
+            cmd.Parameters.AddWithValue("$shareType", nextType);
+        }
 
         if (sets.Count == 0 && splits == null && tags == null && !applyAccountId && !applyReceiptUrl &&
-            !applyTransferToAccountId)
+            !applyTransferToAccountId && !applyShareCharges && !applySharePayments)
             return false;
 
         if (sets.Count > 0)
@@ -346,12 +390,17 @@ public partial class BudgetService
                 SaveTags(conn, tx, id, tags);
         }
 
+        if (applyShareCharges)
+            SaveShareCharges(conn, tx, id, newAmount, shareCharges);
+        if (applySharePayments)
+            SaveSharePayments(conn, tx, id, newAmount, sharePayments);
+
         if (balancesChanged)
         {
             var updated = new BudgetTransactionListItemModel
             {
                 Id = existing.Id,
-                Type = existing.Type,
+                Type = nextType,
                 Amount = newAmount,
                 AccountId = newFrom,
                 TransferToAccountId = newTo
@@ -377,6 +426,7 @@ public partial class BudgetService
 
         var defaultAccountId = BudgetAccountBalance.ResolveDefaultAccountId(conn);
         BudgetAccountBalance.RevertTransaction(conn, tx, row, defaultAccountId);
+        DeleteShareRowsForTransaction(conn, tx, id);
 
         var cmd = conn.CreateCommand();
         cmd.Transaction = tx;
@@ -447,6 +497,7 @@ public partial class BudgetService
             t.Tags = LoadTagNames(conn, t.Id);
         }
 
+        AttachShareSummaries(conn, list);
         return list;
     }
 
@@ -575,7 +626,8 @@ public partial class BudgetService
         double amount)
     {
         if (type.Equals("opening_balance", StringComparison.OrdinalIgnoreCase) ||
-            type.Equals("income", StringComparison.OrdinalIgnoreCase))
+            type.Equals("income", StringComparison.OrdinalIgnoreCase) ||
+            type.Equals("reimbursement", StringComparison.OrdinalIgnoreCase))
         {
             ApplyAccountDelta(conn, tx, accountId, "expense", amount, null);
             return;
@@ -591,6 +643,7 @@ public partial class BudgetService
         var delta = type switch
         {
             "income" => amount,
+            "reimbursement" => amount,
             "opening_balance" => amount,
             "expense" => -amount,
             "transfer_out" => -amount,

@@ -25,6 +25,7 @@ public sealed class BudgetAccountModel
     public int? OpeningBalanceTransactionId { get; set; }
     public double? OpeningBalanceAmount { get; set; }
     public string? OpeningBalanceDate { get; set; }
+    public int SortOrder { get; set; }
 }
 
 public sealed class BudgetTransactionSplitModel
@@ -59,6 +60,64 @@ public sealed class BudgetTransactionListItemModel
     public double ExchangeRateToHome { get; set; } = 1;
     public List<string> Tags { get; set; } = new();
     public List<BudgetTransactionSplitModel> Splits { get; set; } = new();
+    public BudgetTransactionShareSummaryModel? ShareSummary { get; set; }
+}
+
+public sealed class BudgetShareChargeLineModel
+{
+    public int Id { get; set; }
+    public int ExpenseTransactionId { get; set; }
+    [JsonConverter(typeof(SnowflakeUlongNullableJsonConverter))]
+    public ulong? OwedByUserId { get; set; }
+    public string OwedByLabel { get; set; } = "";
+    public double Amount { get; set; }
+    public double PaidAmount { get; set; }
+    public double Remaining { get; set; }
+    public string Status { get; set; } = "open";
+    public string? Merchant { get; set; }
+    public string? ExpenseDate { get; set; }
+    public double ExpenseAmount { get; set; }
+}
+
+public sealed class BudgetSharePaymentLineModel
+{
+    public int ChargeId { get; set; }
+    public double Amount { get; set; }
+    public string OwedByLabel { get; set; } = "";
+    public string? Merchant { get; set; }
+    public string? ExpenseDate { get; set; }
+}
+
+public sealed class BudgetTransactionShareSummaryModel
+{
+    public double Owed { get; set; }
+    public double Received { get; set; }
+    public double Remaining { get; set; }
+    public List<BudgetShareChargeLineModel> Charges { get; set; } = new();
+    public List<BudgetSharePaymentLineModel> Payments { get; set; } = new();
+}
+
+public sealed class BudgetSharesOverviewModel
+{
+    public double OutstandingTotal { get; set; }
+    public int OutstandingPeopleCount { get; set; }
+    public List<BudgetShareChargeLineModel> Open { get; set; } = new();
+    public List<BudgetShareChargeLineModel> Ignored { get; set; } = new();
+}
+
+public sealed class BudgetShareChargeInput
+{
+    public int? Id { get; set; }
+    [JsonConverter(typeof(SnowflakeUlongNullableJsonConverter))]
+    public ulong? OwedByUserId { get; set; }
+    public string? OwedByLabel { get; set; }
+    public double Amount { get; set; }
+}
+
+public sealed class BudgetSharePaymentInput
+{
+    public int ChargeId { get; set; }
+    public double Amount { get; set; }
 }
 
 public sealed class BudgetSummarySliceModel

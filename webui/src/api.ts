@@ -1479,6 +1479,56 @@ export type BudgetTransactionListItem = {
   exchangeRateToHome: number;
   tags: string[];
   splits: BudgetTransactionSplit[];
+  shareSummary?: BudgetTransactionShareSummary | null;
+};
+
+export type BudgetShareChargeLine = {
+  id: number;
+  expenseTransactionId: number;
+  owedByUserId: string | null;
+  owedByLabel: string;
+  amount: number;
+  paidAmount: number;
+  remaining: number;
+  status: string;
+  merchant: string | null;
+  expenseDate: string | null;
+  expenseAmount: number;
+};
+
+export type BudgetSharePaymentLine = {
+  chargeId: number;
+  amount: number;
+  owedByLabel: string;
+  merchant: string | null;
+  expenseDate: string | null;
+};
+
+export type BudgetTransactionShareSummary = {
+  owed: number;
+  received: number;
+  remaining: number;
+  charges: BudgetShareChargeLine[];
+  payments: BudgetSharePaymentLine[];
+};
+
+export type BudgetSharesOverview = {
+  outstandingTotal: number;
+  outstandingPeopleCount: number;
+  open: BudgetShareChargeLine[];
+  ignored: BudgetShareChargeLine[];
+};
+
+export type BudgetShareChargeInput = {
+  id?: number;
+  owedByUserId?: string | null;
+  owedByLabel: string;
+  amount: number;
+};
+
+export type BudgetSharePaymentInput = {
+  chargeId: number;
+  amount: number;
 };
 
 export type PagedBudgetTransactions = {
@@ -1539,6 +1589,7 @@ export type BudgetAccount = {
   openingBalanceTransactionId?: number | null;
   openingBalanceAmount?: number | null;
   openingBalanceDate?: string | null;
+  sortOrder?: number;
 };
 
 function budgetQuery(path: string, params: Record<string, string | undefined>): string {
@@ -1658,6 +1709,8 @@ export function postBudgetTransaction(
     tags?: string[];
     splits?: BudgetSplitInput[];
     currency?: string;
+    shareCharges?: BudgetShareChargeInput[];
+    sharePayments?: BudgetSharePaymentInput[];
   }
 ) {
   const path = mergeQuery("/api/budget/transactions", { actorUserId });
@@ -1668,10 +1721,14 @@ export function postBudgetTransaction(
       ? (jsonSnowflakeDigits(s.spentByUserId) ?? s.spentByUserId)
       : s.spentByUserId,
   }));
+  const shareCharges = body.shareCharges?.map((c) => ({
+    ...c,
+    owedByUserId: c.owedByUserId ? (jsonSnowflakeDigits(c.owedByUserId) ?? c.owedByUserId) : c.owedByUserId,
+  }));
   return apiJson<{ id: number }>(path, {
     token,
     method: "POST",
-    body: { ...body, spentByUserId: spentBy, splits },
+    body: { ...body, spentByUserId: spentBy, splits, shareCharges },
   });
 }
 
@@ -1693,6 +1750,8 @@ export function patchBudgetTransaction(
     splits?: BudgetSplitInput[];
     accountId?: number;
     transferToAccountId?: number;
+    shareCharges?: BudgetShareChargeInput[];
+    sharePayments?: BudgetSharePaymentInput[];
   }
 ) {
   const path = mergeQuery(`/api/budget/transactions/${id}`, { actorUserId });
@@ -1706,6 +1765,12 @@ export function patchBudgetTransaction(
       spentByUserId: s.spentByUserId
         ? (jsonSnowflakeDigits(s.spentByUserId) ?? s.spentByUserId)
         : s.spentByUserId,
+    }));
+  }
+  if (body.shareCharges) {
+    payload.shareCharges = body.shareCharges.map((c) => ({
+      ...c,
+      owedByUserId: c.owedByUserId ? (jsonSnowflakeDigits(c.owedByUserId) ?? c.owedByUserId) : c.owedByUserId,
     }));
   }
   return apiJson<unknown>(path, { token, method: "PATCH", body: payload });
@@ -1847,6 +1912,20 @@ export function deleteBudgetGoal(token: string, actorUserId: string, id: number)
   return apiJson<unknown>(path, { token, method: "DELETE" });
 }
 
+export function getBudgetShares(token: string) {
+  return apiJson<BudgetSharesOverview>("/api/budget/shares", { token });
+}
+
+export function patchBudgetShareStatus(
+  token: string,
+  actorUserId: string,
+  id: number,
+  status: "open" | "ignored"
+) {
+  const path = mergeQuery(`/api/budget/shares/${id}`, { actorUserId });
+  return apiJson<{ ok: boolean }>(path, { token, method: "PATCH", body: { status } });
+}
+
 export function getBudgetAccounts(token: string, includeInactive = false) {
   const path = includeInactive
     ? "/api/budget/accounts?includeInactive=true"
@@ -1869,6 +1948,15 @@ export function patchBudgetAccount(
 ) {
   const path = mergeQuery(`/api/budget/accounts/${id}`, { actorUserId });
   return apiJson<unknown>(path, { token, method: "PATCH", body });
+}
+
+export function putBudgetAccountOrder(
+  token: string,
+  actorUserId: string,
+  accountIds: number[]
+) {
+  const path = mergeQuery("/api/budget/accounts/order", { actorUserId });
+  return apiJson<unknown>(path, { token, method: "PUT", body: { accountIds } });
 }
 
 /** Download calendar .ics for a date range (requires bearer token). */

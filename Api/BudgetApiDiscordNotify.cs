@@ -20,7 +20,11 @@ internal static class BudgetApiDiscordNotify
         var cat = categoryId.HasValue
             ? svc.GetCategories().FirstOrDefault(c => c.Id == categoryId.Value)?.Name ?? "?"
             : "(none)";
-        var safeType = type.Equals("income", StringComparison.OrdinalIgnoreCase) ? "income" : "expense";
+        var safeType = type.Equals("income", StringComparison.OrdinalIgnoreCase)
+            ? "income"
+            : type.Equals("reimbursement", StringComparison.OrdinalIgnoreCase)
+                ? "reimbursement"
+                : "expense";
         var amt = DiscordNotifyText.SanitizeInline(amountInput);
         await NotifyAsync(
             root,

@@ -200,6 +200,8 @@ public sealed class BudgetTransactionCreateRequest
     public double ExchangeRateToHome { get; set; } = 1;
     public List<BudgetTransactionSplitModel>? Splits { get; set; }
     public List<string>? Tags { get; set; }
+    public List<BudgetShareChargeInput>? ShareCharges { get; set; }
+    public List<BudgetSharePaymentInput>? SharePayments { get; set; }
 }
 
 public sealed class BudgetTransactionUpdateRequest
@@ -218,6 +220,13 @@ public sealed class BudgetTransactionUpdateRequest
     public List<string>? Tags { get; set; }
     public int? AccountId { get; set; }
     public int? TransferToAccountId { get; set; }
+    public List<BudgetShareChargeInput>? ShareCharges { get; set; }
+    public List<BudgetSharePaymentInput>? SharePayments { get; set; }
+}
+
+public sealed class BudgetShareStatusRequest
+{
+    public string? Status { get; set; }
 }
 
 public sealed class BudgetAccountUpdateRequest
@@ -367,6 +376,11 @@ public sealed class BudgetRecurringUpdateRequest
     public string? Merchant { get; set; }
     public bool? IsActive { get; set; }
     public int? AccountId { get; set; }
+}
+
+public sealed class BudgetAccountReorderRequest
+{
+    public List<int>? AccountIds { get; set; }
 }
 
 public sealed class BudgetAccountCreateRequest

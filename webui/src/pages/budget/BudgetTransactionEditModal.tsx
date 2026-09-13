@@ -3,6 +3,19 @@ import MemberIdField from "../../components/MemberIdField";
 import Sheet from "../../components/Sheet";
 import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster";
 import { memberPickerLabel } from "../../lib/memberDisplay";
+import { isDepositAccount, isIncomeLikeType } from "../../lib/budgetMoney";
+import AccountSelect from "./AccountSelect";
+import { BudgetExpenseShareEditor, BudgetReimbursementEditor } from "./BudgetShareEditors";
+import {
+  draftsFromShareSummary,
+  emptyShareChargeDraft,
+  shareChargeError,
+  sharePaymentError,
+  toShareChargeInputs,
+  toSharePaymentInputs,
+  type ShareChargeDraft,
+  type SharePaymentDraft,
+} from "../../lib/budgetShares";
 import {
   patchBudgetTransaction,
   type BudgetAccount,
@@ -51,6 +64,10 @@ export default function BudgetTransactionEditModal({
   const [transferToId, setTransferToId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [chargeOthers, setChargeOthers] = useState(false);
+  const [shareDrafts, setShareDrafts] = useState<ShareChargeDraft[]>(() => [emptyShareChargeDraft()]);
+  const [isReimbursement, setIsReimbursement] = useState(false);
+  const [paymentDrafts, setPaymentDrafts] = useState<SharePaymentDraft[]>([]);
 
   useEffect(() => {
     if (!open || !row) return;
@@ -74,12 +91,29 @@ export default function BudgetTransactionEditModal({
           }))
         : [{ categoryId: "", spentByUserId: row.spentByUserId, amount: "" }]
     );
-    setAccountId(row.accountId != null ? String(row.accountId) : "");
+    let nextFrom = row.accountId != null ? String(row.accountId) : "";
+    if ((row.type === "income" || row.type === "reimbursement" || row.type === "transfer") && row.accountId != null) {
+      const fromAcc = accounts.find((a) => a.id === row.accountId);
+      if (fromAcc && !isDepositAccount(fromAcc.accountType)) nextFrom = "";
+    }
+    setAccountId(nextFrom);
     setTransferToId(row.transferToAccountId != null ? String(row.transferToAccountId) : "");
+    const hadCharges = (row.shareSummary?.charges.length ?? 0) > 0;
+    setChargeOthers(hadCharges);
+    setShareDrafts(draftsFromShareSummary(row.shareSummary));
+    const payments = row.shareSummary?.payments ?? [];
+    setIsReimbursement(row.type === "reimbursement" || payments.length > 0);
+    setPaymentDrafts(payments.map((p) => ({ chargeId: p.chargeId, amount: String(p.amount) })));
     setError(null);
-  }, [open, row]);
+  }, [open, row, accounts]);
 
   if (!open || !row) return null;
+
+  const activeAccounts = accounts.filter((a) => a.isActive !== false);
+  const depositAccounts = activeAccounts.filter((a) => isDepositAccount(a.accountType));
+  const incomeLike = isIncomeLikeType(row.type);
+  const accountChoices =
+    incomeLike ? depositAccounts : row.type === "transfer" ? depositAccounts : activeAccounts;
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -97,6 +131,38 @@ export default function BudgetTransactionEditModal({
             amount: Number(s.amount) || 0,
           }));
         if (splitPayload.length === 0) splitPayload = undefined;
+      }
+
+      const hadCharges = (row!.shareSummary?.charges.length ?? 0) > 0;
+      let shareCharges = undefined as ReturnType<typeof toShareChargeInputs> | undefined;
+      if (row!.type === "expense") {
+        if (chargeOthers) {
+          const err = shareChargeError(Number(amount) || 0, shareDrafts);
+          if (err) {
+            setError(err);
+            setBusy(false);
+            return;
+          }
+          shareCharges = toShareChargeInputs(shareDrafts);
+        } else if (hadCharges) {
+          shareCharges = [];
+        }
+      }
+
+      const hadPayments = (row!.shareSummary?.payments.length ?? 0) > 0;
+      let sharePayments = undefined as ReturnType<typeof toSharePaymentInputs> | undefined;
+      if (isIncomeLikeType(row!.type)) {
+        if (isReimbursement) {
+          const err = sharePaymentError(Number(amount) || 0, paymentDrafts);
+          if (err) {
+            setError(err);
+            setBusy(false);
+            return;
+          }
+          sharePayments = toSharePaymentInputs(paymentDrafts);
+        } else if (hadPayments || row!.type === "reimbursement") {
+          sharePayments = [];
+        }
       }
 
       await patchBudgetTransaction(token, actor, row!.id, {
@@ -121,6 +187,8 @@ export default function BudgetTransactionEditModal({
               ? Number(accountId)
               : undefined,
         transferToAccountId: row!.type === "transfer" && transferToId ? Number(transferToId) : undefined,
+        shareCharges,
+        sharePayments,
       });
       await onSaved();
       onClose();
@@ -175,51 +243,35 @@ export default function BudgetTransactionEditModal({
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="block text-xs text-slate-400">
                 From
-                <select
+                <AccountSelect
+                  className="mt-1"
+                  accounts={depositAccounts}
                   value={accountId}
-                  onChange={(e) => setAccountId(e.target.value)}
+                  onChange={setAccountId}
+                  placeholder="From (checking or savings)"
                   required
-                  className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
-                >
-                  <option value="">From account</option>
-                  {accounts.map((a) => (
-                    <option key={`from-${a.id}`} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
+                />
               </label>
               <label className="block text-xs text-slate-400">
                 To
-                <select
+                <AccountSelect
+                  className="mt-1"
+                  accounts={activeAccounts}
                   value={transferToId}
-                  onChange={(e) => setTransferToId(e.target.value)}
+                  onChange={setTransferToId}
+                  placeholder="To account"
                   required
-                  className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
-                >
-                  <option value="">To account</option>
-                  {accounts.map((a) => (
-                    <option key={`to-${a.id}`} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
+                />
               </label>
             </div>
           )}
-          {row.type !== "transfer" && accounts.length > 0 && (
-            <select
+          {row.type !== "transfer" && accountChoices.length > 0 && (
+            <AccountSelect
+              accounts={accountChoices}
               value={accountId}
-              onChange={(e) => setAccountId(e.target.value)}
-              className="w-full hb-input px-3 py-2 text-slate-100"
-            >
-              <option value="">Account (default)</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+              onChange={setAccountId}
+              placeholder={incomeLike ? "Checking or savings" : "Account (default)"}
+            />
           )}
           <input
             value={merchant}
@@ -316,6 +368,47 @@ export default function BudgetTransactionEditModal({
                 + split line
               </button>
             </div>
+          )}
+          {row.type === "expense" && (
+            <>
+              <label className="flex items-center gap-2 text-sm text-slate-400">
+                <input
+                  type="checkbox"
+                  checked={chargeOthers}
+                  onChange={(e) => setChargeOthers(e.target.checked)}
+                />
+                Others owe me part of this
+              </label>
+              {chargeOthers && (
+                <BudgetExpenseShareEditor
+                  total={Number(amount) || 0}
+                  roster={roster}
+                  drafts={shareDrafts}
+                  onChange={setShareDrafts}
+                />
+              )}
+            </>
+          )}
+          {incomeLike && (
+            <>
+              <label className="flex items-center gap-2 text-sm text-slate-400">
+                <input
+                  type="checkbox"
+                  checked={isReimbursement}
+                  onChange={(e) => setIsReimbursement(e.target.checked)}
+                />
+                This is a reimbursement
+              </label>
+              {isReimbursement && (
+                <BudgetReimbursementEditor
+                  token={token}
+                  incomeAmount={Number(amount) || 0}
+                  existingPayments={row.shareSummary?.payments ?? []}
+                  drafts={paymentDrafts}
+                  onChange={setPaymentDrafts}
+                />
+              )}
+            </>
           )}
           <label className="flex items-center gap-2 text-sm text-slate-400">
             <input type="checkbox" checked={isPending} onChange={(e) => setIsPending(e.target.checked)} />

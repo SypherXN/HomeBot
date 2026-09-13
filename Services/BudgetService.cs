@@ -195,4 +195,58 @@ public partial class BudgetService
 
     private static object DbAccountId(int? accountId) =>
         accountId is null or <= 0 ? DBNull.Value : accountId.Value;
+
+    internal static bool IsDepositAccountType(string? accountType)
+    {
+        var t = (accountType ?? "").Trim().ToLowerInvariant();
+        return t is "checking" or "savings";
+    }
+
+    /// <summary>Income and reimbursements both credit a checking/savings account.</summary>
+    internal static bool IsIncomeLikeType(string? type)
+    {
+        var t = (type ?? "").Trim().ToLowerInvariant();
+        return t is "income" or "reimbursement";
+    }
+
+    private static string? ReadAccountType(SqliteConnection conn, SqliteTransaction? tx, int accountId)
+    {
+        var cmd = conn.CreateCommand();
+        if (tx != null)
+            cmd.Transaction = tx;
+        cmd.CommandText = "SELECT AccountType FROM BudgetAccounts WHERE Id=$id";
+        cmd.Parameters.AddWithValue("$id", accountId);
+        return cmd.ExecuteScalar() as string;
+    }
+
+    /// <summary>Checking/savings only — income and transfer-from cannot use credit cards.</summary>
+    private static void EnsureDepositAccount(
+        SqliteConnection conn, SqliteTransaction? tx, int accountId, string action)
+    {
+        var type = ReadAccountType(conn, tx, accountId);
+        if (type is null)
+            throw new ArgumentException("Account not found.");
+        if (!IsDepositAccountType(type))
+            throw new ArgumentException($"{action} must use a checking or savings account.");
+    }
+
+    private static int? FindDefaultDepositAccountId(SqliteConnection conn)
+    {
+        var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT Id FROM BudgetAccounts
+            WHERE IsActive=1 AND lower(AccountType) IN ('checking','savings')
+            ORDER BY Id LIMIT 1";
+        var v = cmd.ExecuteScalar();
+        if (v == null || v is DBNull)
+        {
+            cmd.CommandText = @"
+                SELECT Id FROM BudgetAccounts
+                WHERE lower(AccountType) IN ('checking','savings')
+                ORDER BY Id LIMIT 1";
+            v = cmd.ExecuteScalar();
+        }
+
+        return v == null || v is DBNull ? null : Convert.ToInt32(v);
+    }
 }

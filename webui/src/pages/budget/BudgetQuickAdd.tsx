@@ -1,9 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import { defaultTransactionDateForMonth } from "../../lib/budgetTransactionDate";
+import { isDepositAccount } from "../../lib/budgetMoney";
+import AccountSelect from "./AccountSelect";
 import { postBudgetTransaction, type BudgetAccount, type BudgetCategory } from "../../api";
 import DiscordMemberSelect from "../../components/DiscordMemberSelect";
 import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster";
 import { useMerchantSuggestions } from "../../hooks/useMerchantSuggestions";
+import { BudgetExpenseShareEditor, BudgetReimbursementEditor } from "./BudgetShareEditors";
+import {
+  emptyShareChargeDraft,
+  shareChargeError,
+  sharePaymentError,
+  toShareChargeInputs,
+  toSharePaymentInputs,
+  type ShareChargeDraft,
+  type SharePaymentDraft,
+} from "../../lib/budgetShares";
 
 export type QuickAddPrefill = { categoryId?: number; merchant?: string } | null;
 
@@ -50,6 +62,10 @@ export default function BudgetQuickAdd({
   const [date, setDate] = useState(() => defaultTransactionDateForMonth(month));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [chargeOthers, setChargeOthers] = useState(false);
+  const [shareDrafts, setShareDrafts] = useState<ShareChargeDraft[]>(() => [emptyShareChargeDraft()]);
+  const [isReimbursement, setIsReimbursement] = useState(false);
+  const [paymentDrafts, setPaymentDrafts] = useState<SharePaymentDraft[]>([]);
   const amountRef = useRef<HTMLInputElement>(null);
 
   const { merchants, suggestion } = useMerchantSuggestions(token, merchant);
@@ -62,14 +78,41 @@ export default function BudgetQuickAdd({
     onPrefillConsumed?.();
   }, [prefill, onPrefillConsumed]);
 
+  useEffect(() => {
+    if (type !== "income") return;
+    const selected = accounts.find((a) => String(a.id) === accountId);
+    if (selected && !isDepositAccount(selected.accountType)) setAccountId("");
+  }, [type, accountId, accounts]);
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!actor || !spender || !amount.trim()) return;
     setBusy(true);
     setError(null);
     try {
+      const total = Number(amount) || 0;
+      let shareCharges = undefined as ReturnType<typeof toShareChargeInputs> | undefined;
+      let sharePayments = undefined as ReturnType<typeof toSharePaymentInputs> | undefined;
+      if (type === "expense" && chargeOthers) {
+        const err = shareChargeError(total, shareDrafts);
+        if (err) {
+          setError(err);
+          setBusy(false);
+          return;
+        }
+        shareCharges = toShareChargeInputs(shareDrafts);
+      }
+      if (type === "income" && isReimbursement) {
+        const err = sharePaymentError(total, paymentDrafts);
+        if (err) {
+          setError(err);
+          setBusy(false);
+          return;
+        }
+        sharePayments = toSharePaymentInputs(paymentDrafts);
+      }
       await postBudgetTransaction(token, actor, {
-        type,
+        type: type === "income" && isReimbursement ? "reimbursement" : type,
         amountInput: amount.trim(),
         categoryId: categoryId ? Number(categoryId) : undefined,
         spentByUserId: spender,
@@ -77,12 +120,18 @@ export default function BudgetQuickAdd({
         note: note.trim() || undefined,
         accountId: accountId ? Number(accountId) : undefined,
         transactionDate: date || undefined,
+        shareCharges,
+        sharePayments,
       });
       setAmount("");
       setMerchant("");
       setCategoryId("");
       setNote("");
       setExpanded(false);
+      setChargeOthers(false);
+      setShareDrafts([emptyShareChargeDraft()]);
+      setIsReimbursement(false);
+      setPaymentDrafts([]);
       await onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -148,15 +197,20 @@ export default function BudgetQuickAdd({
         >
           <option value="">Category</option>
           {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-              {c.visibility === "personal" ? " (personal)" : ""}
-            </option>
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
           ))}
         </select>
         <button
           type="submit"
-          disabled={busy || !spender || !amount.trim()}
+          disabled={
+            busy ||
+            !spender ||
+            !amount.trim() ||
+            (type === "income" &&
+              accounts.every((a) => a.isActive === false || !isDepositAccount(a.accountType)))
+          }
           className="shrink-0 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
         >
           {busy ? "Adding…" : "Add"}
@@ -178,6 +232,37 @@ export default function BudgetQuickAdd({
           {suggestion.source === "rule" ? "Rule:" : "Last time:"} {suggestion.categoryName} — tap to apply
         </button>
       )}
+      {type === "expense" && (
+        <>
+          <label className="flex items-center gap-2 text-sm text-slate-400">
+            <input type="checkbox" checked={chargeOthers} onChange={(e) => setChargeOthers(e.target.checked)} />
+            Others owe me part of this
+          </label>
+          {chargeOthers && (
+            <BudgetExpenseShareEditor total={Number(amount) || 0} roster={roster} drafts={shareDrafts} onChange={setShareDrafts} />
+          )}
+        </>
+      )}
+      {type === "income" && (
+        <>
+          <label className="flex items-center gap-2 text-sm text-slate-400">
+            <input
+              type="checkbox"
+              checked={isReimbursement}
+              onChange={(e) => setIsReimbursement(e.target.checked)}
+            />
+            This is a reimbursement
+          </label>
+          {isReimbursement && (
+            <BudgetReimbursementEditor
+              token={token}
+              incomeAmount={Number(amount) || 0}
+              drafts={paymentDrafts}
+              onChange={setPaymentDrafts}
+            />
+          )}
+        </>
+      )}
       {expanded && (
         <div className="grid gap-2 rounded-lg border border-slate-800 bg-slate-950/40 p-3 sm:grid-cols-2">
           <DiscordMemberSelect
@@ -187,19 +272,16 @@ export default function BudgetQuickAdd({
             sharedRoster={roster}
             onPickUserId={setSpender}
           />
-          {accounts.length > 0 && (
-            <select
+          {accounts.filter((a) => a.isActive !== false && (type !== "income" || isDepositAccount(a.accountType))).length > 0 && (
+            <AccountSelect
+              accounts={accounts.filter(
+                (a) => a.isActive !== false && (type !== "income" || isDepositAccount(a.accountType))
+              )}
               value={accountId}
-              onChange={(e) => setAccountId(e.target.value)}
-              className="hb-input px-3 py-2 text-sm text-slate-100"
-            >
-              <option value="">Account (default)</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name} (${a.currentBalance.toFixed(2)})
-                </option>
-              ))}
-            </select>
+              onChange={setAccountId}
+              placeholder={type === "income" ? "Checking or savings" : "Account (default)"}
+              showBalance
+            />
           )}
           <input
             type="date"

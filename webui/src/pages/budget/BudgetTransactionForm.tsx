@@ -4,6 +4,7 @@ import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster"
 import { memberPickerLabel } from "../../lib/memberDisplay";
 import { useMerchantSuggestions } from "../../hooks/useMerchantSuggestions";
 import { defaultTransactionDateForMonth } from "../../lib/budgetTransactionDate";
+import { formatMoney, isDepositAccount } from "../../lib/budgetMoney";
 import { parseReceiptText } from "../../lib/receiptOcr";
 import {
   postBudgetTransaction,
@@ -12,6 +13,17 @@ import {
   type BudgetCategory,
   type BudgetSplitInput,
 } from "../../api";
+import AccountSelect from "./AccountSelect";
+import { BudgetExpenseShareEditor, BudgetReimbursementEditor } from "./BudgetShareEditors";
+import {
+  emptyShareChargeDraft,
+  shareChargeError,
+  sharePaymentError,
+  toShareChargeInputs,
+  toSharePaymentInputs,
+  type ShareChargeDraft,
+  type SharePaymentDraft,
+} from "../../lib/budgetShares";
 
 type SplitRow = { categoryId: string; spentByUserId: string; amount: string };
 
@@ -51,11 +63,19 @@ export default function BudgetTransactionForm({
   const [splits, setSplits] = useState<SplitRow[]>([
     { categoryId: "", spentByUserId: actor, amount: "" },
   ]);
+  const [chargeOthers, setChargeOthers] = useState(false);
+  const [shareDrafts, setShareDrafts] = useState<ShareChargeDraft[]>(() => [emptyShareChargeDraft()]);
+  const [isReimbursement, setIsReimbursement] = useState(false);
+  const [paymentDrafts, setPaymentDrafts] = useState<SharePaymentDraft[]>([]);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const { merchants, suggestion } = useMerchantSuggestions(token, formMerchant);
   const receiptInputRef = useRef<HTMLInputElement | null>(null);
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrStatus, setOcrStatus] = useState<string | null>(null);
+  const activeAccounts = accounts.filter((a) => a.isActive !== false);
+  const depositAccounts = activeAccounts.filter((a) => isDepositAccount(a.accountType));
+  const fromAccounts = formType === "transfer" || formType === "income" ? depositAccounts : activeAccounts;
 
   async function scanReceipt(file: File) {
     setOcrBusy(true);
@@ -88,6 +108,12 @@ export default function BudgetTransactionForm({
     setFormDate(defaultTransactionDateForMonth(month));
   }, [month]);
 
+  useEffect(() => {
+    if (formType !== "income" && formType !== "transfer") return;
+    const selected = accounts.find((a) => String(a.id) === formAccountId);
+    if (selected && !isDepositAccount(selected.accountType)) setFormAccountId("");
+  }, [formType, formAccountId, accounts]);
+
   function addSplitRow() {
     setSplits((s) => [...s, { categoryId: "", spentByUserId: actor, amount: "" }]);
   }
@@ -99,6 +125,7 @@ export default function BudgetTransactionForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!actor || !formAmount.trim()) return;
+    setFormError(null);
 
     if (formType === "transfer") {
       if (!formAccountId || !transferToId || formAccountId === transferToId) return;
@@ -123,8 +150,27 @@ export default function BudgetTransactionForm({
         if (splitPayload.length === 0) splitPayload = undefined;
       }
 
+      let shareCharges = undefined as ReturnType<typeof toShareChargeInputs> | undefined;
+      let sharePayments = undefined as ReturnType<typeof toSharePaymentInputs> | undefined;
+      if (formType === "expense" && chargeOthers) {
+        const err = shareChargeError(total, shareDrafts);
+        if (err) {
+          setFormError(err);
+          return;
+        }
+        shareCharges = toShareChargeInputs(shareDrafts);
+      }
+      if (formType === "income" && isReimbursement) {
+        const err = sharePaymentError(total, paymentDrafts);
+        if (err) {
+          setFormError(err);
+          return;
+        }
+        sharePayments = toSharePaymentInputs(paymentDrafts);
+      }
+
       await postBudgetTransaction(token, actor, {
-        type: formType,
+        type: formType === "income" && isReimbursement ? "reimbursement" : formType,
         amountInput: formAmount.trim(),
         categoryId: !useSplits && formCategoryId ? Number(formCategoryId) : undefined,
         spentByUserId: formSpender,
@@ -139,6 +185,8 @@ export default function BudgetTransactionForm({
         currency: formCurrency.trim() || "USD",
         accountId: formAccountId ? Number(formAccountId) : undefined,
         transactionDate: formDate || undefined,
+        shareCharges,
+        sharePayments,
       });
     }
 
@@ -149,6 +197,10 @@ export default function BudgetTransactionForm({
     setFormTags("");
     setUseSplits(false);
     setSplits([{ categoryId: "", spentByUserId: formSpender, amount: "" }]);
+    setChargeOthers(false);
+    setShareDrafts([emptyShareChargeDraft()]);
+    setIsReimbursement(false);
+    setPaymentDrafts([]);
     await onSaved();
   }
 
@@ -167,7 +219,7 @@ export default function BudgetTransactionForm({
       <div className="flex gap-2">
         {typeButton("expense", "Expense", "bg-amber-700 text-white")}
         {typeButton("income", "Income", "bg-emerald-700 text-white")}
-        {accounts.length >= 2 && typeButton("transfer", "Transfer", "bg-blue-700 text-white")}
+        {depositAccounts.length >= 1 && activeAccounts.length >= 2 && typeButton("transfer", "Transfer", "bg-blue-700 text-white")}
       </div>
       <input
         required
@@ -193,19 +245,15 @@ export default function BudgetTransactionForm({
         <div className="space-y-3">
           <div className="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
             <label className="block text-xs text-slate-400">
-              From
-              <select
+              From (checking or savings)
+              <AccountSelect
+                className="mt-1"
+                accounts={fromAccounts}
                 value={formAccountId}
-                onChange={(e) => setFormAccountId(e.target.value)}
-                className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
-              >
-                <option value="">Choose account</option>
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setFormAccountId}
+                placeholder="Choose account"
+                required
+              />
             </label>
             <div
               className="hidden text-center text-2xl text-cyan-400 transition-transform duration-300 sm:block"
@@ -216,20 +264,14 @@ export default function BudgetTransactionForm({
             </div>
             <label className="block text-xs text-slate-400">
               To
-              <select
+              <AccountSelect
+                className="mt-1"
+                accounts={activeAccounts.filter((a) => String(a.id) !== formAccountId)}
                 value={transferToId}
-                onChange={(e) => setTransferToId(e.target.value)}
-                className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
-              >
-                <option value="">Choose account</option>
-                {accounts
-                  .filter((a) => String(a.id) !== formAccountId)
-                  .map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-              </select>
+                onChange={setTransferToId}
+                placeholder="Choose account"
+                required
+              />
             </label>
           </div>
           {formAccountId && transferToId && (
@@ -242,20 +284,26 @@ export default function BudgetTransactionForm({
                   <>
                     <div className="min-w-0 flex-1 text-center">
                       <p className="truncate text-sm font-medium text-slate-200">{from?.name}</p>
-                      <p className="text-xs text-slate-500">${from?.currentBalance.toFixed(2) ?? "0.00"}</p>
+                      <p className="text-xs text-slate-500">
+                        {from && from.currentBalance < 0 ? "−" : ""}${formatMoney(Math.abs(from?.currentBalance ?? 0))}
+                      </p>
                       {amt > 0 && (
-                        <p className="mt-1 text-xs text-amber-300 transition-opacity">
-                          → ${Math.max(0, (from?.currentBalance ?? 0) - amt).toFixed(2)}
+                        <p className={`mt-1 text-xs ${(from?.currentBalance ?? 0) - amt < 0 ? "text-rose-300" : "text-amber-300"}`}>
+                          → {(from?.currentBalance ?? 0) - amt < 0 ? "−" : ""}$
+                          {formatMoney(Math.abs((from?.currentBalance ?? 0) - amt))}
                         </p>
                       )}
                     </div>
                     <span className="text-xl text-cyan-400 transition-transform duration-300">→</span>
                     <div className="min-w-0 flex-1 text-center">
                       <p className="truncate text-sm font-medium text-slate-200">{to?.name}</p>
-                      <p className="text-xs text-slate-500">${to?.currentBalance.toFixed(2) ?? "0.00"}</p>
+                      <p className="text-xs text-slate-500">
+                        {to && to.currentBalance < 0 ? "−" : ""}${formatMoney(Math.abs(to?.currentBalance ?? 0))}
+                      </p>
                       {amt > 0 && (
-                        <p className="mt-1 text-xs text-emerald-300 transition-opacity">
-                          → ${((to?.currentBalance ?? 0) + amt).toFixed(2)}
+                        <p className={`mt-1 text-xs ${(to?.currentBalance ?? 0) + amt < 0 ? "text-rose-300" : "text-emerald-300"}`}>
+                          → {(to?.currentBalance ?? 0) + amt < 0 ? "−" : ""}$
+                          {formatMoney(Math.abs((to?.currentBalance ?? 0) + amt))}
                         </p>
                       )}
                     </div>
@@ -283,7 +331,6 @@ export default function BudgetTransactionForm({
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
-                  {c.visibility === "personal" ? " (personal)" : ""}
                 </option>
               ))}
             </select>
@@ -357,19 +404,14 @@ export default function BudgetTransactionForm({
               </button>
             </div>
           )}
-          {accounts.length > 0 && (
-            <select
+          {fromAccounts.length > 0 && (
+            <AccountSelect
+              accounts={fromAccounts}
               value={formAccountId}
-              onChange={(e) => setFormAccountId(e.target.value)}
-              className="w-full hb-input px-3 py-2 text-slate-100"
-            >
-              <option value="">Account (default)</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name} (${a.currentBalance.toFixed(2)})
-                </option>
-              ))}
-            </select>
+              onChange={setFormAccountId}
+              placeholder={formType === "income" ? "Checking or savings" : "Account (default)"}
+              showBalance
+            />
           )}
           <DiscordMemberSelect
             token={token}
@@ -378,6 +420,46 @@ export default function BudgetTransactionForm({
             sharedRoster={roster}
             onPickUserId={setFormSpender}
           />
+          {formType === "expense" && (
+            <>
+              <label className="flex items-center gap-2 text-sm text-slate-400">
+                <input
+                  type="checkbox"
+                  checked={chargeOthers}
+                  onChange={(e) => setChargeOthers(e.target.checked)}
+                />
+                Others owe me part of this
+              </label>
+              {chargeOthers && (
+                <BudgetExpenseShareEditor
+                  total={total}
+                  roster={roster}
+                  drafts={shareDrafts}
+                  onChange={setShareDrafts}
+                />
+              )}
+            </>
+          )}
+          {formType === "income" && (
+            <>
+              <label className="flex items-center gap-2 text-sm text-slate-400">
+                <input
+                  type="checkbox"
+                  checked={isReimbursement}
+                  onChange={(e) => setIsReimbursement(e.target.checked)}
+                />
+                This is a reimbursement
+              </label>
+              {isReimbursement && (
+                <BudgetReimbursementEditor
+                  token={token}
+                  incomeAmount={total}
+                  drafts={paymentDrafts}
+                  onChange={setPaymentDrafts}
+                />
+              )}
+            </>
+          )}
           <input
             placeholder="Merchant"
             value={formMerchant}
@@ -443,6 +525,10 @@ export default function BudgetTransactionForm({
         onChange={(e) => setFormNote(e.target.value)}
         className="w-full hb-input px-3 py-2 text-slate-100"
       />
+      {formType === "income" && depositAccounts.length === 0 && (
+        <p className="text-xs text-amber-300">Income needs a checking or savings account.</p>
+      )}
+      {formError && <p className="text-sm text-rose-300">{formError}</p>}
       <button
         type="submit"
         disabled={
@@ -450,7 +536,8 @@ export default function BudgetTransactionForm({
           !formAmount.trim() ||
           (formType === "transfer"
             ? !formAccountId || !transferToId
-            : !formSpender)
+            : !formSpender) ||
+          (formType === "income" && depositAccounts.length === 0)
         }
         className="w-full rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 py-2 font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
       >

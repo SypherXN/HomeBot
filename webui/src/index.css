@@ -233,7 +233,7 @@
   }
 
   .budget-density-compact .budget-ledger-row {
-    @apply py-1.5;
+    @apply gap-2 py-1.5;
   }
 
   /* Primary gradient action — cyan → purple pill with neon glow */

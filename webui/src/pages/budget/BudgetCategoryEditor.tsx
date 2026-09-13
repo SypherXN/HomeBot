@@ -19,14 +19,12 @@ export default function BudgetCategoryEditor({ token, actor, categories, onSaved
   const [newColor, setNewColor] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
-  const [editVisibility, setEditVisibility] = useState("household");
   const [editTax, setEditTax] = useState(false);
   const [editColor, setEditColor] = useState("");
 
   function startEdit(c: BudgetCategory) {
     setEditingId(c.id);
     setEditName(c.name);
-    setEditVisibility(c.visibility === "personal" ? "personal" : "household");
     setEditTax(c.isTaxDeductible);
     setEditColor(c.color ?? "");
   }
@@ -43,14 +41,6 @@ export default function BudgetCategoryEditor({ token, actor, categories, onSaved
                 className="mb-2 w-full hb-input px-2 py-1 text-slate-100"
               />
               <div className="mb-2 flex flex-wrap gap-2">
-                <select
-                  value={editVisibility}
-                  onChange={(e) => setEditVisibility(e.target.value)}
-                  className="hb-input px-2 py-1 text-slate-100"
-                >
-                  <option value="household">Household</option>
-                  <option value="personal">Personal</option>
-                </select>
                 <label className="flex items-center gap-1 text-xs text-slate-400">
                   <input type="checkbox" checked={editTax} onChange={(e) => setEditTax(e.target.checked)} />
                   Tax-deductible
@@ -65,7 +55,7 @@ export default function BudgetCategoryEditor({ token, actor, categories, onSaved
                     if (!actor || !editName.trim()) return;
                     await patchBudgetCategory(token, actor, c.id, {
                       name: editName.trim(),
-                      visibility: editVisibility,
+                      visibility: c.visibility,
                       isTaxDeductible: editTax,
                       color: editColor,
                     });
@@ -85,7 +75,6 @@ export default function BudgetCategoryEditor({ token, actor, categories, onSaved
               <span className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: c.color || "#64748b" }} />
                 {c.name}
-                {c.visibility === "personal" ? " (personal)" : ""}
                 {c.isTaxDeductible ? " · tax" : ""}
               </span>
               {actor && (

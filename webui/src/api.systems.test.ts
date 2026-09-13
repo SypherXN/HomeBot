@@ -15,6 +15,7 @@ import {
   getWishlist,
   patchBudgetTransaction,
   postBudgetTransaction,
+  putBudgetAccountOrder,
   postBuyItem,
   postCalendarItem,
   postMoneyExpenseSplit,
@@ -161,6 +162,11 @@ describe("API client — all subsystems", () => {
     await patchBudgetTransaction(TOKEN, ACTOR, 5, { accountId: 2 });
     expect(lastCall().method).toBe("PATCH");
     expect(JSON.parse(lastCall().body ?? "{}")).toMatchObject({ accountId: 2 });
+
+    await putBudgetAccountOrder(TOKEN, ACTOR, [3, 1, 2]);
+    expect(lastCall().method).toBe("PUT");
+    expect(lastCall().url).toContain("/api/budget/accounts/order");
+    expect(JSON.parse(lastCall().body ?? "{}")).toMatchObject({ accountIds: [3, 1, 2] });
   });
 
   it("calendar: range query and create", async () => {

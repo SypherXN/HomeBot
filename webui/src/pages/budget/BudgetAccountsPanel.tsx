@@ -4,9 +4,13 @@ import {
   patchBudgetAccount,
   postBudgetAccount,
   postBudgetTransfer,
+  putBudgetAccountOrder,
   type BudgetAccount,
 } from "../../api";
 import { defaultTransactionDateForMonth } from "../../lib/budgetTransactionDate";
+import { isDepositAccount } from "../../lib/budgetMoney";
+import AccountReorderList from "./AccountReorderList";
+import AccountSelect from "./AccountSelect";
 import BudgetOpeningBalanceWizard from "./BudgetOpeningBalanceWizard";
 import ColorSwatchPicker from "./ColorSwatchPicker";
 
@@ -70,7 +74,23 @@ export default function BudgetAccountsPanel({
   }, [month]);
 
   const activeAccounts = accounts.filter((a) => a.isActive !== false);
+  const depositAccounts = activeAccounts.filter((a) => isDepositAccount(a.accountType));
   const showOpeningWizard = activeAccounts.length > 0;
+  const canReorder = Boolean(actor) && accounts.length > 1 && editId == null;
+
+  async function persistOrder(next: BudgetAccount[]) {
+    const prev = accounts;
+    setAccounts(next);
+    setError(null);
+    try {
+      await putBudgetAccountOrder(token, actor, next.map((a) => a.id));
+      await onSaved();
+      await reloadAccounts();
+    } catch (err) {
+      setAccounts(prev);
+      setError(err instanceof Error ? err.message : "Couldn't save account order.");
+    }
+  }
 
   async function handleAddAccount(e: React.FormEvent) {
     e.preventDefault();
@@ -227,16 +247,25 @@ export default function BudgetAccountsPanel({
       {accounts.length === 0 ? (
         <p className="mb-3 text-sm text-slate-500">No accounts yet.</p>
       ) : (
-        <ul className="mb-4 space-y-2 text-sm">
-          {accounts.map((a) => (
-            <li
-              key={a.id}
-              className={`rounded border px-3 py-2 ${
+        <>
+          {canReorder && (
+            <p className="mb-2 text-[11px] text-slate-500">Drag the dotted handle to reorder.</p>
+          )}
+          <AccountReorderList
+            items={accounts}
+            enabled={canReorder}
+            listClassName="mb-4 space-y-2 text-sm"
+            onReorder={(next) => void persistOrder(next)}
+            renderItem={(a, handle) => (
+            <div
+              className={`flex items-start gap-1 rounded border px-2 py-2 ${
                 a.isActive === false
                   ? "border-slate-800/60 text-slate-500"
                   : "border-slate-800 text-slate-300"
               }`}
             >
+              {handle}
+              <div className="min-w-0 flex-1">
               {editId === a.id ? (
                 <div className="space-y-2">
                   <input
@@ -352,9 +381,11 @@ export default function BudgetAccountsPanel({
                 )}
                 </div>
               )}
-            </li>
-          ))}
-        </ul>
+              </div>
+            </div>
+            )}
+          />
+        </>
       )}
 
       {error && <p className="mb-3 text-sm text-red-300">{error}</p>}
@@ -412,32 +443,20 @@ export default function BudgetAccountsPanel({
 
           <form onSubmit={(e) => void handleTransfer(e)} className="space-y-2 border-t border-slate-800 pt-3">
             <p className="text-xs font-medium text-slate-400">Transfer between accounts</p>
-            <select
+            <AccountSelect
+              accounts={depositAccounts}
               value={xferFrom}
-              onChange={(e) => setXferFrom(e.target.value)}
+              onChange={setXferFrom}
+              placeholder="From (checking or savings)"
               required
-              className="w-full hb-input px-2 py-1 text-sm text-slate-100"
-            >
-              <option value="">From</option>
-              {activeAccounts.map((a) => (
-                <option key={`f-${a.id}`} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-            <select
+            />
+            <AccountSelect
+              accounts={activeAccounts}
               value={xferTo}
-              onChange={(e) => setXferTo(e.target.value)}
+              onChange={setXferTo}
+              placeholder="To"
               required
-              className="w-full hb-input px-2 py-1 text-sm text-slate-100"
-            >
-              <option value="">To</option>
-              {activeAccounts.map((a) => (
-                <option key={`t-${a.id}`} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+            />
             <input
               value={xferAmount}
               onChange={(e) => setXferAmount(e.target.value)}
@@ -463,7 +482,7 @@ export default function BudgetAccountsPanel({
             />
             <button
               type="submit"
-              disabled={busy || activeAccounts.length < 2}
+              disabled={busy || depositAccounts.length < 1 || activeAccounts.length < 2}
               className="rounded bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-1 text-xs text-white disabled:opacity-50"
             >
               Record transfer

@@ -12,7 +12,7 @@ public partial class BudgetService
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
             SELECT a.Id, a.Name, a.AccountType, a.Currency, a.CreditLimit, a.CurrentBalance, a.IsActive, a.Color,
-                   t.Id, t.Amount, t.TransactionDate
+                   t.Id, t.Amount, t.TransactionDate, a.SortOrder
             FROM BudgetAccounts a
             LEFT JOIN (
                 SELECT AccountId, MIN(Id) AS OpeningId
@@ -21,7 +21,7 @@ public partial class BudgetService
                 GROUP BY AccountId
             ) o ON o.AccountId = a.Id
             LEFT JOIN BudgetTransactions t ON t.Id = o.OpeningId" +
-            (activeOnly ? " WHERE a.IsActive=1" : "") + " ORDER BY a.Id";
+            (activeOnly ? " WHERE a.IsActive=1" : "") + " ORDER BY a.SortOrder, a.Id";
         var list = new List<BudgetAccountModel>();
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
@@ -38,7 +38,8 @@ public partial class BudgetService
                 Color = reader.IsDBNull(7) ? null : reader.GetString(7),
                 OpeningBalanceTransactionId = reader.IsDBNull(8) ? null : reader.GetInt32(8),
                 OpeningBalanceAmount = reader.IsDBNull(9) ? null : reader.GetDouble(9),
-                OpeningBalanceDate = reader.IsDBNull(10) ? null : reader.GetString(10)
+                OpeningBalanceDate = reader.IsDBNull(10) ? null : reader.GetString(10),
+                SortOrder = reader.IsDBNull(11) ? 0 : reader.GetInt32(11)
             });
         }
 
@@ -58,20 +59,82 @@ public partial class BudgetService
         return ok;
     }
 
+    public void ReorderAccounts(IReadOnlyList<int> orderedIds, ulong actor)
+    {
+        if (orderedIds.Count == 0)
+            throw new ArgumentException("accountIds required.");
+
+        using var conn = _db.GetConnection();
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        var all = new List<int>();
+        var read = conn.CreateCommand();
+        read.Transaction = tx;
+        read.CommandText = "SELECT Id FROM BudgetAccounts ORDER BY SortOrder, Id";
+        using (var reader = read.ExecuteReader())
+        {
+            while (reader.Read())
+                all.Add(reader.GetInt32(0));
+        }
+
+        var known = all.ToHashSet();
+        var incoming = new List<int>();
+        var seen = new HashSet<int>();
+        foreach (var id in orderedIds)
+        {
+            if (!known.Contains(id) || !seen.Add(id))
+                continue;
+            incoming.Add(id);
+        }
+
+        if (incoming.Count == 0)
+            throw new ArgumentException("No matching accounts.");
+
+        var incomingSet = incoming.ToHashSet();
+        var slots = new List<int>();
+        for (var i = 0; i < all.Count; i++)
+        {
+            if (incomingSet.Contains(all[i]))
+                slots.Add(i);
+        }
+
+        var merged = all.ToArray();
+        for (var i = 0; i < slots.Count && i < incoming.Count; i++)
+            merged[slots[i]] = incoming[i];
+
+        for (var i = 0; i < merged.Length; i++)
+        {
+            var upd = conn.CreateCommand();
+            upd.Transaction = tx;
+            upd.CommandText = "UPDATE BudgetAccounts SET SortOrder=$s WHERE Id=$id";
+            upd.Parameters.AddWithValue("$s", i);
+            upd.Parameters.AddWithValue("$id", merged[i]);
+            upd.ExecuteNonQuery();
+        }
+
+        tx.Commit();
+        Audit(actor, "account", 0, "reorder");
+    }
+
     public int CreateAccount(string name, string accountType, string currency, double? creditLimit, ulong actor,
         string? color = null)
     {
         using var conn = _db.GetConnection();
         conn.Open();
+        var nextOrder = conn.CreateCommand();
+        nextOrder.CommandText = "SELECT COALESCE(MAX(SortOrder), 0) + 1 FROM BudgetAccounts";
+        var sortOrder = Convert.ToInt32(nextOrder.ExecuteScalar());
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            INSERT INTO BudgetAccounts (Name, AccountType, Currency, CreditLimit, Color)
-            VALUES ($n, $t, $c, $lim, $color)";
+            INSERT INTO BudgetAccounts (Name, AccountType, Currency, CreditLimit, Color, SortOrder)
+            VALUES ($n, $t, $c, $lim, $color, $ord)";
         cmd.Parameters.AddWithValue("$n", name.Trim());
         cmd.Parameters.AddWithValue("$t", string.IsNullOrWhiteSpace(accountType) ? "checking" : accountType.Trim());
         cmd.Parameters.AddWithValue("$c", string.IsNullOrWhiteSpace(currency) ? "USD" : currency.Trim().ToUpperInvariant());
         cmd.Parameters.AddWithValue("$lim", (object?)creditLimit ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$color", DbColor(color));
+        cmd.Parameters.AddWithValue("$ord", sortOrder);
         cmd.ExecuteNonQuery();
         var id = ReadLastId(conn);
         Audit(actor, "account", id, "create");
@@ -222,6 +285,8 @@ public partial class BudgetService
         var amount = EvaluateAmount(amountInput);
         using var conn = _db.GetConnection();
         conn.Open();
+        if (type.Equals("income", StringComparison.OrdinalIgnoreCase) && accountId is > 0)
+            EnsureDepositAccount(conn, null, accountId.Value, "Income");
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
             INSERT INTO BudgetRecurring
@@ -507,6 +572,26 @@ public partial class BudgetService
             cmd.Parameters.AddWithValue("$acc", DbAccountId(accountId));
         }
         if (sets.Count == 0) return false;
+
+        var nextType = type?.Trim().ToLowerInvariant();
+        int? nextAcc = applyAccountId ? accountId : null;
+        if (string.IsNullOrEmpty(nextType) || nextType is not ("expense" or "income") || !applyAccountId)
+        {
+            var read = conn.CreateCommand();
+            read.CommandText = "SELECT Type, AccountId FROM BudgetRecurring WHERE Id=$id";
+            read.Parameters.AddWithValue("$id", id);
+            using var reader = read.ExecuteReader();
+            if (reader.Read())
+            {
+                nextType = string.IsNullOrEmpty(nextType) || nextType is not ("expense" or "income")
+                    ? reader.GetString(0)
+                    : nextType;
+                nextAcc ??= reader.IsDBNull(1) ? null : reader.GetInt32(1);
+            }
+        }
+        if (string.Equals(nextType, "income", StringComparison.OrdinalIgnoreCase) && nextAcc is > 0)
+            EnsureDepositAccount(conn, null, nextAcc.Value, "Income");
+
         cmd.CommandText = $"UPDATE BudgetRecurring SET {string.Join(", ", sets)} WHERE Id=$id";
         cmd.Parameters.AddWithValue("$id", id);
         var ok = cmd.ExecuteNonQuery() > 0;

@@ -40,22 +40,30 @@ public class BudgetCommands : InteractionModuleBase<SocketInteractionContext>
         }
 
         var txType = type.Equals("income", StringComparison.OrdinalIgnoreCase) ? "income" : "expense";
-        _budget.CreateTransaction(
-            txType,
-            amount,
-            cat.Id,
-            spender.Id,
-            DateTime.UtcNow.ToString("yyyy-MM-dd"),
-            note,
-            null,
-            null,
-            null,
-            false,
-            "USD",
-            1,
-            null,
-            null,
-            Context.User.Id);
+        try
+        {
+            _budget.CreateTransaction(
+                txType,
+                amount,
+                cat.Id,
+                spender.Id,
+                DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                note,
+                null,
+                null,
+                null,
+                false,
+                "USD",
+                1,
+                null,
+                null,
+                Context.User.Id);
+        }
+        catch (ArgumentException ex)
+        {
+            await RespondAsync(ex.Message, ephemeral: true);
+            return;
+        }
 
         await RespondAsync(
             $"📊 Logged **{txType}** ${amount} — **{cat.Name}** (<@{spender.Id}>)");

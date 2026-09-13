@@ -74,11 +74,7 @@ public partial class BudgetService
 
     private List<ExpenseRow> FilterExpenseIncomeRows(string month, ulong? spentByUserId, int? categoryId, string? scope)
     {
-        var personal = scope == "all"
-            ? new HashSet<string>()
-            : GetCategories().Where(c => c.Visibility == "personal").Select(c => c.Name)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
+        _ = scope;
         var cats = GetCategories().ToDictionary(c => c.Id, c => c.Name);
         var list = new List<ExpenseRow>();
         foreach (var t in LoadAllTransactions().Where(t => MonthContainsDate(month, t.TransactionDate)))
@@ -97,8 +93,6 @@ public partial class BudgetService
                     if (categoryId.HasValue && cid != categoryId)
                         continue;
                     var label = cid.HasValue && cats.TryGetValue(cid.Value, out var n) ? n : "Uncategorized";
-                    if (personal.Contains(label))
-                        continue;
                     var portion = s.Amount * t.ExchangeRateToHome;
                     list.Add(new ExpenseRow(t.Type, cid, label, uid, portion));
                 }
@@ -110,8 +104,6 @@ public partial class BudgetService
                 if (categoryId.HasValue && t.CategoryId != categoryId)
                     continue;
                 var label = t.CategoryName ?? "Uncategorized";
-                if (personal.Contains(label))
-                    continue;
                 list.Add(new ExpenseRow(t.Type, t.CategoryId, label, t.SpentByUserId,
                     t.Amount * t.ExchangeRateToHome));
             }

@@ -3,13 +3,12 @@ import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useHorizontalSwipe } from "../hooks/useHorizontalSwipe";
 import { validActorId } from "../lib/validation";
-import { titleCase } from "../lib/titleCase";
 import { formatMoney, formatMonthLong } from "../lib/budgetMoney";
-import { layerForAssignee } from "../lib/personLayers";
+import { budgetDayLabel, groupBudgetTransactionsByDay } from "../lib/budgetLedger";
 import { getBudgetAccounts, getBudgetTransactions, type BudgetAccount, type BudgetTransactionListItem } from "../api";
 import BudgetTransactionEditModal from "./budget/BudgetTransactionEditModal";
+import BudgetLedgerRow from "./budget/BudgetLedgerRow";
 import { useGuildRoster } from "../hooks/GuildRosterContext";
-import { memberUsername } from "../lib/memberDisplay";
 import { getBudgetCategories, type BudgetCategory } from "../api";
 
 function currentMonth(): string {
@@ -82,6 +81,13 @@ export default function BudgetAccountPage() {
     return Math.min(100, (Math.abs(Math.min(0, account.currentBalance)) / account.creditLimit) * 100);
   }, [account]);
 
+  const groups = useMemo(() => groupBudgetTransactionsByDay(items), [items]);
+  const categoryColorByName = useMemo(
+    () => new Map(categories.map((c) => [c.name.toLowerCase(), c.color] as const)),
+    [categories]
+  );
+  const accountNameById = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts]);
+
   if (!tok) return <div className="hb-card p-6 text-slate-300">Sign in via Settings to use Budget.</div>;
 
   return (
@@ -123,39 +129,41 @@ export default function BudgetAccountPage() {
         </button>
       </div>
 
-      <section className="hb-card p-4">
+      <section className="hb-card overflow-hidden">
         {items.length === 0 ? (
-          <p className="text-sm text-slate-500">No transactions for {formatMonthLong(month)} on this account.</p>
+          <p className="p-4 text-sm text-slate-500">No transactions for {formatMonthLong(month)} on this account.</p>
         ) : (
-          <ul className="divide-y divide-slate-800">
-            {items.map((row) => (
-              <li key={row.id} className="py-3 text-sm">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <span className={row.type === "income" ? "text-emerald-400" : "text-amber-300"}>
-                      ${formatMoney(row.amount)}
-                    </span>{" "}
-                    <span className="text-white">{titleCase(row.categoryName ?? row.type)}</span>
-                    <span className="text-slate-500">
-                      {" · "}
-                      <span className={`mr-1 inline-block h-2 w-2 rounded-full align-middle ${layerForAssignee(row.spentByUserId).dot}`} aria-hidden />
-                      {memberUsername(roster.data, row.spentByUserId, row.spentByMemberLabel)}
-                    </span>
-                    {row.merchant && <span className="text-slate-500"> · {row.merchant}</span>}
-                  </div>
-                  {actor && (
-                    <button type="button" onClick={() => setEditTx(row)} className="text-blue-400 hover:text-blue-300">
-                      Edit
-                    </button>
-                  )}
-                </div>
-                <p className="mt-0.5 text-xs text-slate-500">{row.transactionDate}</p>
-              </li>
-            ))}
-          </ul>
+          groups.map((group) => (
+            <div key={group.day} className="border-t border-slate-800/80 first:border-t-0">
+              <div className="flex items-baseline justify-between px-4 pb-1 pt-3">
+                <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  {budgetDayLabel(group.day)}
+                </h3>
+              </div>
+              <ul>
+                {group.rows.map((row) => (
+                  <li key={row.id}>
+                    <BudgetLedgerRow
+                      row={row}
+                      actor={actor}
+                      roster={roster}
+                      categoryColor={
+                        row.categoryName ? categoryColorByName.get(row.categoryName.toLowerCase()) : undefined
+                      }
+                      accountName={row.accountId != null ? accountNameById.get(row.accountId) : account?.name}
+                      transferToName={
+                        row.transferToAccountId != null ? accountNameById.get(row.transferToAccountId) : null
+                      }
+                      onEdit={() => setEditTx(row)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))
         )}
         {hasNext && (
-          <button type="button" onClick={() => void loadMore()} className="mt-3 w-full rounded-lg hb-btn-soft px-4 py-2 text-sm text-slate-200">
+          <button type="button" onClick={() => void loadMore()} className="m-4 mt-0 w-[calc(100%-2rem)] rounded-lg hb-btn-soft px-4 py-2 text-sm text-slate-200">
             Load more
           </button>
         )}

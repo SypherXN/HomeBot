@@ -93,6 +93,33 @@ public sealed class BudgetPolishApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Accounts_reorder_persists()
+    {
+        var aRes = await _client.PostAsJsonAsync(
+            $"/api/budget/accounts?actorUserId={Actor}",
+            new { name = "Alpha", accountType = "checking" });
+        var bRes = await _client.PostAsJsonAsync(
+            $"/api/budget/accounts?actorUserId={Actor}",
+            new { name = "Beta", accountType = "savings" });
+        var aId = (await aRes.Content.ReadFromJsonAsync<Dictionary<string, int>>())!["id"];
+        var bId = (await bRes.Content.ReadFromJsonAsync<Dictionary<string, int>>())!["id"];
+
+        var before = await _client.GetFromJsonAsync<JsonElement>("/api/budget/accounts");
+        var ids = before.EnumerateArray().Select(a => a.GetProperty("id").GetInt32()).ToList();
+        Assert.Contains(aId, ids);
+        Assert.Contains(bId, ids);
+        ids.Reverse();
+
+        var put = await _client.PutAsJsonAsync(
+            $"/api/budget/accounts/order?actorUserId={Actor}",
+            new { accountIds = ids });
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+
+        var after = await _client.GetFromJsonAsync<JsonElement>("/api/budget/accounts");
+        Assert.Equal(ids, after.EnumerateArray().Select(a => a.GetProperty("id").GetInt32()).ToList());
+    }
+
+    [Fact]
     public async Task Category_patch_and_delete()
     {
         var post = await _client.PostAsJsonAsync(
@@ -484,6 +511,57 @@ public sealed class BudgetPolishApiTests : IDisposable
         Assert.True(resumed.GetProperty("isActive").GetBoolean());
         var next = resumed.GetProperty("nextRunDate").GetString();
         Assert.True(string.CompareOrdinal(next, DateTime.UtcNow.ToString("yyyy-MM-dd")) >= 0);
+    }
+
+    [Fact]
+    public async Task Share_charges_and_reimbursement_via_api()
+    {
+        var accRes = await _client.PostAsJsonAsync(
+            $"/api/budget/accounts?actorUserId={Actor}",
+            new { name = "Checking", accountType = "checking" });
+        accRes.EnsureSuccessStatusCode();
+        var checking = (await accRes.Content.ReadFromJsonAsync<Dictionary<string, int>>())!["id"];
+
+        var txRes = await _client.PostAsJsonAsync(
+            $"/api/budget/transactions?actorUserId={Actor}",
+            new
+            {
+                type = "expense",
+                amountInput = "60",
+                spentByUserId = Actor.ToString(),
+                accountId = checking,
+                merchant = "Dumplings",
+                transactionDate = "2026-09-13",
+                shareCharges = new[]
+                {
+                    new { owedByLabel = "Alex", amount = 20 }
+                }
+            });
+        Assert.Equal(HttpStatusCode.Created, txRes.StatusCode);
+
+        var shares = await _client.GetFromJsonAsync<JsonElement>("/api/budget/shares");
+        Assert.Equal(20, shares.GetProperty("outstandingTotal").GetDouble());
+        var chargeId = shares.GetProperty("open")[0].GetProperty("id").GetInt32();
+
+        var payRes = await _client.PostAsJsonAsync(
+            $"/api/budget/transactions?actorUserId={Actor}",
+            new
+            {
+                type = "income",
+                amountInput = "20",
+                spentByUserId = Actor.ToString(),
+                accountId = checking,
+                transactionDate = "2026-09-14",
+                sharePayments = new[] { new { chargeId, amount = 20 } }
+            });
+        Assert.Equal(HttpStatusCode.Created, payRes.StatusCode);
+
+        var afterPay = await _client.GetFromJsonAsync<JsonElement>("/api/budget/shares");
+        Assert.Equal(0, afterPay.GetProperty("outstandingTotal").GetDouble());
+
+        var month = await _client.GetFromJsonAsync<JsonElement>("/api/budget/summary/month?month=2026-09");
+        Assert.Equal(0, month.GetProperty("totalIncome").GetDouble());
+        Assert.Equal(60, month.GetProperty("totalExpenses").GetDouble());
     }
 
     private async Task<int> CreateCategoryAsync(string name)

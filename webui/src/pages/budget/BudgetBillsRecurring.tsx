@@ -14,6 +14,8 @@ import {
   type BudgetRecurring,
 } from "../../api";
 import ColorSwatchPicker from "./ColorSwatchPicker";
+import AccountSelect from "./AccountSelect";
+import { isDepositAccount } from "../../lib/budgetMoney";
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -390,7 +392,14 @@ export default function BudgetBillsRecurring({
                       </div>
                       <select
                         value={editRecType}
-                        onChange={(e) => setEditRecType(e.target.value)}
+                        onChange={(e) => {
+                          const next = e.target.value;
+                          setEditRecType(next);
+                          if (next === "income") {
+                            const acc = accounts.find((a) => String(a.id) === editRecAccount);
+                            if (acc && !isDepositAccount(acc.accountType)) setEditRecAccount("");
+                          }
+                        }}
                         className="w-full hb-input px-2 py-1 text-slate-100"
                       >
                         <option value="expense">Expense</option>
@@ -409,20 +418,16 @@ export default function BudgetBillsRecurring({
                         ))}
                       </select>
                       {accounts.length > 0 && (
-                        <select
+                        <AccountSelect
+                          accounts={accounts.filter(
+                            (a) =>
+                              a.isActive !== false &&
+                              (editRecType !== "income" || isDepositAccount(a.accountType))
+                          )}
                           value={editRecAccount}
-                          onChange={(e) => setEditRecAccount(e.target.value)}
-                          className="w-full hb-input px-2 py-1 text-slate-100"
-                        >
-                          <option value="">Account (default)</option>
-                          {accounts
-                            .filter((a) => a.isActive !== false)
-                            .map((a) => (
-                              <option key={a.id} value={a.id}>
-                                {a.name}
-                              </option>
-                            ))}
-                        </select>
+                          onChange={setEditRecAccount}
+                          placeholder={editRecType === "income" ? "Checking or savings" : "Account (default)"}
+                        />
                       )}
                       <DiscordMemberSelect
                         token={token}
@@ -575,20 +580,12 @@ export default function BudgetBillsRecurring({
                 ))}
               </select>
               {accounts.length > 0 && (
-                <select
+                <AccountSelect
+                  accounts={accounts.filter((a) => a.isActive !== false)}
                   value={recAccount}
-                  onChange={(e) => setRecAccount(e.target.value)}
-                  className="w-full hb-input px-2 py-1 text-sm text-slate-100"
-                >
-                  <option value="">Account (default)</option>
-                  {accounts
-                    .filter((a) => a.isActive !== false)
-                    .map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}
-                      </option>
-                    ))}
-                </select>
+                  onChange={setRecAccount}
+                  placeholder="Account (default)"
+                />
               )}
               <button type="submit" className="rounded bg-slate-700 px-2 py-1 text-xs text-white">
                 Add recurring

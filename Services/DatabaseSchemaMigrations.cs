@@ -389,6 +389,48 @@ public static class DatabaseSchemaMigrations
                 "ALTER TABLE BudgetBills ADD COLUMN Color TEXT");
             CollapseStackedOpeningBalances(conn);
         }),
+
+        new SchemaMigrationRunner.Migration("012_budget_account_sort_order", conn =>
+        {
+            SchemaMigrationRunner.TryAddColumn(conn,
+                "ALTER TABLE BudgetAccounts ADD COLUMN SortOrder INTEGER NOT NULL DEFAULT 0");
+            SchemaMigrationRunner.Execute(conn, "UPDATE BudgetAccounts SET SortOrder = Id WHERE SortOrder = 0");
+        }),
+
+        new SchemaMigrationRunner.Migration("013_budget_share_charges", conn =>
+        {
+            SchemaMigrationRunner.Execute(conn, @"
+                CREATE TABLE IF NOT EXISTS BudgetShareCharges (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ExpenseTransactionId INTEGER NOT NULL,
+                    OwedByUserId INTEGER,
+                    OwedByLabel TEXT NOT NULL,
+                    Amount REAL NOT NULL,
+                    Status TEXT NOT NULL DEFAULT 'open',
+                    CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (ExpenseTransactionId) REFERENCES BudgetTransactions(Id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS BudgetSharePayments (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ChargeId INTEGER NOT NULL,
+                    IncomeTransactionId INTEGER NOT NULL,
+                    Amount REAL NOT NULL,
+                    CreatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (ChargeId) REFERENCES BudgetShareCharges(Id) ON DELETE CASCADE,
+                    FOREIGN KEY (IncomeTransactionId) REFERENCES BudgetTransactions(Id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS IX_BudgetShareCharges_Expense
+                    ON BudgetShareCharges(ExpenseTransactionId);
+                CREATE INDEX IF NOT EXISTS IX_BudgetShareCharges_Status
+                    ON BudgetShareCharges(Status);
+                CREATE INDEX IF NOT EXISTS IX_BudgetSharePayments_Charge
+                    ON BudgetSharePayments(ChargeId);
+                CREATE INDEX IF NOT EXISTS IX_BudgetSharePayments_Income
+                    ON BudgetSharePayments(IncomeTransactionId);
+            ");
+        }),
     };
 
     /// <summary>

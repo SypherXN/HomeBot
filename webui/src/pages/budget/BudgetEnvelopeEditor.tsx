@@ -44,12 +44,11 @@ export default function BudgetEnvelopeEditor({
   const [copyBusy, setCopyBusy] = useState(false);
   const [applyBusy, setApplyBusy] = useState(false);
 
-  const householdCats = categories.filter((c) => c.visibility !== "personal");
   const dirtyCount = Object.keys(drafts).length + Object.keys(leaveDrafts).length;
   const timePct = monthTimePct(month);
 
   const rank: Record<string, number> = { over: 0, warn: 1, pace: 2, under: 3, none: 4 };
-  const sortedCats = [...householdCats].sort((a, b) => {
+  const sortedCats = [...categories].sort((a, b) => {
     const ea = envByCat.get(a.id);
     const eb = envByCat.get(b.id);
     const sa = paceState(ea?.percentUsed ?? 0, timePct, ea != null && ea.targetAmount > 0);
@@ -65,7 +64,7 @@ export default function BudgetEnvelopeEditor({
     try {
       const touched = new Set([...Object.keys(drafts), ...Object.keys(leaveDrafts)].map(Number));
       for (const catId of touched) {
-        const cat = householdCats.find((c) => c.id === catId);
+        const cat = categories.find((c) => c.id === catId);
         if (!cat) continue;
         const env = envByCat.get(catId);
         const rawTarget = drafts[catId];
@@ -129,8 +128,8 @@ export default function BudgetEnvelopeEditor({
     }
   }
 
-  if (householdCats.length === 0) {
-    return <p className="text-sm text-slate-500">Add household categories first (Accounts & categories tab).</p>;
+  if (categories.length === 0) {
+    return <p className="text-sm text-slate-500">Add categories first (Accounts & categories tab).</p>;
   }
 
   return (
