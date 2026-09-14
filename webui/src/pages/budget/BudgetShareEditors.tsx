@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster";
 import { formatMoney } from "../../lib/budgetMoney";
 import { guestNamesFromCharges, uniqueGuestNames } from "../../lib/sharePerson";
@@ -46,17 +46,12 @@ export function BudgetExpenseShareEditor({ total, token, roster, drafts, onChang
     return () => ac.abort();
   }, [token]);
 
-  const draftsRef = useRef(drafts);
-  draftsRef.current = drafts;
-  const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
   useEffect(() => {
     if (mode !== "even") return;
-    const current = draftsRef.current;
-    const next = splitRemainingEqually(total, current);
-    const same = current.length === next.length && current.every((d, i) => d.amount === next[i]?.amount);
-    if (!same) onChangeRef.current(next);
-  }, [mode, total]);
+    const next = splitRemainingEqually(total, drafts);
+    const same = drafts.length === next.length && drafts.every((d, i) => d.amount === next[i]?.amount);
+    if (!same) onChange(next);
+  }, [mode, total, drafts, onChange]);
 
   const guests = useMemo(() => {
     const fromDrafts = drafts.filter((d) => !d.owedByUserId.trim()).map((d) => d.owedByLabel);
