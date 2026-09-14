@@ -36,6 +36,7 @@ import { useToasts } from "../components/toastContext";
 import { titleCase } from "../lib/titleCase";
 import { validActorId } from "../lib/validation";
 import { Icon, type IconName } from "../components/icons";
+import { useNavVisibility } from "../nav/NavVisibilityContext";
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -111,6 +112,7 @@ export default function DashboardPage() {
   const guildRoster = useGuildRoster();
   const undoToast = useUndoToast();
   const { showToast } = useToasts();
+  const { isVisible } = useNavVisibility();
 
   const [slice, setSlice] = useState<Slice<DashboardBundle>>({ status: "loading" });
   const [onlyMine, setOnlyMine] = useState(false);
@@ -271,7 +273,7 @@ export default function DashboardPage() {
 
   const attentionRows: { icon: IconName; text: ReactNode; to: string; action: string }[] = [];
   if (bundle) {
-    if (bundle.budgetAlertCount > 0) {
+    if (bundle.budgetAlertCount > 0 && isVisible("budget")) {
       attentionRows.push({
         icon: "budget",
         text: `${bundle.budgetAlertCount} budget alert${bundle.budgetAlertCount === 1 ? "" : "s"} pending review`,
@@ -279,7 +281,7 @@ export default function DashboardPage() {
         action: "Review",
       });
     }
-    if (bundle.staleBuy.length > 0) {
+    if (bundle.staleBuy.length > 0 && isVisible("buy")) {
       attentionRows.push({
         icon: "buy",
         text: `${bundle.staleBuy.length} item${bundle.staleBuy.length === 1 ? "" : "s"} on the buy list for 14+ days — ${bundle.staleBuy
@@ -290,7 +292,7 @@ export default function DashboardPage() {
         action: "Clean up",
       });
     }
-    if (!tonightEntry) {
+    if (!tonightEntry && isVisible("meals")) {
       attentionRows.push({
         icon: "meals",
         text: "No dinner planned for tonight",
@@ -408,8 +410,8 @@ export default function DashboardPage() {
             </section>
           )}
 
-          <div className="grid gap-4 lg:grid-cols-5">
-            {/* Tonight */}
+          <div className={`grid gap-4 ${isVisible("meals") && isVisible("calendar") ? "lg:grid-cols-5" : ""}`}>
+            {isVisible("meals") && (
             <section className="hb-border-glow lg:col-span-2" aria-label="Tonight">
             <div className="hb-card relative h-full overflow-hidden p-5">
               <div
@@ -467,9 +469,10 @@ export default function DashboardPage() {
               </div>
             </div>
             </section>
+            )}
 
-            {/* Today band */}
-            <section className="hb-card p-5 lg:col-span-3" aria-label="Today">
+            {isVisible("calendar") && (
+            <section className={`hb-card p-5 ${isVisible("meals") ? "lg:col-span-3" : ""}`} aria-label="Today">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5">
                   <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600/20 text-blue-300">
@@ -562,6 +565,7 @@ export default function DashboardPage() {
                 </p>
               )}
             </section>
+            )}
           </div>
 
           {/* Later / at a glance */}
@@ -570,6 +574,7 @@ export default function DashboardPage() {
               Later
             </h2>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {isVisible("calendar") && (
               <SnapshotCard
                 to="/calendar"
                 icon="calendar"
@@ -592,7 +597,9 @@ export default function DashboardPage() {
                   )}
                 </ul>
               </SnapshotCard>
+              )}
 
+              {isVisible("buy") && (
               <SnapshotCard
                 to="/buy"
                 icon="buy"
@@ -613,7 +620,9 @@ export default function DashboardPage() {
                   )}
                 </ul>
               </SnapshotCard>
+              )}
 
+              {isVisible("budget") && (
               <SnapshotCard
                 to="/budget"
                 icon="budget"
@@ -640,7 +649,9 @@ export default function DashboardPage() {
                   <p className="mt-2 text-sm text-slate-500">No budget data yet.</p>
                 )}
               </SnapshotCard>
+              )}
 
+              {isVisible("wishlist") && (
               <SnapshotCard
                 to="/wishlist"
                 icon="wishlist"
@@ -661,7 +672,9 @@ export default function DashboardPage() {
                   )}
                 </ul>
               </SnapshotCard>
+              )}
 
+              {isVisible("money") && (
               <SnapshotCard
                 to="/money"
                 icon="money"
@@ -683,7 +696,9 @@ export default function DashboardPage() {
                   </p>
                 )}
               </SnapshotCard>
+              )}
 
+              {isVisible("calendar") && (
               <SnapshotCard
                 to="/calendar"
                 icon="tasks"
@@ -703,10 +718,11 @@ export default function DashboardPage() {
                   )}
                 </ul>
               </SnapshotCard>
+              )}
             </div>
           </section>
 
-          {bundle.ops.googleConnected != null && (
+          {bundle.ops.googleConnected != null && isVisible("calendar") && (
             <p className="text-xs text-slate-500">
               Google Calendar:{" "}
               {bundle.ops.googleConnected ? (

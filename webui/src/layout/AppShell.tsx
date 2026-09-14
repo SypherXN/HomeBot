@@ -1,6 +1,8 @@
 import { Link, NavLink, Outlet } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
+import { buildMobileTabItems, buildMoreItems, buildNavGroups } from "../lib/navConfig";
+import { useNavVisibility } from "../nav/NavVisibilityContext";
 import { getApiBaseUrl, getMeta, subscribeApiBaseUrl } from "../api";
 import { useApiConnectionStatus } from "../hooks/useApiConnectionStatus";
 import { useBudgetAlertCount } from "../hooks/useBudgetAlertCount";
@@ -10,51 +12,7 @@ import NotificationCenter from "../components/NotificationCenter";
 import Sheet from "../components/Sheet";
 import { useGlobalKeyboardShortcuts } from "../hooks/useGlobalKeyboardShortcuts";
 import { useTheme } from "../theme/ThemeProvider";
-import { Icon, type IconName } from "../components/icons";
-
-type NavItem = { to: string; label: string; icon: IconName; end?: boolean };
-
-const navGroups: { label: string | null; items: NavItem[] }[] = [
-  { label: null, items: [{ to: "/", label: "Home", icon: "home", end: true }] },
-  {
-    label: "Household",
-    items: [
-      { to: "/buy", label: "Buy", icon: "buy" },
-      { to: "/wishlist", label: "Wishlist", icon: "wishlist" },
-      { to: "/meals", label: "Meals", icon: "meals" },
-    ],
-  },
-  {
-    label: "Finances",
-    items: [
-      { to: "/money", label: "Money", icon: "money" },
-      { to: "/budget", label: "Budget", icon: "budget" },
-    ],
-  },
-  {
-    label: "Planning",
-    items: [{ to: "/calendar", label: "Calendar", icon: "calendar" }],
-  },
-  {
-    label: "System",
-    items: [{ to: "/settings", label: "Settings", icon: "settings" }],
-  },
-];
-
-const flatNav: NavItem[] = navGroups.flatMap((g) => g.items);
-
-/** Primary mobile tab-bar destinations. */
-const TAB_ITEMS: NavItem[] = [
-  { to: "/", label: "Home", icon: "home", end: true },
-  { to: "/buy", label: "Buy", icon: "buy" },
-  { to: "/calendar", label: "Calendar", icon: "calendar" },
-  { to: "/budget", label: "Budget", icon: "budget" },
-];
-
-/** Destinations that live in the mobile "More" sheet (everything not on the tab bar). */
-const MORE_ITEMS: NavItem[] = flatNav.filter(
-  (i) => !TAB_ITEMS.some((t) => t.to === i.to)
-);
+import { Icon } from "../components/icons";
 
 function navClass({ isActive }: { isActive: boolean }) {
   return [
@@ -142,6 +100,12 @@ function BrandMark() {
 }
 
 export default function AppShell() {
+  const { hiddenPages } = useNavVisibility();
+  const navGroups = useMemo(() => buildNavGroups(hiddenPages), [hiddenPages]);
+  const tabItems = useMemo(() => buildMobileTabItems(hiddenPages), [hiddenPages]);
+  const moreItems = useMemo(() => buildMoreItems(hiddenPages, tabItems), [hiddenPages, tabItems]);
+  const mobileColCount = tabItems.length + 1;
+
   const { token, webUsername } = useAuth();
   const hasToken = token.trim().length > 0;
   const { status } = useApiConnectionStatus(token);
@@ -385,8 +349,8 @@ export default function AppShell() {
 
       {/* Mobile bottom tab bar */}
       <nav className="hb-tabbar md:hidden" aria-label="Primary">
-        <div className="grid grid-cols-5">
-          {TAB_ITEMS.map(({ to, label, icon, end }) => (
+        <div className="grid" style={{ gridTemplateColumns: `repeat(${mobileColCount}, minmax(0, 1fr))` }}>
+          {tabItems.map(({ to, label, icon, end }) => (
             <NavLink
               key={to}
               to={to}
@@ -425,7 +389,7 @@ export default function AppShell() {
       {/* Mobile "More" sheet */}
       <Sheet open={moreOpen} title="More" onClose={() => setMoreOpen(false)}>
         <nav className="grid grid-cols-2 gap-2">
-          {MORE_ITEMS.map(({ to, label, icon, end }) => (
+          {moreItems.map(({ to, label, icon, end }) => (
             <NavLink
               key={to}
               to={to}

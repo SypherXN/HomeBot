@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import NavRouteGuard from "./components/NavRouteGuard";
 import AppShell from "./layout/AppShell";
 import BuyPage from "./pages/BuyPage";
 import CalendarPage from "./pages/CalendarPage";
@@ -21,13 +22,16 @@ export default function App() {
       <Route element={<AppShell />}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/buy" element={<BuyPage />} />
-        <Route path="/wishlist" element={<WishlistPage />} />
-        <Route path="/money" element={<MoneyPage />} />
-        <Route path="/budget" element={<BudgetPage />} />
-        <Route path="/budget/accounts/:accountId" element={<BudgetAccountPage />} />
-        <Route path="/calendar" element={<CalendarPage />} />
-        <Route path="/meals" element={<MealPlanPage />} />
+        <Route path="/buy" element={<NavRouteGuard pageId="buy"><BuyPage /></NavRouteGuard>} />
+        <Route path="/wishlist" element={<NavRouteGuard pageId="wishlist"><WishlistPage /></NavRouteGuard>} />
+        <Route path="/money" element={<NavRouteGuard pageId="money"><MoneyPage /></NavRouteGuard>} />
+        <Route path="/budget" element={<NavRouteGuard pageId="budget"><BudgetPage /></NavRouteGuard>} />
+        <Route
+          path="/budget/accounts/:accountId"
+          element={<NavRouteGuard pageId="budget"><BudgetAccountPage /></NavRouteGuard>}
+        />
+        <Route path="/calendar" element={<NavRouteGuard pageId="calendar"><CalendarPage /></NavRouteGuard>} />
+        <Route path="/meals" element={<NavRouteGuard pageId="meals"><MealPlanPage /></NavRouteGuard>} />
         <Route path="/health" element={<HealthPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/setup" element={<SetupPage />} />

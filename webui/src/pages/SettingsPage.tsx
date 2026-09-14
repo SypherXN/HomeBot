@@ -13,6 +13,7 @@ import HouseholdAuditPanel from "./settings/HouseholdAuditPanel";
 import NotificationPreferencesPanel from "./settings/NotificationPreferencesPanel";
 import PushNotificationsPanel from "./settings/PushNotificationsPanel";
 import AppearancePanel from "./settings/AppearancePanel";
+import NavigationPanel from "./settings/NavigationPanel";
 import {
   getApiBaseUrl,
   isApiBaseInferred,
@@ -166,6 +167,11 @@ export default function SettingsPage() {
       <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/30 p-4">
         <h2 className="text-sm font-semibold text-white">Household audit log</h2>
         <HouseholdAuditPanel token={token} />
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/30 p-4">
+        <h2 className="text-sm font-semibold text-white">Navigation</h2>
+        <NavigationPanel />
       </div>
 
       <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/30 p-4">

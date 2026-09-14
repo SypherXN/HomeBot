@@ -6,6 +6,7 @@ import { AuthProvider } from "./auth/AuthContext";
 import { CalendarZoneProvider } from "./calendar/CalendarZoneContext";
 import { GuildRosterProvider } from "./hooks/GuildRosterContext";
 import { ThemeProvider } from "./theme/ThemeProvider";
+import { NavVisibilityProvider } from "./nav/NavVisibilityContext";
 import { ToastProvider } from "./components/ToastProvider";
 import { AUTH_STORAGE_ACTOR, AUTH_STORAGE_TOKEN } from "./auth/storageKeys";
 import { createHomeBotFetchMock } from "./test/fetchMock";
@@ -16,11 +17,13 @@ function renderRoute(path: string) {
       <AuthProvider>
         <GuildRosterProvider>
           <ThemeProvider>
-            <CalendarZoneProvider>
-              <ToastProvider>
-                <App />
-              </ToastProvider>
-            </CalendarZoneProvider>
+            <NavVisibilityProvider>
+              <CalendarZoneProvider>
+                <ToastProvider>
+                  <App />
+                </ToastProvider>
+              </CalendarZoneProvider>
+            </NavVisibilityProvider>
           </ThemeProvider>
         </GuildRosterProvider>
       </AuthProvider>

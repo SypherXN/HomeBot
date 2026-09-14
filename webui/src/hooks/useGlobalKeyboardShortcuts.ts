@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { KEYBOARD_SHORTCUTS, TOGGLEABLE_NAV_PAGES } from "../lib/navConfig";
+import { useNavVisibility } from "../nav/NavVisibilityContext";
 
 function isTypingTarget(t: EventTarget | null): boolean {
   return (
@@ -8,18 +10,18 @@ function isTypingTarget(t: EventTarget | null): boolean {
   );
 }
 
-const NAV_MAP: Record<string, string> = {
-  h: "/",
-  b: "/buy",
-  w: "/wishlist",
-  m: "/money",
-  c: "/calendar",
-  s: "/settings",
-};
-
 export function useGlobalKeyboardShortcuts() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isVisible } = useNavVisibility();
+  const navMap = useMemo(() => {
+    const map: Record<string, string> = { h: "/", s: "/settings" };
+    for (const page of TOGGLEABLE_NAV_PAGES) {
+      const key = KEYBOARD_SHORTCUTS[page.id];
+      if (key && isVisible(page.id)) map[key] = page.to;
+    }
+    return map;
+  }, [isVisible]);
   const [helpOpen, setHelpOpen] = useState(false);
   const pendingG = useRef(false);
   const gTimer = useRef<number | null>(null);
@@ -63,10 +65,10 @@ export function useGlobalKeyboardShortcuts() {
         return;
       }
 
-      if (pendingG.current && NAV_MAP[e.key]) {
+      if (pendingG.current && navMap[e.key]) {
         e.preventDefault();
         clearGTimer();
-        navigate(NAV_MAP[e.key]);
+        navigate(navMap[e.key]);
         return;
       }
 
@@ -95,7 +97,7 @@ export function useGlobalKeyboardShortcuts() {
       window.removeEventListener("keydown", onKeyDown);
       clearGTimer();
     };
-  }, [helpOpen, location.pathname, navigate]);
+  }, [helpOpen, location.pathname, navigate, navMap]);
 
   return { helpOpen, setHelpOpen };
 }
