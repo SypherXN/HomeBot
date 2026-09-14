@@ -7,6 +7,7 @@ import { layerForAssignee } from "../../lib/personLayers";
 import { categoryDotStyle, formatMoney, MONEY_TEXT, isIncomeLikeType } from "../../lib/budgetMoney";
 import { humanizeBudgetTxType } from "../../lib/budgetLedger";
 import { formatTransferLedgerAmount, transferReceivedAmount } from "../../lib/budgetTransfer";
+import { formatShareOwedByLabel, relatedShareLinks } from "../../lib/budgetShares";
 import { titleCase } from "../../lib/titleCase";
 
 type Props = {
@@ -21,6 +22,8 @@ type Props = {
   onToggleSelect?: () => void;
   onEdit: () => void;
   onDelete?: () => void;
+  onSplit?: () => void;
+  onViewTransaction?: (transactionId: number, transactionDate?: string | null) => void;
 };
 
 function TypeTile({ type }: { type: string }) {
@@ -106,6 +109,8 @@ export default function BudgetLedgerRow({
   onToggleSelect,
   onEdit,
   onDelete,
+  onSplit,
+  onViewTransaction,
 }: Props) {
   const spenderLayer = layerForAssignee(row.spentByUserId);
   const spender = memberUsername(roster.data, row.spentByUserId, row.spentByMemberLabel);
@@ -188,13 +193,15 @@ export default function BudgetLedgerRow({
     }
   }
   if (isIncomeLikeType(row.type) && share && share.payments.length > 0) {
-    const names = [...new Set(share.payments.map((p) => p.owedByLabel).filter(Boolean))];
+    const names = [...new Set(share.payments.map((p) => formatShareOwedByLabel(p.owedByLabel)).filter(Boolean))];
     meta.push(
       <span key="reimb" className="rounded-full bg-emerald-950/70 px-1.5 py-px text-[10px] font-medium text-emerald-200">
         {names.length ? `From ${names.join(", ")}` : "Reimbursement"}
       </span>
     );
   }
+
+  const { incomeIds, expenseIds } = relatedShareLinks(row);
   if (row.type === "expense" && row.categoryId == null) {
     meta.push(
       <span key="uncat" className="rounded-full bg-slate-800 px-1.5 py-px text-[10px] text-slate-400">
@@ -251,6 +258,56 @@ export default function BudgetLedgerRow({
                   : ""}
               </p>
             )}
+            {canActor && row.type === "expense" && onSplit && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSplit();
+                }}
+                className="mt-1 text-[11px] text-violet-400 hover:text-violet-200 sm:hidden"
+              >
+                Charge others
+              </button>
+            )}
+            {onViewTransaction && row.type === "expense" && incomeIds.length > 0 && (
+              <p className="mt-1 flex flex-wrap gap-2 text-[11px]">
+                {incomeIds.map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onViewTransaction(id);
+                    }}
+                    className="text-blue-400 hover:text-blue-200"
+                  >
+                    View reimbursement
+                  </button>
+                ))}
+              </p>
+            )}
+            {onViewTransaction && isIncomeLikeType(row.type) && expenseIds.length > 0 && (
+              <p className="mt-1 flex flex-wrap gap-2 text-[11px]">
+                {expenseIds.map((id) => {
+                  const pay = share?.payments.find((p) => p.expenseTransactionId === id);
+                  const label = pay?.merchant?.trim() || pay?.expenseDate?.slice(0, 10) || "expense";
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onViewTransaction(id, pay?.expenseDate);
+                      }}
+                      className="text-blue-400 hover:text-blue-200"
+                    >
+                      View {label}
+                    </button>
+                  );
+                })}
+              </p>
+            )}
           </button>
           {row.receiptUrl && (
             <a
@@ -266,6 +323,17 @@ export default function BudgetLedgerRow({
         <div className="flex shrink-0 items-center gap-1">
           {canActor && (
             <span className="mr-0.5 hidden items-center sm:flex sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+              {row.type === "expense" && onSplit && (
+                <button
+                  type="button"
+                  onClick={onSplit}
+                  aria-label="Charge others"
+                  title="Charge others"
+                  className="rounded-lg px-2 py-1.5 text-[11px] text-slate-500 hover:bg-slate-800 hover:text-violet-300"
+                >
+                  Split
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onEdit}

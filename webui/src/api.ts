@@ -1499,6 +1499,8 @@ export type BudgetShareChargeLine = {
 
 export type BudgetSharePaymentLine = {
   chargeId: number;
+  incomeTransactionId: number;
+  expenseTransactionId: number;
   amount: number;
   owedByLabel: string;
   merchant: string | null;

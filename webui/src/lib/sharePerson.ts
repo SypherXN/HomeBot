@@ -1,4 +1,5 @@
 import { memberPickerLabel } from "./memberDisplay";
+import { isGeneralShareLabel } from "./budgetShares";
 
 export type SharePersonMember = {
   userId: string;
@@ -31,7 +32,11 @@ export function uniqueGuestNames(labels: string[], memberLabels: string[] = []):
 export function guestNamesFromCharges(
   charges: { owedByUserId?: string | null; owedByLabel: string }[]
 ): string[] {
-  return uniqueGuestNames(charges.filter((c) => !c.owedByUserId).map((c) => c.owedByLabel));
+  return uniqueGuestNames(
+    charges
+      .filter((c) => !c.owedByUserId && !isGeneralShareLabel(c.owedByLabel))
+      .map((c) => c.owedByLabel)
+  );
 }
 
 /**

@@ -5,6 +5,10 @@ public partial class BudgetService
     internal const double ShareMoneyEpsilon = 0.005;
     internal const int AwaitingRepaymentCategoryId = -1;
     internal const string AwaitingRepaymentLabel = "Awaiting repayment";
+    internal const string GeneralShareLabel = "Unassigned";
+
+    internal static bool IsGeneralShareLabel(string? label) =>
+        string.Equals(label?.Trim(), GeneralShareLabel, StringComparison.OrdinalIgnoreCase);
 
     public BudgetSharesOverviewModel GetSharesOverview()
     {
@@ -18,6 +22,7 @@ public partial class BudgetService
                 || (c.Status == "open" && c.Remaining <= ShareMoneyEpsilon && c.PaidAmount > ShareMoneyEpsilon))
             .ToList();
         var people = open
+            .Where(c => !IsGeneralShareLabel(c.OwedByLabel))
             .Select(c => c.OwedByUserId is > 0 ? $"u:{c.OwedByUserId}" : $"n:{c.OwedByLabel.Trim().ToLowerInvariant()}")
             .Distinct(StringComparer.Ordinal)
             .Count();
@@ -140,7 +145,7 @@ public partial class BudgetService
             if (string.IsNullOrEmpty(label) && userId is > 0)
                 label = HouseholdIdentity.MemberLabel(userId.Value);
             if (string.IsNullOrEmpty(label))
-                throw new ArgumentException("Each charge needs a person name.");
+                label = GeneralShareLabel;
             list.Add(new BudgetShareChargeInput
             {
                 Id = raw.Id is > 0 ? raw.Id : null,
@@ -254,12 +259,18 @@ public partial class BudgetService
         {
             if (byExpense.TryGetValue(t.Id, out var expenseCharges))
             {
+                var chargeIds = expenseCharges.Select(c => c.Id).ToHashSet();
+                var relatedPayments = payments
+                    .Where(p => chargeIds.Contains(p.Line.ChargeId))
+                    .Select(p => p.Line)
+                    .ToList();
                 t.ShareSummary = new BudgetTransactionShareSummaryModel
                 {
                     Owed = expenseCharges.Sum(c => c.Amount),
                     Received = expenseCharges.Sum(c => c.PaidAmount),
                     Remaining = expenseCharges.Where(c => c.Status == "open").Sum(c => c.Remaining),
-                    Charges = expenseCharges
+                    Charges = expenseCharges,
+                    Payments = relatedPayments
                 };
             }
 
@@ -320,7 +331,8 @@ public partial class BudgetService
     {
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            SELECT p.IncomeTransactionId, p.ChargeId, p.Amount, c.OwedByLabel, t.Merchant, t.TransactionDate
+            SELECT p.IncomeTransactionId, p.ChargeId, p.Amount, c.OwedByLabel, t.Merchant, t.TransactionDate,
+                   c.ExpenseTransactionId
             FROM BudgetSharePayments p
             JOIN BudgetShareCharges c ON c.Id = p.ChargeId
             JOIN BudgetTransactions t ON t.Id = c.ExpenseTransactionId
@@ -333,11 +345,13 @@ public partial class BudgetService
                 reader.GetInt32(0),
                 new BudgetSharePaymentLineModel
                 {
+                    IncomeTransactionId = reader.GetInt32(0),
                     ChargeId = reader.GetInt32(1),
                     Amount = reader.GetDouble(2),
                     OwedByLabel = reader.GetString(3),
                     Merchant = reader.IsDBNull(4) ? null : reader.GetString(4),
-                    ExpenseDate = reader.IsDBNull(5) ? null : reader.GetString(5)
+                    ExpenseDate = reader.IsDBNull(5) ? null : reader.GetString(5),
+                    ExpenseTransactionId = reader.GetInt32(6)
                 }));
         }
 

@@ -4,7 +4,9 @@ import { formatMoney } from "../../lib/budgetMoney";
 import { guestNamesFromCharges, uniqueGuestNames } from "../../lib/sharePerson";
 import {
   chargedTotal,
+  emptyGeneralShareChargeDraft,
   emptyShareChargeDraft,
+  formatShareOwedByLabel,
   looksEvenSplit,
   SHARE_EPS,
   splitRemainingEqually,
@@ -54,16 +56,33 @@ export function BudgetExpenseShareEditor({ total, token, roster, drafts, onChang
   }, [mode, total, drafts, onChange]);
 
   const guests = useMemo(() => {
-    const fromDrafts = drafts.filter((d) => !d.owedByUserId.trim()).map((d) => d.owedByLabel);
+    const fromDrafts = drafts
+      .filter((d) => !d.isGeneral && !d.owedByUserId.trim())
+      .map((d) => d.owedByLabel);
     return uniqueGuestNames([...savedGuests, ...fromDrafts]);
   }, [savedGuests, drafts]);
 
+  const hasGeneral = drafts.some((d) => d.isGeneral);
+  const namedCount = drafts.filter((d) => !d.isGeneral && d.owedByLabel.trim()).length;
+
   function update(i: number, patch: Partial<ShareChargeDraft>) {
-    const next = drafts.map((d, j) => (j === i ? { ...d, ...patch } : d));
-    onChange(mode === "even" ? splitRemainingEqually(total, next) : next);
+    let next = drafts.map((d, j) => (j === i ? { ...d, ...patch } : d));
+    if (patch.isGeneral === true) {
+      setMode("assign");
+      next = next.map((d, j) =>
+        j === i ? { ...d, isGeneral: true, owedByUserId: "", owedByLabel: "" } : d
+      );
+      onChange(next);
+      return;
+    }
+    if (patch.isGeneral === false || patch.owedByLabel !== undefined || patch.owedByUserId !== undefined) {
+      next = next.map((d, j) => (j === i && d.isGeneral ? { ...d, isGeneral: false } : d));
+    }
+    onChange(mode === "even" && !next.some((d) => d.isGeneral) ? splitRemainingEqually(total, next) : next);
   }
 
   function setSplitMode(next: "even" | "assign") {
+    if (next === "even" && hasGeneral) return;
     setMode(next);
     if (next === "even") onChange(splitRemainingEqually(total, drafts));
   }
@@ -71,45 +90,73 @@ export function BudgetExpenseShareEditor({ total, token, roster, drafts, onChang
   return (
     <div className="space-y-2 rounded-lg border border-slate-700 p-3">
       <p className="text-xs text-slate-400">
-        Type any name — they do not have to be in the household. Household members still show as suggestions.
+        Assign to a person, or use General when you are waiting on repayment but do not know who yet.
       </p>
-      <div className="flex overflow-hidden rounded-lg border border-slate-700">
-        {(
-          [
-            ["even", "Split evenly"],
-            ["assign", "Assign amounts"],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setSplitMode(id)}
-            className={`flex-1 px-3 py-1.5 text-xs ${
-              mode === id ? "bg-slate-700 text-white" : "bg-slate-900/60 text-slate-400"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {!hasGeneral ? (
+        <div className="flex overflow-hidden rounded-lg border border-slate-700">
+          {(
+            [
+              ["even", "Split evenly"],
+              ["assign", "Assign amounts"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setSplitMode(id)}
+              className={`flex-1 px-3 py-1.5 text-xs ${
+                mode === id ? "bg-slate-700 text-white" : "bg-slate-900/60 text-slate-400"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-slate-500">General splits use assign amounts only.</p>
+      )}
       <p className={`text-xs ${over ? "text-rose-300" : mine < -SHARE_EPS ? "text-rose-300" : "text-slate-400"}`}>
         {total > 0
           ? over
             ? `Charges ($${formatMoney(charged)}) are more than the $${formatMoney(total)} expense.`
             : mode === "even"
-              ? `Split ${drafts.filter((d) => d.owedByLabel.trim()).length + 1} ways including you · your share $${formatMoney(Math.max(0, mine))}`
+              ? `Split ${namedCount + 1} ways including you · your share $${formatMoney(Math.max(0, mine))}`
               : `Others $${formatMoney(charged)} · your share $${formatMoney(Math.max(0, mine))}`
-          : "Enter the full amount you paid, then who owes you."}
+          : "Enter the full amount you paid, then what still needs to come back."}
       </p>
       {drafts.map((row, i) => (
-        <div key={row.key} className="grid gap-2 sm:grid-cols-[1fr_7rem_auto]">
-          <SharePersonSelect
-            roster={roster}
-            guests={guests}
-            label={row.owedByLabel}
-            onChange={(userId, owedByLabel) => update(i, { owedByUserId: userId, owedByLabel })}
-          />
-          {mode === "assign" ? (
+        <div key={row.key} className="space-y-2 rounded-lg border border-slate-800/80 bg-slate-950/30 p-2">
+          <div className="flex overflow-hidden rounded-lg border border-slate-700">
+            {(
+              [
+                [false, "Person"],
+                [true, "General"],
+              ] as const
+            ).map(([general, label]) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => update(i, { isGeneral: general })}
+                className={`flex-1 px-2 py-1 text-[11px] ${
+                  Boolean(row.isGeneral) === general ? "bg-slate-700 text-white" : "bg-slate-900/60 text-slate-400"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="grid gap-2 sm:grid-cols-[1fr_7rem_auto]">
+          {row.isGeneral ? (
+            <p className="self-center text-sm text-slate-300">To be repaid</p>
+          ) : (
+            <SharePersonSelect
+              roster={roster}
+              guests={guests}
+              label={row.owedByLabel}
+              onChange={(userId, owedByLabel) => update(i, { owedByUserId: userId, owedByLabel })}
+            />
+          )}
+          {mode === "assign" || row.isGeneral ? (
             <input
               inputMode="decimal"
               placeholder="Amount"
@@ -119,7 +166,9 @@ export function BudgetExpenseShareEditor({ total, token, roster, drafts, onChang
             />
           ) : (
             <p className="self-center text-sm tabular-nums text-slate-300">
-              {row.owedByLabel.trim() && row.amount ? `$${formatMoney(Number(row.amount) || 0)}` : "—"}
+              {(row.isGeneral || row.owedByLabel.trim()) && row.amount
+                ? `$${formatMoney(Number(row.amount) || 0)}`
+                : "—"}
             </p>
           )}
           <button
@@ -127,12 +176,15 @@ export function BudgetExpenseShareEditor({ total, token, roster, drafts, onChang
             onClick={() => {
               let next = drafts.filter((_, j) => j !== i);
               if (next.length === 0) next = [emptyShareChargeDraft()];
-              onChange(mode === "even" ? splitRemainingEqually(total, next) : next);
+              onChange(
+                mode === "even" && !next.some((d) => d.isGeneral) ? splitRemainingEqually(total, next) : next
+              );
             }}
             className="text-xs text-slate-500 hover:text-rose-300"
           >
             Remove
           </button>
+          </div>
         </div>
       ))}
       <div className="flex flex-wrap gap-2">
@@ -140,11 +192,21 @@ export function BudgetExpenseShareEditor({ total, token, roster, drafts, onChang
           type="button"
           onClick={() => {
             const next = [...drafts, emptyShareChargeDraft()];
-            onChange(mode === "even" ? splitRemainingEqually(total, next) : next);
+            onChange(mode === "even" && !next.some((d) => d.isGeneral) ? splitRemainingEqually(total, next) : next);
           }}
           className="text-xs text-blue-300 hover:text-blue-100"
         >
           + Person
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMode("assign");
+            onChange([...drafts, emptyGeneralShareChargeDraft()]);
+          }}
+          className="text-xs text-slate-400 hover:text-slate-200"
+        >
+          + General
         </button>
       </div>
     </div>
@@ -190,7 +252,7 @@ export function BudgetReimbursementEditor({
     for (const c of charges) {
       const existing = existingPayments.find((p) => p.chargeId === c.id)?.amount ?? 0;
       byId.set(c.id, {
-        label: c.owedByLabel,
+        label: formatShareOwedByLabel(c.owedByLabel),
         merchant: c.merchant,
         date: c.expenseDate,
         max: c.remaining + existing,
@@ -199,7 +261,7 @@ export function BudgetReimbursementEditor({
     for (const p of existingPayments) {
       if (byId.has(p.chargeId)) continue;
       byId.set(p.chargeId, {
-        label: p.owedByLabel,
+        label: formatShareOwedByLabel(p.owedByLabel),
         merchant: p.merchant,
         date: p.expenseDate,
         max: p.amount,

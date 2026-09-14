@@ -97,6 +97,16 @@ public sealed class BudgetShareTests : IDisposable
         var reimburse = _budget.GetTransactionById(reimburseId);
         Assert.Equal("reimbursement", reimburse!.Type);
         Assert.Equal(20, reimburse.ShareSummary!.Received, 2);
+        var payment = Assert.Single(reimburse.ShareSummary.Payments);
+        Assert.Equal(reimburseId, payment.IncomeTransactionId);
+        Assert.True(payment.ExpenseTransactionId > 0);
+
+        var expense = _budget.GetTransactionById(payment.ExpenseTransactionId);
+        Assert.NotNull(expense);
+        Assert.Equal("expense", expense!.Type);
+        var expensePayment = Assert.Single(expense.ShareSummary!.Payments);
+        Assert.Equal(reimburseId, expensePayment.IncomeTransactionId);
+        Assert.Equal(expense.Id, expensePayment.ExpenseTransactionId);
 
         var summary = _budget.GetMonthSummary("2026-09", null, null, null);
         Assert.Equal(60, summary.TotalExpenses, 2);
@@ -307,6 +317,20 @@ public sealed class BudgetShareTests : IDisposable
         Assert.Equal(40, _budget.GetMonthSummary("2026-09", null, null, null).TotalExpenses, 2);
         Assert.Equal(-80, Assert.Single(_budget.GetAccounts(), a => a.Id == checking).CurrentBalance);
         Assert.Single(_budget.GetSharesOverview().Reimbursed);
+    }
+
+    [Fact]
+    public void General_share_without_person_name_counts_as_outstanding()
+    {
+        var checking = _budget.CreateAccount("Checking", "checking", "USD", null, Actor);
+        CreateExpense(checking, "60", "Supplies",
+            new BudgetShareChargeInput { Amount = 25 });
+
+        var overview = _budget.GetSharesOverview();
+        Assert.Equal(25, overview.OutstandingTotal, 2);
+        Assert.Equal(0, overview.OutstandingPeopleCount);
+        var charge = Assert.Single(overview.Open);
+        Assert.Equal("Unassigned", charge.OwedByLabel);
     }
 
     [Fact]

@@ -84,6 +84,8 @@ public sealed class BudgetShareChargeLineModel
 public sealed class BudgetSharePaymentLineModel
 {
     public int ChargeId { get; set; }
+    public int IncomeTransactionId { get; set; }
+    public int ExpenseTransactionId { get; set; }
     public double Amount { get; set; }
     public string OwedByLabel { get; set; } = "";
     public string? Merchant { get; set; }

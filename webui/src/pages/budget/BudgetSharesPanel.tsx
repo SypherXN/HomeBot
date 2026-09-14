@@ -1,12 +1,15 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { patchBudgetShareStatus, type BudgetShareChargeLine, type BudgetSharesOverview } from "../../api";
 import { formatMoney } from "../../lib/budgetMoney";
+import { formatShareOwedByLabel } from "../../lib/budgetShares";
+import { groupOpenShareTotals } from "../../lib/budgetShareTotals";
 
 type Props = {
   overview: BudgetSharesOverview | null;
   token: string;
   actor: string;
   onChanged: () => Promise<void> | void;
+  onViewTransaction?: (transactionId: number, transactionDate?: string | null) => void;
 };
 
 function chargeTitle(merchant: string | null, date: string | null): string {
@@ -19,13 +22,14 @@ function unpaid(c: BudgetShareChargeLine): number {
 }
 
 /** Full split history: waiting, paid back / marked reimbursed, and not collecting. */
-export default function BudgetSharesPanel({ overview, token, actor, onChanged }: Props) {
+export default function BudgetSharesPanel({ overview, token, actor, onChanged, onViewTransaction }: Props) {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const open = overview?.open ?? [];
   const reimbursed = overview?.reimbursed ?? [];
   const ignored = overview?.ignored ?? [];
   const empty = open.length === 0 && reimbursed.length === 0 && ignored.length === 0;
+  const openTotals = useMemo(() => groupOpenShareTotals(open), [open]);
 
   async function setStatus(id: number, status: "open" | "ignored" | "reimbursed") {
     if (!actor) return;
@@ -66,6 +70,27 @@ export default function BudgetSharesPanel({ overview, token, actor, onChanged }:
         </p>
       ) : (
         <>
+          {openTotals.length > 0 && (
+            <div className="mb-4">
+              <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Still owed (by person)</h3>
+              <ul className="grid gap-2 sm:grid-cols-2">
+                {openTotals.map((row) => (
+                  <li
+                    key={row.key}
+                    className="flex items-center justify-between rounded-lg border border-amber-900/40 bg-amber-950/20 px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-amber-100">{row.label}</p>
+                      <p className="text-[11px] text-amber-200/70">
+                        {row.chargeCount} {row.chargeCount === 1 ? "charge" : "charges"}
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-sm font-semibold tabular-nums text-amber-200">${formatMoney(row.total)}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <ChargeSection title="Waiting to be paid back" emptyLabel="You're not waiting on anyone right now." items={open}>
             {(c) => (
               <ChargeRow
@@ -78,6 +103,7 @@ export default function BudgetSharesPanel({ overview, token, actor, onChanged }:
                 }
                 busy={busyId === c.id}
                 actor={actor}
+                onViewTransaction={onViewTransaction}
                 actions={[
                   { label: "Mark reimbursed", onClick: () => void setStatus(c.id, "reimbursed") },
                   { label: "Ignore", onClick: () => void setStatus(c.id, "ignored") },
@@ -104,6 +130,7 @@ export default function BudgetSharesPanel({ overview, token, actor, onChanged }:
                 }
                 busy={busyId === c.id}
                 actor={actor}
+                onViewTransaction={onViewTransaction}
                 actions={
                   unpaid(c) > 0.005
                     ? [{ label: "Restore", onClick: () => void setStatus(c.id, "open") }]
@@ -119,6 +146,7 @@ export default function BudgetSharesPanel({ overview, token, actor, onChanged }:
                 amountLabel={`$${formatMoney(unpaid(c))}`}
                 busy={busyId === c.id}
                 actor={actor}
+                onViewTransaction={onViewTransaction}
                 actions={[{ label: "Restore", onClick: () => void setStatus(c.id, "open") }]}
               />
             )}
@@ -160,6 +188,7 @@ function ChargeRow({
   busy,
   actor,
   actions,
+  onViewTransaction,
 }: {
   charge: BudgetShareChargeLine;
   amountLabel: string;
@@ -167,15 +196,25 @@ function ChargeRow({
   busy: boolean;
   actor: string;
   actions: { label: string; onClick: () => void }[];
+  onViewTransaction?: (transactionId: number, transactionDate?: string | null) => void;
 }) {
   return (
     <li className="flex items-start justify-between gap-3 rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2">
       <div className="min-w-0">
         <p className="truncate text-sm text-slate-200">
-          {charge.owedByLabel} · {amountLabel}
+          {formatShareOwedByLabel(charge.owedByLabel)} · {amountLabel}
         </p>
         <p className="truncate text-[11px] text-slate-500">{chargeTitle(charge.merchant, charge.expenseDate)}</p>
         {hint ? <p className="text-[11px] text-slate-600">{hint}</p> : null}
+        {onViewTransaction ? (
+          <button
+            type="button"
+            onClick={() => onViewTransaction(charge.expenseTransactionId, charge.expenseDate)}
+            className="mt-1 text-[11px] text-blue-400 hover:text-blue-200"
+          >
+            View expense
+          </button>
+        ) : null}
       </div>
       {actor && actions.length > 0 ? (
         <div className="flex shrink-0 flex-col items-end gap-1">

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { useAuth } from "../auth/AuthContext";
 import { useTheme } from "../theme/ThemeProvider";
@@ -97,6 +97,8 @@ import BudgetOverviewHero from "./budget/BudgetOverviewHero";
 import BudgetQuickAdd, { type QuickAddPrefill } from "./budget/BudgetQuickAdd";
 import BudgetLedgerRow from "./budget/BudgetLedgerRow";
 import BudgetSharesPanel from "./budget/BudgetSharesPanel";
+import BudgetLedgerShareSheet from "./budget/BudgetLedgerShareSheet";
+import { budgetLedgerHighlightPath } from "../lib/budgetLinks";
 import BudgetRecurringPreview from "./budget/BudgetRecurringPreview";
 import BudgetScenarioPanel from "./budget/BudgetScenarioPanel";
 import BudgetSetupChecklist from "./budget/BudgetSetupChecklist";
@@ -171,6 +173,7 @@ export default function BudgetPage() {
   const roster = useGuildRoster();
   const undoToast = useUndoToast();
   const { showToast } = useToasts();
+  const navigate = useNavigate();
   const [params] = useSearchParams();
   const highlightId = useSearchHighlightId();
   const highlightRef = useRef<HTMLLIElement>(null);
@@ -213,6 +216,13 @@ export default function BudgetPage() {
     highlightRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [highlightId, ledgerItems]);
 
+  useEffect(() => {
+    if (!highlightId || ledgerItems.some((r) => r.id === highlightId)) return;
+    const found = monthTxAll.find((r) => r.id === highlightId);
+    if (!found) return;
+    setLedgerItems((prev) => (prev.some((r) => r.id === highlightId) ? prev : [found, ...prev]));
+  }, [highlightId, ledgerItems, monthTxAll]);
+
   const [envelopes, setEnvelopes] = useState<BudgetEnvelope[]>([]);
   const [goals, setGoals] = useState<BudgetGoal[]>([]);
   const [trends, setTrends] = useState<Awaited<ReturnType<typeof getBudgetTrends>>>([]);
@@ -244,6 +254,17 @@ export default function BudgetPage() {
   const [trendMonths, setTrendMonths] = useState(6);
   const [trendGroupBy, setTrendGroupBy] = useState<"category" | "user">("category");
   const [editTx, setEditTx] = useState<BudgetTransactionListItem | null>(null);
+  const [shareTx, setShareTx] = useState<BudgetTransactionListItem | null>(null);
+
+  const viewLedgerTransaction = useCallback(
+    (transactionId: number, transactionDate?: string | null) => {
+      const m = transactionDate?.slice(0, 7);
+      if (m && m !== month) setMonth(m);
+      setTab("ledger");
+      navigate(budgetLedgerHighlightPath(transactionId));
+    },
+    [month, navigate]
+  );
 
   const categoryNameById = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories]);
   const categoryColorByName = useMemo(
@@ -1186,6 +1207,8 @@ export default function BudgetPage() {
                               onToggleSelect={() => toggleSelect(row.id)}
                               onEdit={() => setEditTx(row)}
                               onDelete={() => setDeleteTarget(row)}
+                              onSplit={row.type === "expense" ? () => setShareTx(row) : undefined}
+                              onViewTransaction={viewLedgerTransaction}
                             />
                           </li>
                         );
@@ -1202,7 +1225,13 @@ export default function BudgetPage() {
       )}
 
       {tab === "splits" && (
-        <BudgetSharesPanel overview={sharesOverview} token={tok} actor={actor} onChanged={load} />
+        <BudgetSharesPanel
+          overview={sharesOverview}
+          token={tok}
+          actor={actor}
+          onChanged={load}
+          onViewTransaction={viewLedgerTransaction}
+        />
       )}
 
       {tab === "plan" && (
@@ -1459,6 +1488,16 @@ export default function BudgetPage() {
         accounts={accounts}
         roster={roster}
         onClose={() => setEditTx(null)}
+        onSaved={load}
+      />
+
+      <BudgetLedgerShareSheet
+        open={shareTx != null}
+        row={shareTx}
+        token={tok}
+        actor={actor}
+        roster={roster}
+        onClose={() => setShareTx(null)}
         onSaved={load}
       />
     </div>
