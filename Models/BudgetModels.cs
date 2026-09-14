@@ -50,6 +50,8 @@ public sealed class BudgetTransactionListItemModel
     public string SpentByMemberLabel { get; set; } = "";
     public int? AccountId { get; set; }
     public int? TransferToAccountId { get; set; }
+    /// <summary>Money credited to the destination account. Null or unset means the same as <see cref="Amount"/>.</summary>
+    public double? TransferToAmount { get; set; }
     public string? Note { get; set; }
     public string? ReceiptUrl { get; set; }
     public string? Merchant { get; set; }
@@ -102,6 +104,7 @@ public sealed class BudgetSharesOverviewModel
     public double OutstandingTotal { get; set; }
     public int OutstandingPeopleCount { get; set; }
     public List<BudgetShareChargeLineModel> Open { get; set; } = new();
+    public List<BudgetShareChargeLineModel> Reimbursed { get; set; } = new();
     public List<BudgetShareChargeLineModel> Ignored { get; set; } = new();
 }
 

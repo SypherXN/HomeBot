@@ -1469,6 +1469,7 @@ export type BudgetTransactionListItem = {
   spentByMemberLabel: string;
   accountId: number | null;
   transferToAccountId: number | null;
+  transferToAmount: number | null;
   note: string | null;
   receiptUrl: string | null;
   merchant: string | null;
@@ -1516,6 +1517,7 @@ export type BudgetSharesOverview = {
   outstandingTotal: number;
   outstandingPeopleCount: number;
   open: BudgetShareChargeLine[];
+  reimbursed?: BudgetShareChargeLine[];
   ignored: BudgetShareChargeLine[];
 };
 
@@ -1750,6 +1752,7 @@ export function patchBudgetTransaction(
     splits?: BudgetSplitInput[];
     accountId?: number;
     transferToAccountId?: number;
+    transferToAmountInput?: string;
     shareCharges?: BudgetShareChargeInput[];
     sharePayments?: BudgetSharePaymentInput[];
   }
@@ -1920,7 +1923,7 @@ export function patchBudgetShareStatus(
   token: string,
   actorUserId: string,
   id: number,
-  status: "open" | "ignored"
+  status: "open" | "ignored" | "reimbursed"
 ) {
   const path = mergeQuery(`/api/budget/shares/${id}`, { actorUserId });
   return apiJson<{ ok: boolean }>(path, { token, method: "PATCH", body: { status } });
@@ -2004,6 +2007,8 @@ export function postBudgetTransfer(
     toAccountId: number;
     transactionDate?: string;
     note?: string;
+    merchant?: string;
+    toAmountInput?: string;
   }
 ) {
   const path = mergeQuery("/api/budget/transfers", { actorUserId });

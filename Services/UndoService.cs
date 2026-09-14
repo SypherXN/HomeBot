@@ -280,8 +280,8 @@ public class UndoService
                     cmd.CommandText = @"
                         INSERT INTO BudgetTransactions
                         (Id, Type, Amount, AmountInput, CategoryId, SpentByUserId, AccountId, TransferToAccountId,
-                         Note, ReceiptUrl, Merchant, TransactionDate, ClearedAt, IsPending, Currency, ExchangeRateToHome)
-                        VALUES ($id, $type, $amt, $input, $cat, $user, $acc, $xfer, $note, $receipt, $merchant, $date,
+                         TransferToAmount, Note, ReceiptUrl, Merchant, TransactionDate, ClearedAt, IsPending, Currency, ExchangeRateToHome)
+                        VALUES ($id, $type, $amt, $input, $cat, $user, $acc, $xfer, $toAmt, $note, $receipt, $merchant, $date,
                                 $cleared, $pend, $cur, $rate)";
                     cmd.Parameters.AddWithValue("$id", id);
                     cmd.Parameters.AddWithValue("$type", item.Type);
@@ -291,6 +291,7 @@ public class UndoService
                     cmd.Parameters.AddWithValue("$user", (long)item.SpentByUserId);
                     cmd.Parameters.AddWithValue("$acc", (object?)item.AccountId ?? DBNull.Value);
                     cmd.Parameters.AddWithValue("$xfer", (object?)item.TransferToAccountId ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("$toAmt", item.TransferToAmount is > 0 ? item.TransferToAmount.Value : DBNull.Value);
                     cmd.Parameters.AddWithValue("$note", (object?)item.Note ?? DBNull.Value);
                     cmd.Parameters.AddWithValue("$receipt", (object?)item.ReceiptUrl ?? DBNull.Value);
                     cmd.Parameters.AddWithValue("$merchant", (object?)item.Merchant ?? DBNull.Value);

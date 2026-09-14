@@ -267,6 +267,68 @@ public sealed class BudgetServicePolishTests : IDisposable
     }
 
     [Fact]
+    public void Gift_card_transfer_credits_destination_more_than_source()
+    {
+        var checking = _budget.CreateAccount("Checking", "checking", "USD", null, Actor);
+        var dash = _budget.CreateAccount("DoorDash", "cash", "USD", null, Actor);
+        var id = _budget.CreateTransfer(
+            "80",
+            checking,
+            dash,
+            "2026-09-13",
+            "Costco gift cards",
+            Actor,
+            "100",
+            "Costco");
+
+        var accounts = _budget.GetAccounts();
+        Assert.Equal(-80, Assert.Single(accounts, a => a.Id == checking).CurrentBalance);
+        Assert.Equal(100, Assert.Single(accounts, a => a.Id == dash).CurrentBalance);
+
+        var row = _budget.GetTransactionById(id);
+        Assert.NotNull(row);
+        Assert.Equal(80, row!.Amount, 2);
+        Assert.Equal(100, row.TransferToAmount!.Value, 2);
+        Assert.Equal("Costco", row.Merchant);
+
+        var summary = _budget.GetMonthSummary("2026-09", null, null, null);
+        Assert.Equal(0, summary.TotalIncome, 2);
+        Assert.Equal(0, summary.TotalExpenses, 2);
+
+        var onDash = _budget.GetTransactions(month: "2026-09", accountId: dash);
+        Assert.Contains(onDash.Items, t => t.Id == id);
+
+        Assert.True(_budget.UpdateTransaction(
+            id,
+            "160",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            false,
+            Actor,
+            transferToAmountInput: "200",
+            applyTransferToAmount: true));
+
+        accounts = _budget.GetAccounts();
+        Assert.Equal(-160, Assert.Single(accounts, a => a.Id == checking).CurrentBalance);
+        Assert.Equal(200, Assert.Single(accounts, a => a.Id == dash).CurrentBalance);
+
+        _budget.DeleteTransaction(id, Actor);
+        accounts = _budget.GetAccounts();
+        Assert.Equal(0, Assert.Single(accounts, a => a.Id == checking).CurrentBalance);
+        Assert.Equal(0, Assert.Single(accounts, a => a.Id == dash).CurrentBalance);
+    }
+
+    [Fact]
     public void UpdateTransaction_changes_date_spender_and_tags()
     {
         var catId = _budget.CreateCategory("Food", null, null, "household", false, Actor);

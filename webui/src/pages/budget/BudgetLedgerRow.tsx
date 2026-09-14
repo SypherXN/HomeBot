@@ -6,6 +6,7 @@ import { memberUsername } from "../../lib/memberDisplay";
 import { layerForAssignee } from "../../lib/personLayers";
 import { categoryDotStyle, formatMoney, MONEY_TEXT, isIncomeLikeType } from "../../lib/budgetMoney";
 import { humanizeBudgetTxType } from "../../lib/budgetLedger";
+import { formatTransferLedgerAmount, transferReceivedAmount } from "../../lib/budgetTransfer";
 import { titleCase } from "../../lib/titleCase";
 
 type Props = {
@@ -114,6 +115,9 @@ export default function BudgetLedgerRow({
   const canActor = Boolean(actor);
   const abs = Math.abs(row.amount);
   const prefix = amountPrefix(row.type, row.amount);
+  const received = row.type === "transfer" ? transferReceivedAmount(row) : row.amount;
+  const transferLabel =
+    row.type === "transfer" ? formatTransferLedgerAmount(row.amount, received, formatMoney) : null;
   const meta: ReactNode[] = [];
   if (showCategoryChip) {
     meta.push(
@@ -140,6 +144,19 @@ export default function BudgetLedgerRow({
   } else if (row.type !== "transfer" && accountName) {
     meta.push(<span key="acct">{accountName}</span>);
   }
+  if (row.type === "transfer" && Math.abs(received - row.amount) > 0.005) {
+    const bonus = received - row.amount;
+    meta.push(
+      <span
+        key="bonus"
+        className={`rounded-full px-1.5 py-px text-[10px] font-medium ${
+          bonus > 0 ? "bg-emerald-950/70 text-emerald-200" : "bg-rose-950/70 text-rose-200"
+        }`}
+      >
+        {bonus > 0 ? `+$${formatMoney(bonus)} bonus` : `−$${formatMoney(Math.abs(bonus))} fee`}
+      </span>
+    );
+  }
   if (row.isPending) {
     meta.push(
       <span key="pend" className="rounded-full bg-amber-950/70 px-1.5 py-px text-[10px] font-medium text-amber-200">
@@ -149,16 +166,17 @@ export default function BudgetLedgerRow({
   }
   const share = row.shareSummary;
   if (row.type === "expense" && share && share.owed > 0.005) {
+    const markedReimbursed = (share.charges ?? []).some((c) => c.status === "reimbursed");
     if (share.remaining > 0.005) {
       meta.push(
         <span key="owed" className="rounded-full bg-violet-950/70 px-1.5 py-px text-[10px] font-medium text-violet-200">
           Owed ${formatMoney(share.remaining)}
         </span>
       );
-    } else if (share.received > 0.005) {
+    } else if (share.received > 0.005 || markedReimbursed) {
       meta.push(
         <span key="paidback" className="rounded-full bg-emerald-950/70 px-1.5 py-px text-[10px] font-medium text-emerald-200">
-          Paid back
+          {markedReimbursed && share.received <= 0.005 ? "Reimbursed" : "Paid back"}
         </span>
       );
     } else {
@@ -269,7 +287,7 @@ export default function BudgetLedgerRow({
             </span>
           )}
           <span className={`${MONEY_TEXT} text-sm font-semibold ${amountTone(row.type, row.amount)}`}>
-            {prefix}${formatMoney(abs)}
+            {transferLabel ? transferLabel : `${prefix}$${formatMoney(abs)}`}
           </span>
         </div>
       </div>

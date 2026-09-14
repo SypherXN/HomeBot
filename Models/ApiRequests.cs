@@ -220,6 +220,7 @@ public sealed class BudgetTransactionUpdateRequest
     public List<string>? Tags { get; set; }
     public int? AccountId { get; set; }
     public int? TransferToAccountId { get; set; }
+    public string? TransferToAmountInput { get; set; }
     public List<BudgetShareChargeInput>? ShareCharges { get; set; }
     public List<BudgetSharePaymentInput>? SharePayments { get; set; }
 }
@@ -242,10 +243,13 @@ public sealed class BudgetAccountUpdateRequest
 public sealed class BudgetTransferCreateRequest
 {
     public string AmountInput { get; set; } = "";
+    /// <summary>Amount credited to the destination. Omit when both accounts change by <see cref="AmountInput"/>.</summary>
+    public string? ToAmountInput { get; set; }
     public int FromAccountId { get; set; }
     public int ToAccountId { get; set; }
     public string? TransactionDate { get; set; }
     public string? Note { get; set; }
+    public string? Merchant { get; set; }
 }
 
 public sealed class BudgetEnvelopeSetRequest

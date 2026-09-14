@@ -13,6 +13,7 @@ function tx(partial: Partial<BudgetTransactionListItem> & Pick<BudgetTransaction
     spentByMemberLabel: "a",
     accountId: null,
     transferToAccountId: null,
+    transferToAmount: null,
     note: null,
     receiptUrl: null,
     merchant: null,

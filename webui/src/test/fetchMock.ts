@@ -174,6 +174,9 @@ export function createHomeBotFetchMock(
       });
     }
     if (url.includes("/api/budget/forecast")) return jsonResponse([]);
+    if (url.includes("/api/budget/shares")) {
+      return jsonResponse({ outstandingTotal: 0, outstandingPeopleCount: 0, open: [], reimbursed: [], ignored: [] });
+    }
     if (url.includes("/api/calendar/items")) {
       return jsonResponse(emptyPage);
     }

@@ -12,6 +12,7 @@ import { validActorId } from "../lib/validation";
 import { titleCase } from "../lib/titleCase";
 import { layerForAssignee } from "../lib/personLayers";
 import { formatMoney, formatMonthLong } from "../lib/budgetMoney";
+import { AWAITING_REPAYMENT_CATEGORY_KEY } from "../lib/budgetShares";
 import { budgetDayLabel, groupBudgetTransactionsByDay } from "../lib/budgetLedger";
 import MonthPickerField from "../components/MonthPickerField";
 import {
@@ -157,7 +158,7 @@ function hasActiveFilters(f: BudgetFilters, spender: string, categoryId: number 
 }
 
 type ChartMode = "category" | "user";
-type BudgetTab = "overview" | "ledger" | "plan";
+type BudgetTab = "overview" | "ledger" | "splits" | "plan";
 type PlanSection = "plan" | "accounts" | "bills" | "goals" | "year" | "tools";
 type ScopeView = "everyone" | "mine";
 
@@ -176,7 +177,9 @@ export default function BudgetPage() {
   const initialPage = Number.parseInt(params.get("page") ?? "0", 10);
   const initialTabParam = params.get("tab");
   const initialTab: BudgetTab =
-    initialTabParam === "ledger" || initialTabParam === "plan" ? initialTabParam : "overview";
+    initialTabParam === "ledger" || initialTabParam === "plan" || initialTabParam === "splits"
+      ? initialTabParam
+      : "overview";
 
   const [month, setMonth] = useState(currentMonth);
   const [spenderFilter, setSpenderFilter] = useState("");
@@ -434,6 +437,9 @@ export default function BudgetPage() {
   }));
 
   function sliceColor(slice: BudgetSummarySlice, index: number): string {
+    if (chartMode === "category" && slice.key === AWAITING_REPAYMENT_CATEGORY_KEY) {
+      return theme === "dark" ? "#c4b5fd" : "#6d28d9";
+    }
     if (chartMode === "category") {
       const c = categoryColorByName.get(slice.label.toLowerCase());
       if (c?.trim()) return c.trim();
@@ -518,12 +524,7 @@ export default function BudgetPage() {
         }.`,
         action: {
           label: "Review",
-          onClick: () => {
-            setTab("overview");
-            requestAnimationFrame(() => {
-              document.getElementById("budget-shares-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
-            });
-          },
+          onClick: () => setTab("splits"),
         },
       });
     }
@@ -684,6 +685,10 @@ export default function BudgetPage() {
     const slice = slices[index];
     if (!slice) return;
     if (chartMode === "category") {
+      if (slice.key === AWAITING_REPAYMENT_CATEGORY_KEY) {
+        setTab("splits");
+        return;
+      }
       const id = Number(slice.key);
       if (id > 0) viewCategoryInLedger(id);
     } else if (slice.key && slice.key !== "0") {
@@ -826,6 +831,7 @@ export default function BudgetPage() {
           [
             ["overview", "Overview"],
             ["ledger", "Ledger"],
+            ["splits", "Splits"],
             ["plan", "Plan"],
           ] as const
         ).map(([id, label]) => (
@@ -838,6 +844,9 @@ export default function BudgetPage() {
             }`}
           >
             {label}
+            {id === "splits" && (sharesOverview?.outstandingTotal ?? 0) > 0.005 ? (
+              <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-amber-300" aria-hidden />
+            ) : null}
           </button>
         ))}
       </div>
@@ -889,15 +898,6 @@ export default function BudgetPage() {
               onPrefillConsumed={() => setQuickAddPrefill(null)}
             />
           </section>
-
-          {sharesOverview && (sharesOverview.open.length > 0 || sharesOverview.ignored.length > 0) && (
-            <BudgetSharesPanel
-              overview={sharesOverview}
-              token={tok}
-              actor={actor}
-              onChanged={load}
-            />
-          )}
 
           <BudgetUpcomingBills
             token={tok}
@@ -1025,7 +1025,9 @@ export default function BudgetPage() {
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
-                  <p className="text-xs text-slate-500">Tap a slice to open it in the Ledger.</p>
+                  <p className="text-xs text-slate-500">
+                    Tap a slice to open it in the Ledger. Awaiting repayment opens Splits.
+                  </p>
                 </>
               )}
             </section>
@@ -1197,6 +1199,10 @@ export default function BudgetPage() {
             )}
           </section>
         </>
+      )}
+
+      {tab === "splits" && (
+        <BudgetSharesPanel overview={sharesOverview} token={tok} actor={actor} onChanged={load} />
       )}
 
       {tab === "plan" && (

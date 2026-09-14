@@ -29,7 +29,7 @@ public static class BudgetAccountBalance
             if (row.TransferToAccountId is { } to)
             {
                 ApplyDelta(conn, tx, from, "transfer_out", row.Amount);
-                ApplyDelta(conn, tx, to, "transfer_in", row.Amount);
+                ApplyDelta(conn, tx, to, "transfer_in", TransferReceivedAmount(row));
             }
 
             return;
@@ -56,7 +56,7 @@ public static class BudgetAccountBalance
             if (row.TransferToAccountId is { } to)
             {
                 ApplyDelta(conn, tx, from, "transfer_in", row.Amount);
-                ApplyDelta(conn, tx, to, "transfer_out", row.Amount);
+                ApplyDelta(conn, tx, to, "transfer_out", TransferReceivedAmount(row));
             }
 
             return;
@@ -79,7 +79,7 @@ public static class BudgetAccountBalance
         if (tx != null)
             cmd.Transaction = tx;
         cmd.CommandText = @"
-            SELECT Type, Amount, AccountId, TransferToAccountId
+            SELECT Type, Amount, AccountId, TransferToAccountId, TransferToAmount
             FROM BudgetTransactions
             WHERE Id=$id";
         cmd.Parameters.AddWithValue("$id", id);
@@ -96,9 +96,21 @@ public static class BudgetAccountBalance
             Type = reader.GetString(0),
             Amount = reader.GetDouble(1),
             AccountId = reader.IsDBNull(2) ? null : reader.GetInt32(2),
-            TransferToAccountId = reader.IsDBNull(3) ? null : reader.GetInt32(3)
+            TransferToAccountId = reader.IsDBNull(3) ? null : reader.GetInt32(3),
+            TransferToAmount = reader.IsDBNull(4) ? null : reader.GetDouble(4)
         };
         return true;
+    }
+
+    /// <summary>Money that lands in the destination account (gift-card bonus, transfer fee, or the same as sent).</summary>
+    public static double TransferReceivedAmount(BudgetTransactionListItemModel row) =>
+        TransferReceivedAmount(row.Amount, row.TransferToAmount);
+
+    public static double TransferReceivedAmount(double amount, double? transferToAmount)
+    {
+        if (transferToAmount is double to && to > 0.0001)
+            return to;
+        return amount;
     }
 
     private static void ApplyDelta(SqliteConnection conn, SqliteTransaction tx, int accountId, string type, double amount)

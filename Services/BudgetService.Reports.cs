@@ -82,34 +82,91 @@ public partial class BudgetService
             if (t.Type is not ("expense" or "income"))
                 continue;
 
+            if (t.Type == "expense" && TryShareKeepAndAwaiting(t, out var keep, out var awaiting))
+            {
+                var rate = t.ExchangeRateToHome;
+                if (t.Splits.Count > 0)
+                {
+                    var scale = t.Amount > ShareMoneyEpsilon ? keep / t.Amount : 0;
+                    foreach (var s in t.Splits)
+                    {
+                        var uid = s.SpentByUserId ?? t.SpentByUserId;
+                        var cid = s.CategoryId ?? t.CategoryId;
+                        var label = cid.HasValue && cats.TryGetValue(cid.Value, out var n) ? n : "Uncategorized";
+                        AddFilteredExpenseRow(list, t.Type, cid, label, uid, s.Amount * scale * rate,
+                            spentByUserId, categoryId);
+                    }
+                }
+                else
+                {
+                    var label = t.CategoryName ?? "Uncategorized";
+                    AddFilteredExpenseRow(list, t.Type, t.CategoryId, label, t.SpentByUserId, keep * rate,
+                        spentByUserId, categoryId);
+                }
+
+                AddFilteredExpenseRow(list, t.Type, AwaitingRepaymentCategoryId, AwaitingRepaymentLabel,
+                    t.SpentByUserId, awaiting * rate, spentByUserId, categoryId);
+                continue;
+            }
+
             if (t.Splits.Count > 0)
             {
                 foreach (var s in t.Splits)
                 {
                     var uid = s.SpentByUserId ?? t.SpentByUserId;
-                    if (spentByUserId.HasValue && spentByUserId.Value != 0 && uid != spentByUserId)
-                        continue;
                     var cid = s.CategoryId ?? t.CategoryId;
-                    if (categoryId.HasValue && cid != categoryId)
-                        continue;
                     var label = cid.HasValue && cats.TryGetValue(cid.Value, out var n) ? n : "Uncategorized";
-                    var portion = s.Amount * t.ExchangeRateToHome;
-                    list.Add(new ExpenseRow(t.Type, cid, label, uid, portion));
+                    AddFilteredExpenseRow(list, t.Type, cid, label, uid, s.Amount * t.ExchangeRateToHome,
+                        spentByUserId, categoryId);
                 }
             }
             else
             {
-                if (spentByUserId.HasValue && spentByUserId.Value != 0 && t.SpentByUserId != spentByUserId)
-                    continue;
-                if (categoryId.HasValue && t.CategoryId != categoryId)
-                    continue;
                 var label = t.CategoryName ?? "Uncategorized";
-                list.Add(new ExpenseRow(t.Type, t.CategoryId, label, t.SpentByUserId,
-                    t.Amount * t.ExchangeRateToHome));
+                AddFilteredExpenseRow(list, t.Type, t.CategoryId, label, t.SpentByUserId,
+                    t.Amount * t.ExchangeRateToHome, spentByUserId, categoryId);
             }
         }
 
         return list;
+    }
+
+    private static bool TryShareKeepAndAwaiting(BudgetTransactionListItemModel t, out double keep, out double awaiting)
+    {
+        keep = 0;
+        awaiting = 0;
+        var charges = t.ShareSummary?.Charges;
+        if (charges is not { Count: > 0 })
+            return false;
+
+        awaiting = charges
+            .Where(c => string.Equals(c.Status, "open", StringComparison.OrdinalIgnoreCase))
+            .Sum(c => c.Remaining);
+        var collected = charges.Sum(c => c.PaidAmount)
+            + charges
+                .Where(c => string.Equals(c.Status, "reimbursed", StringComparison.OrdinalIgnoreCase))
+                .Sum(c => c.Remaining);
+        keep = Math.Max(0, t.Amount - awaiting - collected);
+        return true;
+    }
+
+    private static void AddFilteredExpenseRow(
+        List<ExpenseRow> list,
+        string type,
+        int? categoryId,
+        string? categoryLabel,
+        ulong spentByUserId,
+        double homeAmount,
+        ulong? filterUser,
+        int? filterCat)
+    {
+        if (homeAmount <= ShareMoneyEpsilon)
+            return;
+        if (filterUser is > 0 && spentByUserId != filterUser.Value)
+            return;
+        if (filterCat.HasValue && categoryId != filterCat)
+            return;
+        list.Add(new ExpenseRow(type, categoryId, categoryLabel, spentByUserId, homeAmount));
     }
 
     public List<BudgetEnvelopeModel> GetEnvelopes(string month, ulong? spentByUserId)

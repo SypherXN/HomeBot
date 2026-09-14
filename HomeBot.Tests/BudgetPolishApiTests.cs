@@ -93,6 +93,45 @@ public sealed class BudgetPolishApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Gift_card_transfer_uses_different_received_amount()
+    {
+        var chkId = (await (await _client.PostAsJsonAsync(
+            $"/api/budget/accounts?actorUserId={Actor}",
+            new { name = "Checking", accountType = "checking" })).Content.ReadFromJsonAsync<Dictionary<string, int>>())!["id"];
+        var dashId = (await (await _client.PostAsJsonAsync(
+            $"/api/budget/accounts?actorUserId={Actor}",
+            new { name = "DoorDash", accountType = "cash" })).Content.ReadFromJsonAsync<Dictionary<string, int>>())!["id"];
+
+        var xfer = await _client.PostAsJsonAsync(
+            $"/api/budget/transfers?actorUserId={Actor}",
+            new
+            {
+                amountInput = "80",
+                toAmountInput = "100",
+                fromAccountId = chkId,
+                toAccountId = dashId,
+                merchant = "Costco",
+                transactionDate = "2026-09-13",
+            });
+        Assert.Equal(HttpStatusCode.Created, xfer.StatusCode);
+
+        var accounts = await _client.GetFromJsonAsync<JsonElement>("/api/budget/accounts");
+        double Bal(int id)
+        {
+            foreach (var a in accounts.EnumerateArray())
+            {
+                if (a.GetProperty("id").GetInt32() == id)
+                    return a.GetProperty("currentBalance").GetDouble();
+            }
+
+            throw new InvalidOperationException($"account {id} missing");
+        }
+
+        Assert.Equal(-80, Bal(chkId));
+        Assert.Equal(100, Bal(dashId));
+    }
+
+    [Fact]
     public async Task Accounts_reorder_persists()
     {
         var aRes = await _client.PostAsJsonAsync(
@@ -561,7 +600,55 @@ public sealed class BudgetPolishApiTests : IDisposable
 
         var month = await _client.GetFromJsonAsync<JsonElement>("/api/budget/summary/month?month=2026-09");
         Assert.Equal(0, month.GetProperty("totalIncome").GetDouble());
-        Assert.Equal(60, month.GetProperty("totalExpenses").GetDouble());
+        Assert.Equal(40, month.GetProperty("totalExpenses").GetDouble());
+    }
+
+    [Fact]
+    public async Task Share_mark_reimbursed_without_deposit_and_category_slice()
+    {
+        var accRes = await _client.PostAsJsonAsync(
+            $"/api/budget/accounts?actorUserId={Actor}",
+            new { name = "Checking", accountType = "checking" });
+        accRes.EnsureSuccessStatusCode();
+        var checking = (await accRes.Content.ReadFromJsonAsync<Dictionary<string, int>>())!["id"];
+        var dining = await CreateCategoryAsync("Dining");
+
+        var txRes = await _client.PostAsJsonAsync(
+            $"/api/budget/transactions?actorUserId={Actor}",
+            new
+            {
+                type = "expense",
+                amountInput = "80",
+                spentByUserId = Actor.ToString(),
+                accountId = checking,
+                categoryId = dining,
+                merchant = "Dinner",
+                transactionDate = "2026-09-13",
+                shareCharges = new[]
+                {
+                    new { owedByLabel = "Alex", amount = 40 }
+                }
+            });
+        Assert.Equal(HttpStatusCode.Created, txRes.StatusCode);
+
+        var cats = await _client.GetFromJsonAsync<JsonElement>("/api/budget/summary/by-category?month=2026-09");
+        Assert.Equal(40, cats.EnumerateArray().First(s => s.GetProperty("label").GetString() == "Dining").GetProperty("total").GetDouble());
+        Assert.Equal(40, cats.EnumerateArray().First(s => s.GetProperty("key").GetString() == "-1").GetProperty("total").GetDouble());
+
+        var shares = await _client.GetFromJsonAsync<JsonElement>("/api/budget/shares");
+        var chargeId = shares.GetProperty("open")[0].GetProperty("id").GetInt32();
+        var mark = await _client.PatchAsJsonAsync(
+            $"/api/budget/shares/{chargeId}?actorUserId={Actor}",
+            new { status = "reimbursed" });
+        Assert.Equal(HttpStatusCode.OK, mark.StatusCode);
+
+        var after = await _client.GetFromJsonAsync<JsonElement>("/api/budget/shares");
+        Assert.Equal(0, after.GetProperty("outstandingTotal").GetDouble());
+        Assert.Equal(1, after.GetProperty("reimbursed").GetArrayLength());
+
+        cats = await _client.GetFromJsonAsync<JsonElement>("/api/budget/summary/by-category?month=2026-09");
+        Assert.Equal(40, cats.EnumerateArray().First(s => s.GetProperty("label").GetString() == "Dining").GetProperty("total").GetDouble());
+        Assert.DoesNotContain("-1", cats.EnumerateArray().Select(s => s.GetProperty("key").GetString()).ToList());
     }
 
     private async Task<int> CreateCategoryAsync(string name)

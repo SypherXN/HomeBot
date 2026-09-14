@@ -46,7 +46,7 @@ public partial class BudgetService
             q = q.Where(t => t.Tags.Any(x => x.Equals(tag, StringComparison.OrdinalIgnoreCase)));
 
         if (accountId.HasValue)
-            q = q.Where(t => t.AccountId == accountId);
+            q = q.Where(t => t.AccountId == accountId || t.TransferToAccountId == accountId);
 
         var list = q.OrderByDescending(t => t.TransactionDate).ThenByDescending(t => t.Id).ToList();
 
@@ -188,9 +188,14 @@ public partial class BudgetService
         int toAccountId,
         string transactionDate,
         string? note,
-        ulong actor)
+        ulong actor,
+        string? toAmountInput = null,
+        string? merchant = null)
     {
         var amount = EvaluateAmount(amountInput);
+        if (amount <= 0)
+            throw new ArgumentException("Amount paid must be positive.");
+        var toAmount = ResolveTransferReceivedAmount(amount, toAmountInput);
         if (fromAccountId == toAccountId)
             throw new ArgumentException("Transfer requires two different accounts.");
         using var conn = _db.GetConnection();
@@ -201,19 +206,21 @@ public partial class BudgetService
         cmd.Transaction = tx;
         cmd.CommandText = @"
             INSERT INTO BudgetTransactions
-            (Type, Amount, AmountInput, SpentByUserId, AccountId, TransferToAccountId, Note, TransactionDate)
-            VALUES ('transfer', $amt, $input, $user, $from, $to, $note, $date)";
+            (Type, Amount, AmountInput, SpentByUserId, AccountId, TransferToAccountId, TransferToAmount, Note, Merchant, TransactionDate)
+            VALUES ('transfer', $amt, $input, $user, $from, $to, $toAmt, $note, $merchant, $date)";
         cmd.Parameters.AddWithValue("$amt", amount);
         cmd.Parameters.AddWithValue("$input", amountInput);
         cmd.Parameters.AddWithValue("$user", (long)actor);
         cmd.Parameters.AddWithValue("$from", fromAccountId);
         cmd.Parameters.AddWithValue("$to", toAccountId);
+        cmd.Parameters.AddWithValue("$toAmt", toAmount);
         cmd.Parameters.AddWithValue("$note", (object?)note ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$merchant", string.IsNullOrWhiteSpace(merchant) ? DBNull.Value : merchant.Trim());
         cmd.Parameters.AddWithValue("$date", transactionDate);
         cmd.ExecuteNonQuery();
         var id = ReadLastId(conn);
         ApplyAccountDelta(conn, tx, fromAccountId, "transfer_out", amount, toAccountId);
-        ApplyAccountDelta(conn, tx, toAccountId, "transfer_in", amount, fromAccountId);
+        ApplyAccountDelta(conn, tx, toAccountId, "transfer_in", toAmount, fromAccountId);
         tx.Commit();
         Audit(actor, "transaction", id, "transfer");
         return id;
@@ -241,7 +248,9 @@ public partial class BudgetService
         List<BudgetShareChargeInput>? shareCharges = null,
         bool applyShareCharges = false,
         List<BudgetSharePaymentInput>? sharePayments = null,
-        bool applySharePayments = false)
+        bool applySharePayments = false,
+        string? transferToAmountInput = null,
+        bool applyTransferToAmount = false)
     {
         var existing = GetTransactionById(id);
         if (existing == null)
@@ -258,6 +267,15 @@ public partial class BudgetService
         var newAmount = amount ?? existing.Amount;
         var isTransfer = string.Equals(existing.Type, "transfer", StringComparison.OrdinalIgnoreCase);
         var defaultAccountId = BudgetAccountBalance.ResolveDefaultAccountId(conn);
+        var existingReceived = BudgetAccountBalance.TransferReceivedAmount(existing);
+        var newReceived = existingReceived;
+        if (isTransfer)
+        {
+            if (applyTransferToAmount)
+                newReceived = ResolveTransferReceivedAmount(newAmount, transferToAmountInput);
+            else if (amount.HasValue && Math.Abs(existingReceived - existing.Amount) < 0.0001)
+                newReceived = newAmount;
+        }
 
         int? newFrom = existing.AccountId;
         int? newTo = existing.TransferToAccountId;
@@ -292,6 +310,7 @@ public partial class BudgetService
             throw new ArgumentException("Charges to others cannot exceed the expense.");
 
         var balancesChanged = Math.Abs(newAmount - existing.Amount) > 0.0001
+            || Math.Abs(newReceived - existingReceived) > 0.0001
             || !Nullable.Equals(newFrom, existing.AccountId)
             || !Nullable.Equals(newTo, existing.TransferToAccountId);
 
@@ -359,6 +378,11 @@ public partial class BudgetService
             sets.Add("TransferToAccountId=$to");
             cmd.Parameters.AddWithValue("$to", (object?)newTo ?? DBNull.Value);
         }
+        if (isTransfer && (applyTransferToAmount || Math.Abs(newReceived - existingReceived) > 0.0001))
+        {
+            sets.Add("TransferToAmount=$toAmt");
+            cmd.Parameters.AddWithValue("$toAmt", newReceived);
+        }
         if (!string.Equals(nextType, existing.Type, StringComparison.OrdinalIgnoreCase))
         {
             sets.Add("Type=$shareType");
@@ -366,7 +390,7 @@ public partial class BudgetService
         }
 
         if (sets.Count == 0 && splits == null && tags == null && !applyAccountId && !applyReceiptUrl &&
-            !applyTransferToAccountId && !applyShareCharges && !applySharePayments)
+            !applyTransferToAccountId && !applyShareCharges && !applySharePayments && !applyTransferToAmount)
             return false;
 
         if (sets.Count > 0)
@@ -403,7 +427,8 @@ public partial class BudgetService
                 Type = nextType,
                 Amount = newAmount,
                 AccountId = newFrom,
-                TransferToAccountId = newTo
+                TransferToAccountId = newTo,
+                TransferToAmount = isTransfer ? newReceived : null
             };
             BudgetAccountBalance.ApplyTransaction(conn, tx, updated, defaultAccountId);
         }
@@ -456,7 +481,7 @@ public partial class BudgetService
             SELECT t.Id, t.Type, t.Amount, t.AmountInput, t.CategoryId, t.SpentByUserId, t.AccountId,
                    t.TransferToAccountId, t.Note, t.ReceiptUrl, t.Merchant, t.TransactionDate, t.ClearedAt, t.IsPending,
                    t.Currency, t.ExchangeRateToHome,
-                   c.Name
+                   c.Name, t.TransferToAmount
             FROM BudgetTransactions t
             LEFT JOIN BudgetCategories c ON c.Id = t.CategoryId
             ORDER BY t.Id DESC";
@@ -486,7 +511,8 @@ public partial class BudgetService
                     IsPending = reader.GetInt64(13) != 0,
                     Currency = reader.GetString(14),
                     ExchangeRateToHome = reader.GetDouble(15),
-                    CategoryName = reader.IsDBNull(16) ? null : reader.GetString(16)
+                    CategoryName = reader.IsDBNull(16) ? null : reader.GetString(16),
+                    TransferToAmount = reader.IsDBNull(17) ? null : reader.GetDouble(17)
                 });
             }
         }
@@ -635,6 +661,16 @@ public partial class BudgetService
 
         if (type.Equals("expense", StringComparison.OrdinalIgnoreCase))
             ApplyAccountDelta(conn, tx, accountId, "income", amount, null);
+    }
+
+    private static double ResolveTransferReceivedAmount(double fromAmount, string? toAmountInput)
+    {
+        if (string.IsNullOrWhiteSpace(toAmountInput))
+            return fromAmount;
+        var toAmount = EvaluateAmount(toAmountInput);
+        if (toAmount <= 0)
+            throw new ArgumentException("Amount received must be positive.");
+        return toAmount;
     }
 
     private static void ApplyAccountDelta(SqliteConnection conn, SqliteTransaction tx, int accountId, string type,

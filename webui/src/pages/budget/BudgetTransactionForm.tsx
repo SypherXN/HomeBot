@@ -14,6 +14,7 @@ import {
   type BudgetSplitInput,
 } from "../../api";
 import AccountSelect from "./AccountSelect";
+import TransferAmountFields from "./TransferAmountFields";
 import { BudgetExpenseShareEditor, BudgetReimbursementEditor } from "./BudgetShareEditors";
 import {
   emptyShareChargeDraft,
@@ -49,6 +50,7 @@ export default function BudgetTransactionForm({
 }: Props) {
   const [formType, setFormType] = useState<"expense" | "income" | "transfer">("expense");
   const [formAmount, setFormAmount] = useState("");
+  const [formToAmount, setFormToAmount] = useState("");
   const [formDate, setFormDate] = useState(() => defaultTransactionDateForMonth(month));
   const [formCategoryId, setFormCategoryId] = useState("");
   const [formSpender, setFormSpender] = useState(actor);
@@ -131,10 +133,12 @@ export default function BudgetTransactionForm({
       if (!formAccountId || !transferToId || formAccountId === transferToId) return;
       await postBudgetTransfer(token, actor, {
         amountInput: formAmount.trim(),
+        toAmountInput: formToAmount.trim() || undefined,
         fromAccountId: Number(formAccountId),
         toAccountId: Number(transferToId),
         transactionDate: formDate || undefined,
         note: formNote || undefined,
+        merchant: formMerchant.trim() || undefined,
       });
     } else {
       if (!formSpender) return;
@@ -191,6 +195,7 @@ export default function BudgetTransactionForm({
     }
 
     setFormAmount("");
+    setFormToAmount("");
     setFormNote("");
     setFormReceiptUrl("");
     setFormMerchant("");
@@ -221,14 +226,16 @@ export default function BudgetTransactionForm({
         {typeButton("income", "Income", "bg-emerald-700 text-white")}
         {depositAccounts.length >= 1 && activeAccounts.length >= 2 && typeButton("transfer", "Transfer", "bg-blue-700 text-white")}
       </div>
-      <input
-        required
-        placeholder="Amount"
-        inputMode="decimal"
-        value={formAmount}
-        onChange={(e) => setFormAmount(e.target.value)}
-        className="w-full hb-input px-3 py-2 text-slate-100"
-      />
+      {formType !== "transfer" && (
+        <input
+          required
+          placeholder="Amount"
+          inputMode="decimal"
+          value={formAmount}
+          onChange={(e) => setFormAmount(e.target.value)}
+          className="w-full hb-input px-3 py-2 text-slate-100"
+        />
+      )}
       <label className="block text-xs text-slate-400">
         Date
         <span className="ml-1 font-normal text-slate-500">(which month this counts toward)</span>
@@ -243,6 +250,15 @@ export default function BudgetTransactionForm({
 
       {formType === "transfer" ? (
         <div className="space-y-3">
+          <TransferAmountFields
+            paid={formAmount}
+            received={formToAmount}
+            onPaidChange={setFormAmount}
+            onReceivedChange={setFormToAmount}
+          />
+          <p className="text-xs text-slate-500">
+            Gift cards: pay $80 at Costco, DoorDash gets $100 — enter both. The extra $20 raises the DoorDash balance and is not income. Log DoorDash orders as expenses from that cash account.
+          </p>
           <div className="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
             <label className="block text-xs text-slate-400">
               From (checking or savings)
@@ -279,7 +295,8 @@ export default function BudgetTransactionForm({
               {(() => {
                 const from = accounts.find((a) => String(a.id) === formAccountId);
                 const to = accounts.find((a) => String(a.id) === transferToId);
-                const amt = Number(formAmount) || 0;
+                const paid = Number(formAmount) || 0;
+                const received = formToAmount.trim() ? Number(formToAmount) || 0 : paid;
                 return (
                   <>
                     <div className="min-w-0 flex-1 text-center">
@@ -287,10 +304,10 @@ export default function BudgetTransactionForm({
                       <p className="text-xs text-slate-500">
                         {from && from.currentBalance < 0 ? "−" : ""}${formatMoney(Math.abs(from?.currentBalance ?? 0))}
                       </p>
-                      {amt > 0 && (
-                        <p className={`mt-1 text-xs ${(from?.currentBalance ?? 0) - amt < 0 ? "text-rose-300" : "text-amber-300"}`}>
-                          → {(from?.currentBalance ?? 0) - amt < 0 ? "−" : ""}$
-                          {formatMoney(Math.abs((from?.currentBalance ?? 0) - amt))}
+                      {paid > 0 && (
+                        <p className={`mt-1 text-xs ${(from?.currentBalance ?? 0) - paid < 0 ? "text-rose-300" : "text-amber-300"}`}>
+                          → {(from?.currentBalance ?? 0) - paid < 0 ? "−" : ""}$
+                          {formatMoney(Math.abs((from?.currentBalance ?? 0) - paid))}
                         </p>
                       )}
                     </div>
@@ -300,10 +317,10 @@ export default function BudgetTransactionForm({
                       <p className="text-xs text-slate-500">
                         {to && to.currentBalance < 0 ? "−" : ""}${formatMoney(Math.abs(to?.currentBalance ?? 0))}
                       </p>
-                      {amt > 0 && (
-                        <p className={`mt-1 text-xs ${(to?.currentBalance ?? 0) + amt < 0 ? "text-rose-300" : "text-emerald-300"}`}>
-                          → {(to?.currentBalance ?? 0) + amt < 0 ? "−" : ""}$
-                          {formatMoney(Math.abs((to?.currentBalance ?? 0) + amt))}
+                      {received > 0 && (
+                        <p className={`mt-1 text-xs ${(to?.currentBalance ?? 0) + received < 0 ? "text-rose-300" : "text-emerald-300"}`}>
+                          → {(to?.currentBalance ?? 0) + received < 0 ? "−" : ""}$
+                          {formatMoney(Math.abs((to?.currentBalance ?? 0) + received))}
                         </p>
                       )}
                     </div>
@@ -312,6 +329,18 @@ export default function BudgetTransactionForm({
               })()}
             </div>
           )}
+          <input
+            placeholder="Where you bought it (e.g. Costco)"
+            value={formMerchant}
+            onChange={(e) => setFormMerchant(e.target.value)}
+            list="budget-merchant-suggestions"
+            className="w-full hb-input px-3 py-2 text-slate-100"
+          />
+          <datalist id="budget-merchant-suggestions">
+            {merchants.map((m) => (
+              <option key={m} value={m} />
+            ))}
+          </datalist>
         </div>
       ) : (
         <>
@@ -433,6 +462,7 @@ export default function BudgetTransactionForm({
               {chargeOthers && (
                 <BudgetExpenseShareEditor
                   total={total}
+                  token={token}
                   roster={roster}
                   drafts={shareDrafts}
                   onChange={setShareDrafts}

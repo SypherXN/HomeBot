@@ -1,6 +1,7 @@
 import { Fragment, useMemo } from "react";
 import type { BudgetTransactionListItem } from "../../api";
 import { formatMoney } from "../../lib/budgetMoney";
+import { netExpenseAmount } from "../../lib/budgetShares";
 
 type Props = {
   month: string;
@@ -28,7 +29,7 @@ export default function BudgetWeekHeatmap({ month, transactions }: Props) {
       const idx = startDow + day - 1;
       const w = Math.floor(idx / 7);
       const d = idx % 7;
-      grid[w][d] += t.amount;
+      grid[w][d] += netExpenseAmount(t);
     }
 
     let maxVal = 0;

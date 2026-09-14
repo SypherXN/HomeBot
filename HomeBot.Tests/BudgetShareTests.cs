@@ -99,7 +99,7 @@ public sealed class BudgetShareTests : IDisposable
         Assert.Equal(20, reimburse.ShareSummary!.Received, 2);
 
         var summary = _budget.GetMonthSummary("2026-09", null, null, null);
-        Assert.Equal(80, summary.TotalExpenses, 2);
+        Assert.Equal(60, summary.TotalExpenses, 2);
         Assert.Equal(0, summary.TotalIncome, 2);
 
         Assert.Equal(-60, Assert.Single(_budget.GetAccounts(), a => a.Id == checking).CurrentBalance);
@@ -264,6 +264,83 @@ public sealed class BudgetShareTests : IDisposable
                 null,
                 Actor,
                 sharePayments: new List<BudgetSharePaymentInput> { new() { ChargeId = charge.Id, Amount = 10 } }));
+    }
+
+    [Fact]
+    public void Share_outstanding_uses_awaiting_repayment_category()
+    {
+        var checking = _budget.CreateAccount("Checking", "checking", "USD", null, Actor);
+        var dining = _budget.CreateCategory("Dining", null, null, "household", false, Actor);
+        _budget.CreateTransaction(
+            "expense",
+            "80",
+            dining,
+            Actor,
+            "2026-09-13",
+            null,
+            null,
+            "Dinner",
+            checking,
+            false,
+            "USD",
+            1,
+            null,
+            null,
+            Actor,
+            shareCharges: new List<BudgetShareChargeInput>
+            {
+                new() { OwedByLabel = "Alex", Amount = 40 }
+            });
+
+        var cats = _budget.GetSummaryByCategory("2026-09", null, null);
+        Assert.Equal(40, Assert.Single(cats, s => s.Label == "Dining").Total, 2);
+        var awaiting = Assert.Single(cats, s => s.Key == "-1");
+        Assert.Equal("Awaiting repayment", awaiting.Label);
+        Assert.Equal(40, awaiting.Total, 2);
+        Assert.Equal(80, _budget.GetMonthSummary("2026-09", null, null, null).TotalExpenses, 2);
+
+        var charge = Assert.Single(_budget.GetSharesOverview().Open);
+        Assert.True(_budget.SetShareChargeStatus(charge.Id, "reimbursed", Actor));
+        cats = _budget.GetSummaryByCategory("2026-09", null, null);
+        Assert.Equal(40, Assert.Single(cats, s => s.Label == "Dining").Total, 2);
+        Assert.DoesNotContain(cats, s => s.Key == "-1");
+        Assert.Equal(40, _budget.GetMonthSummary("2026-09", null, null, null).TotalExpenses, 2);
+        Assert.Equal(-80, Assert.Single(_budget.GetAccounts(), a => a.Id == checking).CurrentBalance);
+        Assert.Single(_budget.GetSharesOverview().Reimbursed);
+    }
+
+    [Fact]
+    public void Ignored_share_returns_to_original_category()
+    {
+        var checking = _budget.CreateAccount("Checking", "checking", "USD", null, Actor);
+        var dining = _budget.CreateCategory("Dining", null, null, "household", false, Actor);
+        _budget.CreateTransaction(
+            "expense",
+            "40",
+            dining,
+            Actor,
+            "2026-09-13",
+            null,
+            null,
+            "Lunch",
+            checking,
+            false,
+            "USD",
+            1,
+            null,
+            null,
+            Actor,
+            shareCharges: new List<BudgetShareChargeInput>
+            {
+                new() { OwedByLabel = "Alex", Amount = 20 }
+            });
+
+        var charge = Assert.Single(_budget.GetSharesOverview().Open);
+        Assert.True(_budget.SetShareChargeStatus(charge.Id, "ignored", Actor));
+        var cats = _budget.GetSummaryByCategory("2026-09", null, null);
+        Assert.Equal(40, Assert.Single(cats, s => s.Label == "Dining").Total, 2);
+        Assert.DoesNotContain(cats, s => s.Key == "-1");
+        Assert.Equal(40, _budget.GetMonthSummary("2026-09", null, null, null).TotalExpenses, 2);
     }
 
     private int CreateExpense(int accountId, string amount, string merchant, params BudgetShareChargeInput[] charges)

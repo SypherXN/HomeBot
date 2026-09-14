@@ -4,7 +4,9 @@ import Sheet from "../../components/Sheet";
 import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster";
 import { memberPickerLabel } from "../../lib/memberDisplay";
 import { isDepositAccount, isIncomeLikeType } from "../../lib/budgetMoney";
+import { transferReceivedAmount } from "../../lib/budgetTransfer";
 import AccountSelect from "./AccountSelect";
+import TransferAmountFields from "./TransferAmountFields";
 import { BudgetExpenseShareEditor, BudgetReimbursementEditor } from "./BudgetShareEditors";
 import {
   draftsFromShareSummary,
@@ -50,6 +52,7 @@ export default function BudgetTransactionEditModal({
   onSaved,
 }: Props) {
   const [amount, setAmount] = useState("");
+  const [toAmount, setToAmount] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [spender, setSpender] = useState("");
   const [txDate, setTxDate] = useState("");
@@ -72,6 +75,7 @@ export default function BudgetTransactionEditModal({
   useEffect(() => {
     if (!open || !row) return;
     setAmount(String(row.amount));
+    setToAmount(row.type === "transfer" ? String(transferReceivedAmount(row)) : "");
     setCategoryId(row.categoryId != null ? String(row.categoryId) : "");
     setSpender(row.spentByUserId);
     setTxDate(row.transactionDate?.slice(0, 10) ?? "");
@@ -187,6 +191,7 @@ export default function BudgetTransactionEditModal({
               ? Number(accountId)
               : undefined,
         transferToAccountId: row!.type === "transfer" && transferToId ? Number(transferToId) : undefined,
+        transferToAmountInput: row!.type === "transfer" ? toAmount.trim() || amount.trim() : undefined,
         shareCharges,
         sharePayments,
       });
@@ -202,13 +207,22 @@ export default function BudgetTransactionEditModal({
   return (
     <Sheet open={open} title="Edit transaction" onClose={onClose}>
       <form onSubmit={(e) => void handleSave(e)} className="space-y-3">
-          <input
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="Amount"
-            required
-            className="w-full hb-input px-3 py-2 text-slate-100"
-          />
+          {row.type === "transfer" ? (
+            <TransferAmountFields
+              paid={amount}
+              received={toAmount}
+              onPaidChange={setAmount}
+              onReceivedChange={setToAmount}
+            />
+          ) : (
+            <input
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="Amount"
+              required
+              className="w-full hb-input px-3 py-2 text-slate-100"
+            />
+          )}
           <label className="block text-xs text-slate-400">
             Date
             <span className="ml-1 font-normal text-slate-500">(which month this counts toward)</span>
@@ -381,7 +395,9 @@ export default function BudgetTransactionEditModal({
               </label>
               {chargeOthers && (
                 <BudgetExpenseShareEditor
+                  key={row.id}
                   total={Number(amount) || 0}
+                  token={token}
                   roster={roster}
                   drafts={shareDrafts}
                   onChange={setShareDrafts}

@@ -2,7 +2,9 @@ using Microsoft.Data.Sqlite;
 
 public partial class BudgetService
 {
-    private const double ShareMoneyEpsilon = 0.005;
+    internal const double ShareMoneyEpsilon = 0.005;
+    internal const int AwaitingRepaymentCategoryId = -1;
+    internal const string AwaitingRepaymentLabel = "Awaiting repayment";
 
     public BudgetSharesOverviewModel GetSharesOverview()
     {
@@ -11,6 +13,10 @@ public partial class BudgetService
         var charges = LoadShareChargeLines(conn);
         var open = charges.Where(c => c.Status == "open" && c.Remaining > ShareMoneyEpsilon).ToList();
         var ignored = charges.Where(c => c.Status == "ignored").ToList();
+        var reimbursed = charges.Where(c =>
+                string.Equals(c.Status, "reimbursed", StringComparison.OrdinalIgnoreCase)
+                || (c.Status == "open" && c.Remaining <= ShareMoneyEpsilon && c.PaidAmount > ShareMoneyEpsilon))
+            .ToList();
         var people = open
             .Select(c => c.OwedByUserId is > 0 ? $"u:{c.OwedByUserId}" : $"n:{c.OwedByLabel.Trim().ToLowerInvariant()}")
             .Distinct(StringComparer.Ordinal)
@@ -20,6 +26,7 @@ public partial class BudgetService
             OutstandingTotal = open.Sum(c => c.Remaining),
             OutstandingPeopleCount = people,
             Open = open,
+            Reimbursed = reimbursed,
             Ignored = ignored
         };
     }
@@ -27,8 +34,8 @@ public partial class BudgetService
     public bool SetShareChargeStatus(int chargeId, string status, ulong actor)
     {
         var next = (status ?? "").Trim().ToLowerInvariant();
-        if (next is not ("open" or "ignored"))
-            throw new ArgumentException("Status must be open or ignored.");
+        if (next is not ("open" or "ignored" or "reimbursed"))
+            throw new ArgumentException("Status must be open, ignored, or reimbursed.");
 
         using var conn = _db.GetConnection();
         conn.Open();
@@ -38,7 +45,7 @@ public partial class BudgetService
         cmd.Parameters.AddWithValue("$id", chargeId);
         if (cmd.ExecuteNonQuery() == 0)
             return false;
-        Audit(actor, "share", chargeId, next == "ignored" ? "ignore" : "restore");
+        Audit(actor, "share", chargeId, next);
         return true;
     }
 
@@ -114,7 +121,7 @@ public partial class BudgetService
             var charge = LoadShareChargeRow(conn, tx, payment.ChargeId)
                 ?? throw new ArgumentException("Share charge not found.");
             if (!string.Equals(charge.Status, "open", StringComparison.OrdinalIgnoreCase))
-                throw new ArgumentException("Restore an ignored charge before applying a reimbursement.");
+                throw new ArgumentException("Restore this split before applying a reimbursement.");
             if (payment.Amount > charge.Remaining + ShareMoneyEpsilon)
                 throw new ArgumentException($"Cannot apply more than ${charge.Remaining:0.00} still owed by {charge.OwedByLabel}.");
             InsertSharePayment(conn, tx, payment.ChargeId, incomeTransactionId, payment.Amount);

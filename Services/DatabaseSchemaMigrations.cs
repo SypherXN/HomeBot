@@ -431,6 +431,16 @@ public static class DatabaseSchemaMigrations
                     ON BudgetSharePayments(IncomeTransactionId);
             ");
         }),
+
+        new SchemaMigrationRunner.Migration("014_budget_transfer_to_amount", conn =>
+        {
+            SchemaMigrationRunner.TryAddColumn(conn,
+                "ALTER TABLE BudgetTransactions ADD COLUMN TransferToAmount REAL");
+            SchemaMigrationRunner.Execute(conn, @"
+                UPDATE BudgetTransactions
+                SET TransferToAmount = Amount
+                WHERE Type = 'transfer' AND TransferToAmount IS NULL");
+        }),
     };
 
     /// <summary>

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { BudgetEnvelope, BudgetNotificationItem, BudgetTransactionListItem } from "../../api";
 import { MONEY_TEXT, formatMoney } from "../../lib/budgetMoney";
+import { netExpenseAmount } from "../../lib/budgetShares";
 import { titleCase } from "../../lib/titleCase";
 import PaceBar from "./PaceBar";
 import { monthTimePct } from "./budgetPace";
@@ -33,7 +34,7 @@ export default function BudgetInsights({
       if (t.type !== "expense") continue;
       const m = t.merchant?.trim();
       if (!m) continue;
-      map.set(m, (map.get(m) ?? 0) + t.amount);
+      map.set(m, (map.get(m) ?? 0) + netExpenseAmount(t));
     }
     return [...map.entries()]
       .map(([merchant, total]) => ({ merchant, total }))

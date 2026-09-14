@@ -37,15 +37,22 @@ internal static class BudgetApiDiscordNotify
         string amountInput,
         int fromAccountId,
         int toAccountId,
-        ulong actor)
+        ulong actor,
+        string? toAmountInput = null)
     {
         var accounts = svc.GetAccounts();
         var from = accounts.FirstOrDefault(a => a.Id == fromAccountId)?.Name ?? $"#{fromAccountId}";
         var to = accounts.FirstOrDefault(a => a.Id == toAccountId)?.Name ?? $"#{toAccountId}";
-        var amt = DiscordNotifyText.SanitizeInline(amountInput);
+        var paid = DiscordNotifyText.SanitizeInline(amountInput);
+        var received = string.IsNullOrWhiteSpace(toAmountInput)
+            ? null
+            : DiscordNotifyText.SanitizeInline(toAmountInput);
+        var amt = received is null || string.Equals(received, paid, StringComparison.Ordinal)
+            ? $"`${paid}`"
+            : $"`${paid}` → `${received}`";
         await NotifyAsync(
             root,
-            $"📊 **Budget** (via web): transfer `${amt}` **{DiscordNotifyText.SanitizeInline(from)}** → **{DiscordNotifyText.SanitizeInline(to)}** (<@{actor}>)");
+            $"📊 **Budget** (via web): transfer {amt} **{DiscordNotifyText.SanitizeInline(from)}** → **{DiscordNotifyText.SanitizeInline(to)}** (<@{actor}>)");
     }
 
     public static async ValueTask BillPaidAsync(IServiceProvider root, BudgetService svc, int billId, string amountInput, ulong spender)

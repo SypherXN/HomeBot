@@ -239,7 +239,13 @@ export default function BudgetQuickAdd({
             Others owe me part of this
           </label>
           {chargeOthers && (
-            <BudgetExpenseShareEditor total={Number(amount) || 0} roster={roster} drafts={shareDrafts} onChange={setShareDrafts} />
+            <BudgetExpenseShareEditor
+              total={Number(amount) || 0}
+              token={token}
+              roster={roster}
+              drafts={shareDrafts}
+              onChange={setShareDrafts}
+            />
           )}
         </>
       )}

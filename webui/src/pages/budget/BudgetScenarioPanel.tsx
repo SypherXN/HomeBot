@@ -12,7 +12,9 @@ type Props = {
 export default function BudgetScenarioPanel({ forecast, envelopes }: Props) {
   const categories = useMemo(() => {
     const names = new Map<number, string>();
-    for (const f of forecast) names.set(f.categoryId, f.categoryName);
+    for (const f of forecast) {
+      if (f.categoryId > 0) names.set(f.categoryId, f.categoryName);
+    }
     for (const e of envelopes) names.set(e.categoryId, e.categoryName);
     return [...names.entries()].map(([id, name]) => ({ id, name }));
   }, [forecast, envelopes]);

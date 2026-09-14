@@ -80,6 +80,33 @@ export function splitRemainingEqually(total: number, drafts: ShareChargeDraft[])
   return [...nextNamed, ...unnamed];
 }
 
+export function looksEvenSplit(total: number, drafts: ShareChargeDraft[]): boolean {
+  const named = drafts.filter((d) => d.owedByLabel.trim());
+  if (named.length === 0) return true;
+  if (named.some((d) => !d.amount.trim())) return true;
+  const expected = splitRemainingEqually(total, drafts);
+  const expectedNamed = expected.filter((d) => d.owedByLabel.trim());
+  return named.every((d, i) => Math.abs((Number(d.amount) || 0) - (Number(expectedNamed[i]?.amount) || 0)) <= 0.02);
+}
+
+export const AWAITING_REPAYMENT_CATEGORY_KEY = "-1";
+
+export function shareCollectedAmount(summary?: BudgetTransactionShareSummary | null): number {
+  const charges = summary?.charges ?? [];
+  let n = 0;
+  for (const c of charges) {
+    n += c.paidAmount;
+    if (c.status === "reimbursed") n += c.remaining;
+  }
+  return n;
+}
+
+/** Expense total still counting as spend (your share + still waiting). Collected repayments are excluded. */
+export function netExpenseAmount(row: { type: string; amount: number; shareSummary?: BudgetTransactionShareSummary | null }): number {
+  if (row.type !== "expense") return row.amount;
+  return Math.max(0, row.amount - shareCollectedAmount(row.shareSummary));
+}
+
 export function toSharePaymentInputs(drafts: SharePaymentDraft[]): BudgetSharePaymentInput[] {
   return drafts
     .filter((d) => (Number(d.amount) || 0) > SHARE_EPS)

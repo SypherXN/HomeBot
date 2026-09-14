@@ -11,6 +11,7 @@ import { defaultTransactionDateForMonth } from "../../lib/budgetTransactionDate"
 import { isDepositAccount } from "../../lib/budgetMoney";
 import AccountReorderList from "./AccountReorderList";
 import AccountSelect from "./AccountSelect";
+import TransferAmountFields from "./TransferAmountFields";
 import BudgetOpeningBalanceWizard from "./BudgetOpeningBalanceWizard";
 import ColorSwatchPicker from "./ColorSwatchPicker";
 
@@ -49,6 +50,7 @@ export default function BudgetAccountsPanel({
   const [xferFrom, setXferFrom] = useState("");
   const [xferTo, setXferTo] = useState("");
   const [xferAmount, setXferAmount] = useState("");
+  const [xferToAmount, setXferToAmount] = useState("");
   const [xferNote, setXferNote] = useState("");
   const [xferDate, setXferDate] = useState(() => defaultTransactionDateForMonth(month));
   const [busy, setBusy] = useState(false);
@@ -129,12 +131,14 @@ export default function BudgetAccountsPanel({
     try {
       await postBudgetTransfer(token, actor, {
         amountInput: xferAmount.trim(),
+        toAmountInput: xferToAmount.trim() || undefined,
         fromAccountId: Number(xferFrom),
         toAccountId: Number(xferTo),
         note: xferNote.trim() || undefined,
         transactionDate: xferDate || undefined,
       });
       setXferAmount("");
+      setXferToAmount("");
       setXferNote("");
       await onSaved();
       await reloadAccounts();
@@ -234,8 +238,9 @@ export default function BudgetAccountsPanel({
         </label>
       </div>
       <p className="mb-3 text-xs text-slate-500">
-        Track balances across checking, savings, or credit accounts. Transfers move money between accounts without
-        affecting category totals.
+        Track balances across checking, savings, cash, or credit. Transfers move money between accounts without
+        affecting category totals. Gift cards that cost less than they load (Costco $80 → DoorDash $100) use two
+        amounts — the extra is a bonus on the destination balance, not income.
       </p>
 
       {showOpeningWizard && actor && (
@@ -457,12 +462,11 @@ export default function BudgetAccountsPanel({
               placeholder="To"
               required
             />
-            <input
-              value={xferAmount}
-              onChange={(e) => setXferAmount(e.target.value)}
-              placeholder="Amount"
-              required
-              className="w-full hb-input px-2 py-1 text-sm text-slate-100"
+            <TransferAmountFields
+              paid={xferAmount}
+              received={xferToAmount}
+              onPaidChange={setXferAmount}
+              onReceivedChange={setXferToAmount}
             />
             <label className="block text-xs text-slate-400">
               Date

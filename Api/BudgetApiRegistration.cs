@@ -253,9 +253,11 @@ public static class BudgetApiRegistration
                     body.ToAccountId,
                     body.TransactionDate ?? DateTime.UtcNow.ToString("yyyy-MM-dd"),
                     body.Note,
-                    actor);
+                    actor,
+                    body.ToAmountInput,
+                    body.Merchant);
                 await BudgetApiDiscordNotify.TransferCreatedAsync(
-                    root, svc, body.AmountInput, body.FromAccountId, body.ToAccountId, actor);
+                    root, svc, body.AmountInput, body.FromAccountId, body.ToAccountId, actor, body.ToAmountInput);
                 return Results.Created($"/api/budget/transactions/{id}", new { id });
             }
             catch (ArgumentException ex)
@@ -294,7 +296,9 @@ public static class BudgetApiRegistration
                     shareCharges: body.ShareCharges,
                     applyShareCharges: body.ShareCharges != null,
                     sharePayments: body.SharePayments,
-                    applySharePayments: body.SharePayments != null);
+                    applySharePayments: body.SharePayments != null,
+                    transferToAmountInput: body.TransferToAmountInput,
+                    applyTransferToAmount: body.TransferToAmountInput != null);
                 return ok ? Results.Ok(new { ok = true }) : ApiResults.NotFound("Transaction not found.", "not_found");
             }
             catch (ArgumentException ex)
