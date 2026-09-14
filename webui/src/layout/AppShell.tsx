@@ -233,7 +233,7 @@ export default function AppShell() {
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       {/* Desktop sidebar */}
-      <aside className="hb-sidebar hidden md:flex md:w-60 md:shrink-0 md:flex-col">
+      <aside className="hb-sidebar hidden md:sticky md:top-0 md:flex md:h-screen md:w-60 md:shrink-0 md:flex-col md:self-start md:overflow-y-auto md:overscroll-y-contain">
         <div className="flex items-center gap-3 px-4 pb-4 pt-4">
           <BrandMark />
           <div className="min-w-0">
