@@ -16,6 +16,7 @@ import {
 import AccountSelect from "./AccountSelect";
 import TransferAmountFields from "./TransferAmountFields";
 import { BudgetExpenseShareEditor, BudgetReimbursementEditor } from "./BudgetShareEditors";
+import { FORM_INPUT_CLASS } from "../../lib/formField";
 import {
   emptyShareChargeDraft,
   shareChargeError,
@@ -233,10 +234,10 @@ export default function BudgetTransactionForm({
           inputMode="decimal"
           value={formAmount}
           onChange={(e) => setFormAmount(e.target.value)}
-          className="w-full hb-input px-3 py-2 text-slate-100"
+          className={FORM_INPUT_CLASS}
         />
       )}
-      <label className="block text-xs text-slate-400">
+      <label className="block w-full min-w-0 text-xs text-slate-400">
         Date
         <span className="ml-1 font-normal text-slate-500">(which month this counts toward)</span>
         <input
@@ -244,7 +245,7 @@ export default function BudgetTransactionForm({
           required
           value={formDate}
           onChange={(e) => setFormDate(e.target.value)}
-          className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
+          className={`mt-1 ${FORM_INPUT_CLASS}`}
         />
       </label>
 

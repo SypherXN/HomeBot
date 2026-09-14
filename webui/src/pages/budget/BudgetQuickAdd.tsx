@@ -7,6 +7,7 @@ import DiscordMemberSelect from "../../components/DiscordMemberSelect";
 import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster";
 import { useMerchantSuggestions } from "../../hooks/useMerchantSuggestions";
 import { BudgetExpenseShareEditor, BudgetReimbursementEditor } from "./BudgetShareEditors";
+import { FORM_INPUT_CLASS } from "../../lib/formField";
 import {
   emptyShareChargeDraft,
   shareChargeError,
@@ -270,16 +271,18 @@ export default function BudgetQuickAdd({
         </>
       )}
       {expanded && (
-        <div className="grid gap-2 rounded-lg border border-slate-800 bg-slate-950/40 p-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 rounded-lg border border-slate-800 bg-slate-950/40 p-3 sm:grid-cols-2">
           <DiscordMemberSelect
             token={token}
             label="Who spent / received"
             value={spender}
             sharedRoster={roster}
             onPickUserId={setSpender}
+            className="min-w-0"
           />
           {accounts.filter((a) => a.isActive !== false && (type !== "income" || isDepositAccount(a.accountType))).length > 0 && (
             <AccountSelect
+              className="min-w-0"
               accounts={accounts.filter(
                 (a) => a.isActive !== false && (type !== "income" || isDepositAccount(a.accountType))
               )}
@@ -289,18 +292,24 @@ export default function BudgetQuickAdd({
               showBalance
             />
           )}
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="hb-input px-3 py-2 text-sm text-slate-100"
-          />
-          <input
-            placeholder="Note"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            className="hb-input px-3 py-2 text-sm text-slate-100"
-          />
+          <label className="block min-w-0 text-xs text-slate-400 sm:col-span-1">
+            Date
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className={`mt-1 ${FORM_INPUT_CLASS}`}
+            />
+          </label>
+          <label className="block min-w-0 text-xs text-slate-400 sm:col-span-1">
+            Note
+            <input
+              placeholder="Optional"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className={`mt-1 ${FORM_INPUT_CLASS}`}
+            />
+          </label>
         </div>
       )}
       {error && <p className="text-sm text-red-300">{error}</p>}

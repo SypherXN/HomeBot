@@ -11,6 +11,7 @@ import type { DiscordGuildRosterState } from "../hooks/useDiscordGuildRoster";
 import { postCalendarItem } from "../api";
 import { defaultStartTimeForDate } from "../lib/calendarDefaults";
 import { CALENDAR_TIME_ZONE_OPTIONS } from "./timeZoneOptions";
+import { FORM_INPUT_CLASS } from "../lib/formField";
 
 type Mode = "event" | "task";
 
@@ -356,8 +357,7 @@ function normalizeHm(t: string): string {
   return "09:00:00";
 }
 
-const inputClass =
-  "box-border block min-w-0 w-full max-w-full hb-input px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500";
+const inputClass = FORM_INPUT_CLASS;
 
 function Field({
   label,

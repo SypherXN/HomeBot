@@ -4,6 +4,7 @@ import Sheet from "../../components/Sheet";
 import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster";
 import { memberPickerLabel } from "../../lib/memberDisplay";
 import { isDepositAccount, isIncomeLikeType } from "../../lib/budgetMoney";
+import { FORM_INPUT_CLASS } from "../../lib/formField";
 import { transferReceivedAmount } from "../../lib/budgetTransfer";
 import AccountSelect from "./AccountSelect";
 import TransferAmountFields from "./TransferAmountFields";
@@ -223,14 +224,14 @@ export default function BudgetTransactionEditModal({
               className="w-full hb-input px-3 py-2 text-slate-100"
             />
           )}
-          <label className="block text-xs text-slate-400">
+          <label className="block w-full min-w-0 text-xs text-slate-400">
             Date
             <span className="ml-1 font-normal text-slate-500">(which month this counts toward)</span>
             <input
               type="date"
               value={txDate}
               onChange={(e) => setTxDate(e.target.value)}
-              className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
+              className={`mt-1 ${FORM_INPUT_CLASS}`}
             />
           </label>
           <MemberIdField

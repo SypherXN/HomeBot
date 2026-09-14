@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { useAuth } from "../auth/AuthContext";
 import { useTheme } from "../theme/ThemeProvider";
 import { useGuildRoster } from "../hooks/GuildRosterContext";
@@ -94,6 +93,7 @@ import BudgetMonthClose from "./budget/BudgetMonthClose";
 import BudgetMonthNoteBanner from "./budget/BudgetMonthNoteBanner";
 import BudgetOpeningBalanceWizard from "./budget/BudgetOpeningBalanceWizard";
 import BudgetOverviewHero from "./budget/BudgetOverviewHero";
+import BudgetPieChart from "./budget/BudgetPieChart";
 import BudgetQuickAdd, { type QuickAddPrefill } from "./budget/BudgetQuickAdd";
 import BudgetLedgerRow from "./budget/BudgetLedgerRow";
 import BudgetSharesPanel from "./budget/BudgetSharesPanel";
@@ -206,6 +206,7 @@ export default function BudgetPage() {
   const ledgerSentinelRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<HTMLDivElement>(null);
   const [shareBusy, setShareBusy] = useState(false);
+  const [selectedChartIndex, setSelectedChartIndex] = useState<number | null>(null);
   const [monthTxAll, setMonthTxAll] = useState<BudgetTransactionListItem[]>([]);
   const [budgetMode, setBudgetMode] = useState<BudgetMode>(() => loadBudgetMode());
   const [budgetDensity, setBudgetDensity] = useState<BudgetDensity>(() => loadBudgetDensity());
@@ -448,7 +449,8 @@ export default function BudgetPage() {
     return () => obs.disconnect();
   }, [tab, ledgerHasNext, ledgerLoadingMore, ledgerPage, loadTx]);
 
-  const chartData = (chartMode === "category" ? byCategory : byUser).map((slice) => ({
+  const chartSlices = chartMode === "category" ? byCategory : byUser;
+  const chartData = chartSlices.map((slice) => ({
     key: slice.key,
     label:
       chartMode === "category"
@@ -456,6 +458,10 @@ export default function BudgetPage() {
         : memberUsername(roster.data, slice.key, slice.label),
     total: slice.total,
   }));
+
+  useEffect(() => {
+    setSelectedChartIndex(null);
+  }, [chartMode, month, byCategory, byUser]);
 
   function sliceColor(slice: BudgetSummarySlice, index: number): string {
     if (chartMode === "category" && slice.key === AWAITING_REPAYMENT_CATEGORY_KEY) {
@@ -701,9 +707,8 @@ export default function BudgetPage() {
     saveBudgetDensity(d);
   }
 
-  function onPieClick(index: number) {
-    const slices = chartMode === "category" ? byCategory : byUser;
-    const slice = slices[index];
+  function openChartSliceInLedger(index: number) {
+    const slice = chartSlices[index];
     if (!slice) return;
     if (chartMode === "category") {
       if (slice.key === AWAITING_REPAYMENT_CATEGORY_KEY) {
@@ -1016,40 +1021,17 @@ export default function BudgetPage() {
               {chartData.length === 0 ? (
                 <p className="text-sm text-slate-500">No expense data for {formatMonthLong(month)} yet.</p>
               ) : (
-                <>
-                  <div ref={chartRef} className="h-72 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={chartData}
-                          dataKey="total"
-                          nameKey="label"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={100}
-                          label={({ name, percent }) => {
-                            const pct = typeof percent === "number" ? (percent * 100).toFixed(0) : "0";
-                            return `${String(name ?? "")} ${pct}%`;
-                          }}
-                        >
-                          {(chartMode === "category" ? byCategory : byUser).map((slice, i) => (
-                            <Cell
-                              key={slice.key}
-                              fill={sliceColor(slice, i)}
-                              onClick={() => onPieClick(i)}
-                              cursor="pointer"
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(v) => `$${formatMoney(Number(v ?? 0))}`} />
-                        <Legend />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    Tap a slice to open it in the Ledger. Awaiting repayment opens Splits.
-                  </p>
-                </>
+                <BudgetPieChart
+                  chartRef={chartRef}
+                  slices={chartData}
+                  colors={(_slice, i) => {
+                    const raw = chartSlices[i];
+                    return raw ? sliceColor(raw, i) : chartColors[i % chartColors.length];
+                  }}
+                  selectedIndex={selectedChartIndex}
+                  onSelectIndex={setSelectedChartIndex}
+                  onOpenInLedger={openChartSliceInLedger}
+                />
               )}
             </section>
           ) : null}
