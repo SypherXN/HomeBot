@@ -11,7 +11,7 @@ import type { DiscordGuildRosterState } from "../hooks/useDiscordGuildRoster";
 import { postCalendarItem } from "../api";
 import { defaultStartTimeForDate } from "../lib/calendarDefaults";
 import { CALENDAR_TIME_ZONE_OPTIONS } from "./timeZoneOptions";
-import { FORM_INPUT_CLASS } from "../lib/formField";
+import { DATE_FIELD_WRAP_CLASS, FORM_INPUT_CLASS } from "../lib/formField";
 
 type Mode = "event" | "task";
 
@@ -191,12 +191,14 @@ export default function AddItemModal({
           <>
             <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="Start date">
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className={inputClass}
-                />
+                <div className={DATE_FIELD_WRAP_CLASS}>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
               </Field>
               <Field label="Start time">
                 <input
@@ -208,7 +210,14 @@ export default function AddItemModal({
                 />
               </Field>
               <Field label="End date (optional)">
-                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inputClass} />
+                <div className={DATE_FIELD_WRAP_CLASS}>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
               </Field>
               <Field label="End time (optional)">
                 <input

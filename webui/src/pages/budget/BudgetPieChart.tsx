@@ -1,5 +1,6 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import ChartTouchShell from "../../components/ChartTouchShell";
 import { formatMoney } from "../../lib/budgetMoney";
 
 export type BudgetPieSlice = {
@@ -78,32 +79,36 @@ export default function BudgetPieChart({
   return (
     <div className="space-y-3">
       <div ref={chartRef} className="mx-auto h-52 w-full max-w-md sm:h-64 md:h-72">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={slices}
-              dataKey="total"
-              nameKey="label"
-              cx="50%"
-              cy="50%"
-              outerRadius="88%"
-              innerRadius={0}
-              paddingAngle={1}
-              onClick={(_, index) => handleSliceClick(index)}
-            >
-              {slices.map((slice, i) => (
-                <Cell
-                  key={slice.key}
-                  fill={colors(slice, i)}
-                  stroke="var(--hb-chart-slice-stroke, rgb(15 23 42))"
-                  strokeWidth={selectedIndex === i ? 2 : 1}
-                  cursor="pointer"
-                />
-              ))}
-            </Pie>
-            <Tooltip formatter={(v) => `$${formatMoney(Number(v ?? 0))}`} />
-          </PieChart>
-        </ResponsiveContainer>
+        <ChartTouchShell className="h-full w-full">
+          {({ hideTooltip }) => (
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={slices}
+                  dataKey="total"
+                  nameKey="label"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius="88%"
+                  innerRadius={0}
+                  paddingAngle={1}
+                  onClick={(_, index) => handleSliceClick(index)}
+                >
+                  {slices.map((slice, i) => (
+                    <Cell
+                      key={slice.key}
+                      fill={colors(slice, i)}
+                      stroke="var(--hb-chart-slice-stroke, rgb(15 23 42))"
+                      strokeWidth={selectedIndex === i ? 2 : 1}
+                      cursor="pointer"
+                    />
+                  ))}
+                </Pie>
+                <Tooltip active={hideTooltip ? false : undefined} formatter={(v) => `$${formatMoney(Number(v ?? 0))}`} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </ChartTouchShell>
       </div>
 
       {selected ? (

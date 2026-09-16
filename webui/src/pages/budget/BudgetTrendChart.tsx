@@ -10,6 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import type { BudgetTrendPoint } from "../../api";
+import ChartTouchShell from "../../components/ChartTouchShell";
 import { useTheme } from "../../theme/ThemeProvider";
 
 function formatMoney(n: number): string {
@@ -68,38 +69,46 @@ export default function BudgetTrendChart({ trends }: Props) {
     <div className="space-y-4">
       <div className="h-56 w-full">
         <p className="mb-1 text-xs text-slate-500">Total expenses by month</p>
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={totals}>
-            <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" />
-            <XAxis dataKey="month" stroke={axisStroke} tick={{ fontSize: 11 }} />
-            <YAxis stroke={axisStroke} tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v}`} />
-            <Tooltip formatter={(v) => `$${formatMoney(Number(v ?? 0))}`} />
-            <Line type="monotone" dataKey="total" stroke={totalStroke} strokeWidth={2} dot={false} />
-          </LineChart>
-        </ResponsiveContainer>
+        <ChartTouchShell className="h-full w-full">
+          {({ hideTooltip }) => (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={totals}>
+                <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" />
+                <XAxis dataKey="month" stroke={axisStroke} tick={{ fontSize: 11 }} />
+                <YAxis stroke={axisStroke} tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v}`} />
+                <Tooltip active={hideTooltip ? false : undefined} formatter={(v) => `$${formatMoney(Number(v ?? 0))}`} />
+                <Line type="monotone" dataKey="total" stroke={totalStroke} strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </ChartTouchShell>
       </div>
       {topLabels.length > 0 && (
         <div className="h-56 w-full">
           <p className="mb-1 text-xs text-slate-500">Top categories</p>
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={topSeries}>
-              <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" />
-              <XAxis dataKey="month" stroke={axisStroke} tick={{ fontSize: 11 }} />
-              <YAxis stroke={axisStroke} tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v) => `$${formatMoney(Number(v ?? 0))}`} />
-              <Legend />
-              {topLabels.map((label, i) => (
-                <Line
-                  key={label}
-                  type="monotone"
-                  dataKey={label}
-                  stroke={colors[i % colors.length]}
-                  strokeWidth={2}
-                  dot={false}
-                />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
+          <ChartTouchShell className="h-full w-full">
+            {({ hideTooltip }) => (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={topSeries}>
+                  <CartesianGrid stroke={gridStroke} strokeDasharray="3 3" />
+                  <XAxis dataKey="month" stroke={axisStroke} tick={{ fontSize: 11 }} />
+                  <YAxis stroke={axisStroke} tick={{ fontSize: 11 }} />
+                  <Tooltip active={hideTooltip ? false : undefined} formatter={(v) => `$${formatMoney(Number(v ?? 0))}`} />
+                  <Legend />
+                  {topLabels.map((label, i) => (
+                    <Line
+                      key={label}
+                      type="monotone"
+                      dataKey={label}
+                      stroke={colors[i % colors.length]}
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </ChartTouchShell>
         </div>
       )}
     </div>

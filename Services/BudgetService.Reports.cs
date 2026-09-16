@@ -76,8 +76,10 @@ public partial class BudgetService
     {
         _ = scope;
         var cats = GetCategories().ToDictionary(c => c.Id, c => c.Name);
+        var allTx = LoadAllTransactions();
+        var costFactors = BudgetAccountBalance.BuildAccountCostFactors(allTx);
         var list = new List<ExpenseRow>();
-        foreach (var t in LoadAllTransactions().Where(t => MonthContainsDate(month, t.TransactionDate)))
+        foreach (var t in allTx.Where(t => MonthContainsDate(month, t.TransactionDate)))
         {
             if (t.Type is not ("expense" or "income"))
                 continue;
@@ -93,19 +95,22 @@ public partial class BudgetService
                         var uid = s.SpentByUserId ?? t.SpentByUserId;
                         var cid = s.CategoryId ?? t.CategoryId;
                         var label = cid.HasValue && cats.TryGetValue(cid.Value, out var n) ? n : "Uncategorized";
-                        AddFilteredExpenseRow(list, t.Type, cid, label, uid, s.Amount * scale * rate,
+                        AddFilteredExpenseRow(list, t.Type, cid, label, uid,
+                            ExpenseHomeAmount(t, s.Amount * scale * rate, costFactors),
                             spentByUserId, categoryId);
                     }
                 }
                 else
                 {
                     var label = t.CategoryName ?? "Uncategorized";
-                    AddFilteredExpenseRow(list, t.Type, t.CategoryId, label, t.SpentByUserId, keep * rate,
+                    AddFilteredExpenseRow(list, t.Type, t.CategoryId, label, t.SpentByUserId,
+                        ExpenseHomeAmount(t, keep * rate, costFactors),
                         spentByUserId, categoryId);
                 }
 
                 AddFilteredExpenseRow(list, t.Type, AwaitingRepaymentCategoryId, AwaitingRepaymentLabel,
-                    t.SpentByUserId, awaiting * rate, spentByUserId, categoryId);
+                    t.SpentByUserId, ExpenseHomeAmount(t, awaiting * rate, costFactors),
+                    spentByUserId, categoryId);
                 continue;
             }
 
@@ -116,7 +121,8 @@ public partial class BudgetService
                     var uid = s.SpentByUserId ?? t.SpentByUserId;
                     var cid = s.CategoryId ?? t.CategoryId;
                     var label = cid.HasValue && cats.TryGetValue(cid.Value, out var n) ? n : "Uncategorized";
-                    AddFilteredExpenseRow(list, t.Type, cid, label, uid, s.Amount * t.ExchangeRateToHome,
+                    AddFilteredExpenseRow(list, t.Type, cid, label, uid,
+                        ExpenseHomeAmount(t, s.Amount * t.ExchangeRateToHome, costFactors),
                         spentByUserId, categoryId);
                 }
             }
@@ -124,7 +130,8 @@ public partial class BudgetService
             {
                 var label = t.CategoryName ?? "Uncategorized";
                 AddFilteredExpenseRow(list, t.Type, t.CategoryId, label, t.SpentByUserId,
-                    t.Amount * t.ExchangeRateToHome, spentByUserId, categoryId);
+                    ExpenseHomeAmount(t, t.Amount * t.ExchangeRateToHome, costFactors),
+                    spentByUserId, categoryId);
             }
         }
 
@@ -149,6 +156,12 @@ public partial class BudgetService
         keep = Math.Max(0, t.Amount - awaiting - collected);
         return true;
     }
+
+    private static double ExpenseHomeAmount(
+        BudgetTransactionListItemModel t,
+        double homeAmount,
+        IReadOnlyDictionary<int, double> costFactors) =>
+        BudgetAccountBalance.ApplyExpenseCostFactor(t.Type, t.AccountId, homeAmount, costFactors);
 
     private static void AddFilteredExpenseRow(
         List<ExpenseRow> list,

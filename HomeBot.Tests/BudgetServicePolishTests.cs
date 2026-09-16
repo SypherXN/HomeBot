@@ -329,6 +329,37 @@ public sealed class BudgetServicePolishTests : IDisposable
     }
 
     [Fact]
+    public void Gift_card_expense_counts_at_cost_basis_in_reports()
+    {
+        var checking = _budget.CreateAccount("Checking", "checking", "USD", null, Actor);
+        var dash = _budget.CreateAccount("DoorDash", "cash", "USD", null, Actor);
+        var foodId = _budget.CreateCategory("Food", null, null, "household", false, Actor);
+        _budget.CreateTransfer("80", checking, dash, "2026-09-13", "Costco gift cards", Actor, "100", "Costco");
+        _budget.CreateTransaction(
+            "expense",
+            "50",
+            foodId,
+            Actor,
+            "2026-09-14",
+            null,
+            null,
+            "DoorDash order",
+            dash,
+            false,
+            "USD",
+            1,
+            null,
+            null,
+            Actor);
+
+        var summary = _budget.GetMonthSummary("2026-09", null, null, null);
+        Assert.Equal(40, summary.TotalExpenses, 2);
+
+        var byCat = _budget.GetSummaryByCategory("2026-09", null, null);
+        Assert.Equal(40, Assert.Single(byCat, c => c.Label == "Food").Total, 2);
+    }
+
+    [Fact]
     public void UpdateTransaction_changes_date_spender_and_tags()
     {
         var catId = _budget.CreateCategory("Food", null, null, "household", false, Actor);

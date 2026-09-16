@@ -4,9 +4,10 @@ import Sheet from "../../components/Sheet";
 import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster";
 import { memberPickerLabel } from "../../lib/memberDisplay";
 import { isDepositAccount, isIncomeLikeType } from "../../lib/budgetMoney";
-import { FORM_INPUT_CLASS } from "../../lib/formField";
+import { DATE_FIELD_WRAP_CLASS, FORM_INPUT_CLASS } from "../../lib/formField";
 import { transferReceivedAmount } from "../../lib/budgetTransfer";
 import AccountSelect from "./AccountSelect";
+import CategorySelect from "./CategorySelect";
 import TransferAmountFields from "./TransferAmountFields";
 import { BudgetExpenseShareEditor, BudgetReimbursementEditor } from "./BudgetShareEditors";
 import {
@@ -227,12 +228,14 @@ export default function BudgetTransactionEditModal({
           <label className="block w-full min-w-0 text-xs text-slate-400">
             Date
             <span className="ml-1 font-normal text-slate-500">(which month this counts toward)</span>
-            <input
-              type="date"
-              value={txDate}
-              onChange={(e) => setTxDate(e.target.value)}
-              className={`mt-1 ${FORM_INPUT_CLASS}`}
-            />
+            <div className={DATE_FIELD_WRAP_CLASS}>
+              <input
+                type="date"
+                value={txDate}
+                onChange={(e) => setTxDate(e.target.value)}
+                className={FORM_INPUT_CLASS}
+              />
+            </div>
           </label>
           <MemberIdField
             token={token}
@@ -242,18 +245,12 @@ export default function BudgetTransactionEditModal({
             sharedRoster={roster}
             actorId={actor}
           />
-          <select
+          <CategorySelect
+            categories={categories}
             value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            className="w-full hb-input px-3 py-2 text-slate-100"
-          >
-            <option value="">Category</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+            onChange={setCategoryId}
+            placeholder="Category"
+          />
           {row.type === "transfer" && accounts.length > 0 && (
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="block text-xs text-slate-400">

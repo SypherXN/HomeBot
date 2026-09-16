@@ -113,6 +113,52 @@ public static class BudgetAccountBalance
         return amount;
     }
 
+    /// <summary>
+    /// Weighted cost basis for accounts funded via gift-card-style transfers (paid less than credited).
+    /// Expenses from those accounts count at paid/credited rate in budget reports.
+    /// </summary>
+    public static Dictionary<int, double> BuildAccountCostFactors(IEnumerable<BudgetTransactionListItemModel> transactions)
+    {
+        const double epsilon = 0.0001;
+        var paid = new Dictionary<int, double>();
+        var credited = new Dictionary<int, double>();
+        foreach (var t in transactions)
+        {
+            if (!string.Equals(t.Type, "transfer", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (t.TransferToAccountId is not int to)
+                continue;
+            paid[to] = paid.GetValueOrDefault(to) + t.Amount;
+            credited[to] = credited.GetValueOrDefault(to) + TransferReceivedAmount(t);
+        }
+
+        var factors = new Dictionary<int, double>();
+        foreach (var (accountId, credit) in credited)
+        {
+            if (credit <= epsilon)
+                continue;
+            var p = paid.GetValueOrDefault(accountId);
+            if (p <= epsilon || credit <= p + epsilon)
+                continue;
+            factors[accountId] = p / credit;
+        }
+
+        return factors;
+    }
+
+    public static double ApplyExpenseCostFactor(
+        string type,
+        int? accountId,
+        double homeAmount,
+        IReadOnlyDictionary<int, double> factors)
+    {
+        if (!string.Equals(type, "expense", StringComparison.OrdinalIgnoreCase))
+            return homeAmount;
+        if (accountId is not int aid || !factors.TryGetValue(aid, out var factor))
+            return homeAmount;
+        return homeAmount * factor;
+    }
+
     private static void ApplyDelta(SqliteConnection conn, SqliteTransaction tx, int accountId, string type, double amount)
     {
         var delta = type switch

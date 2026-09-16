@@ -229,6 +229,19 @@
     min-height: 2.75rem;
     width: 100%;
     max-width: 100%;
+    min-width: 0;
+    -webkit-min-logical-width: 0;
+  }
+
+  .hb-dialog .hb-input[type="date"],
+  .hb-dialog .hb-input[type="time"],
+  .hb-dialog .hb-input[type="datetime-local"],
+  .hb-dialog .hb-input[type="month"] {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
 
   /* Soft (secondary) button surface */
@@ -297,7 +310,7 @@
   /* Bottom sheet (mobile modals); .hb-dialog centers on md+ */
   .hb-sheet,
   .hb-dialog {
-    @apply fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-b-0 border-slate-800 bg-slate-950 pb-[max(1rem,env(safe-area-inset-bottom))];
+    @apply fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[92dvh] w-full max-w-lg min-w-0 overflow-x-hidden overflow-y-auto rounded-t-3xl border border-b-0 border-slate-800 bg-slate-950 pb-[max(1rem,env(safe-area-inset-bottom))];
     box-shadow: 0 -16px 48px -16px rgb(0 0 0 / 0.75);
     animation: hb-sheet-in 0.22s ease-out;
   }

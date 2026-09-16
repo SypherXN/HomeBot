@@ -1,50 +1,42 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
-import type { BudgetAccount } from "../../api";
-import { filterAccounts } from "../../lib/accountSearch";
-import { formatMoney } from "../../lib/budgetMoney";
+import type { BudgetCategory } from "../../api";
+import { categoryDotStyle } from "../../lib/budgetMoney";
+import { filterCategories } from "../../lib/categorySearch";
 import { measureComboboxMenu, type ComboboxMenuPos } from "../../lib/comboboxPosition";
 
 type Props = {
-  accounts: BudgetAccount[];
+  categories: BudgetCategory[];
   value: string;
   onChange: (id: string) => void;
   placeholder?: string;
   disabled?: boolean;
   required?: boolean;
   className?: string;
-  showBalance?: boolean;
   allowEmpty?: boolean;
   id?: string;
 };
 
-type Row = { id: string; account: BudgetAccount | null };
+type Row = { id: string; category: BudgetCategory | null };
 
-function accountButtonLabel(a: BudgetAccount, showBalance: boolean): string {
-  if (!showBalance) return a.name;
-  const sign = a.currentBalance < 0 ? "−" : "";
-  return `${a.name} (${sign}$${formatMoney(Math.abs(a.currentBalance))})`;
-}
-
-function buildRows(accounts: BudgetAccount[], query: string, allowEmpty: boolean): Row[] {
-  const filtered = filterAccounts(accounts, query).map((account) => ({
-    id: String(account.id),
-    account,
+function buildRows(categories: BudgetCategory[], query: string, allowEmpty: boolean): Row[] {
+  const filtered = filterCategories(categories, query).map((category) => ({
+    id: String(category.id),
+    category,
   }));
-  if (allowEmpty && !query.trim()) return [{ id: "", account: null }, ...filtered];
+  if (allowEmpty && !query.trim()) return [{ id: "", category: null }, ...filtered];
   return filtered;
 }
 
-/** Searchable account picker — native selects can't host a search field. */
-export default function AccountSelect({
-  accounts,
+/** Searchable category picker — native selects can't host a search field. */
+export default function CategorySelect({
+  categories,
   value,
   onChange,
-  placeholder = "Choose account",
+  placeholder = "Choose category",
   disabled = false,
   required = false,
   className = "",
-  showBalance = false,
   allowEmpty = true,
   id,
 }: Props) {
@@ -57,8 +49,8 @@ export default function AccountSelect({
   const [activeIndex, setActiveIndex] = useState(0);
   const [pos, setPos] = useState<ComboboxMenuPos | null>(null);
 
-  const selected = accounts.find((a) => String(a.id) === value);
-  const rows = buildRows(accounts, query, allowEmpty);
+  const selected = categories.find((c) => String(c.id) === value);
+  const rows = buildRows(categories, query, allowEmpty);
 
   function updatePos() {
     const el = rootRef.current;
@@ -85,11 +77,10 @@ export default function AccountSelect({
   useEffect(() => {
     if (!open) return;
     setQuery("");
-    const found = accounts.findIndex((a) => String(a.id) === value);
+    const found = categories.findIndex((c) => String(c.id) === value);
     setActiveIndex(allowEmpty ? (found >= 0 ? found + 1 : 0) : Math.max(0, found));
     const t = window.setTimeout(() => searchRef.current?.focus(), 0);
     return () => window.clearTimeout(t);
-    // Highlight the current value only when the menu opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -151,8 +142,8 @@ export default function AccountSelect({
       value={query}
       onChange={(e) => setQuery(e.target.value)}
       onKeyDown={onSearchKey}
-      placeholder="Search accounts…"
-      aria-label="Search accounts"
+      placeholder="Search categories…"
+      aria-label="Search categories"
       aria-controls={listId}
       className="w-full rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
     />
@@ -162,15 +153,15 @@ export default function AccountSelect({
     <ul
       id={listId}
       role="listbox"
-      aria-label="Accounts"
+      aria-label="Categories"
       className="min-h-0 flex-1 overflow-y-auto py-1"
     >
       {rows.length === 0 ? (
-        <li className="px-3 py-2 text-sm text-slate-500">No accounts match.</li>
+        <li className="px-3 py-2 text-sm text-slate-500">No categories match.</li>
       ) : (
         rows.map((row, i) => {
-          const isEmpty = row.account == null;
-          const acc = row.account;
+          const isEmpty = row.category == null;
+          const cat = row.category;
           const isActive = i === activeIndex;
           const isSelected = row.id === value;
           return (
@@ -180,23 +171,18 @@ export default function AccountSelect({
                 role="option"
                 aria-selected={isSelected}
                 id={`${listId}-opt-${i}`}
-                className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm ${
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm ${
                   isActive ? "bg-slate-800 text-white" : "text-slate-200 hover:bg-slate-800/70"
                 }`}
                 onMouseEnter={() => setActiveIndex(i)}
                 onClick={() => pick(row.id)}
               >
+                {cat ? (
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={categoryDotStyle(cat.color)} aria-hidden />
+                ) : null}
                 <span className={`min-w-0 truncate ${isEmpty ? "text-slate-500" : ""}`}>
-                  {isEmpty ? placeholder : acc!.name}
+                  {isEmpty ? placeholder : cat!.name}
                 </span>
-                {acc && (
-                  <span className="shrink-0 text-[11px] text-slate-500">
-                    {acc.accountType}
-                    {showBalance
-                      ? ` · ${acc.currentBalance < 0 ? "−" : ""}$${formatMoney(Math.abs(acc.currentBalance))}`
-                      : ""}
-                  </span>
-                )}
               </button>
             </li>
           );
@@ -242,8 +228,13 @@ export default function AccountSelect({
         onClick={() => !disabled && setOpen((v) => !v)}
         className="flex w-full min-w-0 items-center justify-between gap-2 hb-input px-3 py-2 text-left text-sm text-slate-100 disabled:opacity-50"
       >
-        <span className={`min-w-0 truncate ${selected ? "text-slate-100" : "text-slate-500"}`}>
-          {selected ? accountButtonLabel(selected, showBalance) : placeholder}
+        <span className="flex min-w-0 items-center gap-2 truncate">
+          {selected ? (
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={categoryDotStyle(selected.color)} aria-hidden />
+          ) : null}
+          <span className={`truncate ${selected ? "text-slate-100" : "text-slate-500"}`}>
+            {selected ? selected.name : placeholder}
+          </span>
         </span>
         <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden className="shrink-0 fill-slate-500">
           <path d="M2.2 4.2 6 8l3.8-3.8H2.2z" />

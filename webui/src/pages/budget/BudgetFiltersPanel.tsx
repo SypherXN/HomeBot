@@ -1,5 +1,7 @@
 import DiscordMemberSelect from "../../components/DiscordMemberSelect";
 import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster";
+import type { BudgetCategory } from "../../api";
+import CategorySelect from "./CategorySelect";
 
 export type BudgetFilters = {
   merchant: string;
@@ -14,6 +16,9 @@ type Props = {
   roster: DiscordGuildRosterState;
   spenderFilter: string;
   onSpenderFilter: (v: string) => void;
+  categoryFilter: string;
+  onCategoryFilter: (v: string) => void;
+  categories: BudgetCategory[];
   filters: BudgetFilters;
   onFiltersChange: (f: BudgetFilters) => void;
   allTags: string[];
@@ -26,6 +31,9 @@ export default function BudgetFiltersPanel({
   roster,
   spenderFilter,
   onSpenderFilter,
+  categoryFilter,
+  onCategoryFilter,
+  categories,
   filters,
   onFiltersChange,
   allTags,
@@ -43,6 +51,15 @@ export default function BudgetFiltersPanel({
           sharedRoster={roster}
           onPickUserId={onSpenderFilter}
         />
+        <div>
+          <label className="mb-1 block text-xs text-slate-400">Category</label>
+          <CategorySelect
+            categories={categories}
+            value={categoryFilter}
+            onChange={onCategoryFilter}
+            placeholder="All categories"
+          />
+        </div>
         <div>
           <label className="mb-1 block text-xs text-slate-400">Merchant contains</label>
           <input

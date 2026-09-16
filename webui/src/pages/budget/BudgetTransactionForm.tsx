@@ -14,9 +14,10 @@ import {
   type BudgetSplitInput,
 } from "../../api";
 import AccountSelect from "./AccountSelect";
+import CategorySelect from "./CategorySelect";
 import TransferAmountFields from "./TransferAmountFields";
 import { BudgetExpenseShareEditor, BudgetReimbursementEditor } from "./BudgetShareEditors";
-import { FORM_INPUT_CLASS } from "../../lib/formField";
+import { DATE_FIELD_WRAP_CLASS, FORM_INPUT_CLASS } from "../../lib/formField";
 import {
   emptyShareChargeDraft,
   shareChargeError,
@@ -240,13 +241,15 @@ export default function BudgetTransactionForm({
       <label className="block w-full min-w-0 text-xs text-slate-400">
         Date
         <span className="ml-1 font-normal text-slate-500">(which month this counts toward)</span>
-        <input
-          type="date"
-          required
-          value={formDate}
-          onChange={(e) => setFormDate(e.target.value)}
-          className={`mt-1 ${FORM_INPUT_CLASS}`}
-        />
+        <div className={DATE_FIELD_WRAP_CLASS}>
+          <input
+            type="date"
+            required
+            value={formDate}
+            onChange={(e) => setFormDate(e.target.value)}
+            className={FORM_INPUT_CLASS}
+          />
+        </div>
       </label>
 
       {formType === "transfer" ? (
@@ -352,18 +355,12 @@ export default function BudgetTransactionForm({
             </label>
           )}
           {!useSplits && (
-            <select
+            <CategorySelect
+              categories={categories}
               value={formCategoryId}
-              onChange={(e) => setFormCategoryId(e.target.value)}
-              className="w-full hb-input px-3 py-2 text-slate-100"
-            >
-              <option value="">Category (optional)</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+              onChange={setFormCategoryId}
+              placeholder="Category (optional)"
+            />
           )}
           {suggestion && String(suggestion.categoryId) !== formCategoryId && !useSplits && (
             <button

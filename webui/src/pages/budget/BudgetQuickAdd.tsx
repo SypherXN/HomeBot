@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { defaultTransactionDateForMonth } from "../../lib/budgetTransactionDate";
 import { isDepositAccount } from "../../lib/budgetMoney";
 import AccountSelect from "./AccountSelect";
+import CategorySelect from "./CategorySelect";
 import { postBudgetTransaction, type BudgetAccount, type BudgetCategory } from "../../api";
 import DiscordMemberSelect from "../../components/DiscordMemberSelect";
 import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster";
 import { useMerchantSuggestions } from "../../hooks/useMerchantSuggestions";
 import { BudgetExpenseShareEditor, BudgetReimbursementEditor } from "./BudgetShareEditors";
-import { FORM_INPUT_CLASS } from "../../lib/formField";
+import { DATE_FIELD_WRAP_CLASS, FORM_INPUT_CLASS } from "../../lib/formField";
 import {
   emptyShareChargeDraft,
   shareChargeError,
@@ -191,18 +192,13 @@ export default function BudgetQuickAdd({
             <option key={m} value={m} />
           ))}
         </datalist>
-        <select
+        <CategorySelect
+          className="min-w-0 max-w-40"
+          categories={categories}
           value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
-          className="hb-input max-w-40 px-3 py-2 text-slate-100"
-        >
-          <option value="">Category</option>
-          {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-          ))}
-        </select>
+          onChange={setCategoryId}
+          placeholder="Category"
+        />
         <button
           type="submit"
           disabled={
@@ -294,12 +290,14 @@ export default function BudgetQuickAdd({
           )}
           <label className="block min-w-0 text-xs text-slate-400 sm:col-span-1">
             Date
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className={`mt-1 ${FORM_INPUT_CLASS}`}
-            />
+            <div className={DATE_FIELD_WRAP_CLASS}>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className={FORM_INPUT_CLASS}
+              />
+            </div>
           </label>
           <label className="block min-w-0 text-xs text-slate-400 sm:col-span-1">
             Note

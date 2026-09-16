@@ -76,6 +76,7 @@ import BudgetAccountsStrip from "./budget/BudgetAccountsStrip";
 import BudgetAnnualSnapshot from "./budget/BudgetAnnualSnapshot";
 import BudgetAttentionInbox, { type AttentionItem } from "./budget/BudgetAttentionInbox";
 import BudgetCategoryEditor from "./budget/BudgetCategoryEditor";
+import CategorySelect from "./budget/CategorySelect";
 import BudgetTransactionEditModal from "./budget/BudgetTransactionEditModal";
 import BudgetCsvExport from "./budget/BudgetCsvExport";
 import BudgetAuditLog from "./budget/BudgetAuditLog";
@@ -1094,6 +1095,12 @@ export default function BudgetPage() {
               setLedgerPage(0);
               setSpenderFilter(v);
             }}
+            categoryFilter={categoryFilter != null ? String(categoryFilter) : ""}
+            onCategoryFilter={(v) => {
+              setLedgerPage(0);
+              setCategoryFilter(v ? Number(v) : null);
+            }}
+            categories={categories}
             filters={filters}
             onFiltersChange={setFilters}
             allTags={allTags}
@@ -1388,18 +1395,13 @@ export default function BudgetPage() {
         <div className="fixed inset-x-0 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-40 flex justify-center px-4 md:bottom-8">
           <div className="hb-card flex flex-wrap items-center gap-2 px-4 py-2.5 text-sm shadow-lg">
             <span className="text-slate-200">{selected.size} selected</span>
-            <select
+            <CategorySelect
+              className="min-w-[10rem]"
+              categories={categories}
               value={bulkCategoryId}
-              onChange={(e) => setBulkCategoryId(e.target.value)}
-              className="hb-input px-2 py-1 text-xs text-slate-100"
-            >
-              <option value="">Set category…</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+              onChange={setBulkCategoryId}
+              placeholder="Set category…"
+            />
             <button
               type="button"
               disabled={bulkBusy || !bulkCategoryId}
