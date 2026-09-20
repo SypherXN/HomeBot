@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { shouldIgnorePageSwipe } from "../lib/pageSwipe";
 
 type SwipeHandlers = {
   onTouchStart: (e: React.TouchEvent) => void;
@@ -6,8 +7,10 @@ type SwipeHandlers = {
 };
 
 /**
- * Horizontal swipe → step calendar period.
+ * Horizontal swipe to step calendar period.
  * Swipe left = next, swipe right = previous. Ignores mostly-vertical scrolls.
+ * Does not start when the touch began on an opted-out / competing target
+ * (see `shouldIgnorePageSwipe`).
  */
 export function useHorizontalSwipe(
   onSwipe: (direction: -1 | 1) => void,
@@ -18,6 +21,7 @@ export function useHorizontalSwipe(
 
   return {
     onTouchStart(e) {
+      if (shouldIgnorePageSwipe(e.target)) return;
       const t = e.touches[0];
       if (!t) return;
       startX.current = t.clientX;

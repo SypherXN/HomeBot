@@ -15,6 +15,10 @@ type Props = {
  * Mobile row gestures: swipe-left reveals Edit / Delete under the row;
  * swipe-right triggers the primary action (e.g. complete) with a green reveal.
  * Desktop users still use the inline buttons in children.
+ *
+ * The row owns its horizontal gesture: it opts out of page-level month swipes
+ * via `data-no-page-swipe` and stops touch propagation so parent page handlers
+ * never see the gesture.
  */
 export default function SwipeableRow({
   children,
@@ -33,7 +37,7 @@ export default function SwipeableRow({
   }
 
   return (
-    <div className="relative overflow-hidden">
+    <div className="relative overflow-hidden" data-no-page-swipe="">
       <div className="absolute inset-y-0 right-0 flex items-stretch">
         {onEdit && (
           <button
@@ -65,16 +69,19 @@ export default function SwipeableRow({
         className="relative bg-slate-950/95 transition-transform dark:bg-slate-950/95"
         style={{ transform: `translateX(${offset}px)`, backgroundColor: "var(--hb-row-bg, #0b1020)" }}
         onTouchStart={(e) => {
+          e.stopPropagation();
           startX.current = e.touches[0]?.clientX ?? null;
         }}
         onTouchMove={(e) => {
+          e.stopPropagation();
           if (startX.current == null) return;
           const dx = (e.touches[0]?.clientX ?? startX.current) - startX.current;
           const min = onDelete || onEdit ? -128 : 0;
           const max = onSwipeRight ? 96 : 0;
           setOffset(Math.max(min, Math.min(max, dx)));
         }}
-        onTouchEnd={() => {
+        onTouchEnd={(e) => {
+          e.stopPropagation();
           startX.current = null;
           setOffset((o) => {
             if (o >= 64 && onSwipeRight) {

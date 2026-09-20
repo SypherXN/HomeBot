@@ -9,6 +9,9 @@ type Props = {
 /**
  * On touch devices, Recharts tooltips otherwise stay visible after tap.
  * While the finger is down, allow the chart tooltip; hide it on release.
+ *
+ * Charts own their horizontal gesture (hold-drag to scrub), so the shell opts
+ * out of page-level month swipes via `data-no-page-swipe`.
  */
 export default function ChartTouchShell({ children, className = "" }: Props) {
   const coarse = useCoarsePointer();
@@ -19,9 +22,19 @@ export default function ChartTouchShell({ children, className = "" }: Props) {
   return (
     <div
       className={className}
-      onTouchStart={() => coarse && setTouching(true)}
-      onTouchEnd={() => setTouching(false)}
-      onTouchCancel={() => setTouching(false)}
+      data-no-page-swipe=""
+      onTouchStart={(e) => {
+        e.stopPropagation();
+        if (coarse) setTouching(true);
+      }}
+      onTouchEnd={(e) => {
+        e.stopPropagation();
+        setTouching(false);
+      }}
+      onTouchCancel={(e) => {
+        e.stopPropagation();
+        setTouching(false);
+      }}
     >
       {children({ hideTooltip })}
     </div>

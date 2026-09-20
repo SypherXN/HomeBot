@@ -43,7 +43,7 @@ export default function BudgetWeekHeatmap({ month, transactions }: Props) {
     <section className="hb-card p-4">
       <h2 className="mb-1 text-lg font-medium text-white">Spending by day</h2>
       <p className="mb-3 text-xs text-slate-500">Darker = more spent that weekday.</p>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" data-no-page-swipe="">
         <div className="inline-grid gap-1" style={{ gridTemplateColumns: `2.5rem repeat(7, 1.75rem)` }}>
           <span />
           {DOW.map((d) => (
@@ -77,3 +77,4 @@ export default function BudgetWeekHeatmap({ month, transactions }: Props) {
     </section>
   );
 }
+

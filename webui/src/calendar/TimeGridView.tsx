@@ -290,6 +290,7 @@ export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent
                     key={`${ev.id}@${ev.instanceStartUtc}`}
                     role="button"
                     tabIndex={0}
+                    data-no-page-swipe=""
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!didDragRef.current) onPickEvent(ev);
@@ -320,6 +321,7 @@ export default function TimeGridView({ dayYmds, displayZone, events, onPickEvent
                       <div
                         role="separator"
                         aria-label={`Resize "${ev.title}"`}
+                        data-no-page-swipe=""
                         onPointerDown={(e) => {
                           e.stopPropagation();
                           (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
@@ -370,3 +372,4 @@ function formatHourLabel(h: number): string {
   if (hh === 0) hh = 12;
   return `${hh} ${ampm}`;
 }
+
