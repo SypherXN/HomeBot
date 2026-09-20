@@ -58,15 +58,14 @@ export default function BudgetPieChart({
     onOpenInLedger(index);
   }
 
-  function handleSliceClick(index: number) {
-    const now = Date.now();
+  function handleSliceClick(index: number, at: number) {
     const last = lastPieTapRef.current;
-    if (last && last.index === index && now - last.at < 450) {
+    if (last && last.index === index && at - last.at < 450) {
       lastPieTapRef.current = null;
       openSlice(index);
       return;
     }
-    lastPieTapRef.current = { index, at: now };
+    lastPieTapRef.current = { index, at };
     clearClickTimer();
     clickTimerRef.current = window.setTimeout(() => {
       selectSlice(index);
@@ -92,7 +91,7 @@ export default function BudgetPieChart({
                   outerRadius="88%"
                   innerRadius={0}
                   paddingAngle={1}
-                  onClick={(_, index) => handleSliceClick(index)}
+                  onClick={(_, index, e) => handleSliceClick(index, e.timeStamp)}
                 >
                   {slices.map((slice, i) => (
                     <Cell
@@ -130,7 +129,7 @@ export default function BudgetPieChart({
             <li key={slice.key}>
               <button
                 type="button"
-                onClick={() => handleSliceClick(i)}
+                onClick={(e) => handleSliceClick(i, e.timeStamp)}
                 className={`flex w-full min-w-0 items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-sm transition-colors ${
                   active
                     ? "border-blue-500/50 bg-blue-950/40 text-blue-100"
