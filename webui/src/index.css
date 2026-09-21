@@ -157,33 +157,71 @@
     scrollbar-color: rgb(148 163 184 / 0.7) transparent;
   }
 
-  /* Native date/time/month pickers have a large intrinsic size on WebKit (iOS PWA). */
+  /*
+   * Native date/time pickers on WebKit (iOS PWA) size to the localized value
+   * ("Sep 20, 2026") plus picker chrome, which is wider than sibling fields.
+   * appearance:none + clipping the inner UA parts keeps the border box at 100%.
+   */
   input[type="date"],
   input[type="time"],
-  input[type="month"] {
+  input[type="month"],
+  input[type="datetime-local"] {
     display: block;
     width: 100%;
     max-width: 100%;
     min-width: 0;
     box-sizing: border-box;
+    overflow: hidden;
+    position: relative;
+    -webkit-appearance: none;
+    appearance: none;
   }
   input[type="date"]::-webkit-date-and-time-value,
   input[type="time"]::-webkit-date-and-time-value,
-  input[type="month"]::-webkit-date-and-time-value {
-    min-width: 0;
+  input[type="month"]::-webkit-date-and-time-value,
+  input[type="datetime-local"]::-webkit-date-and-time-value {
+    min-width: 0 !important;
+    width: 100%;
     text-align: left;
   }
   input[type="date"]::-webkit-datetime-edit,
   input[type="time"]::-webkit-datetime-edit,
-  input[type="month"]::-webkit-datetime-edit {
+  input[type="month"]::-webkit-datetime-edit,
+  input[type="datetime-local"]::-webkit-datetime-edit {
     min-width: 0;
+    max-width: 100%;
     overflow: hidden;
     padding: 0;
+    display: inline-flex;
   }
   input[type="date"]::-webkit-datetime-edit-fields-wrapper,
   input[type="time"]::-webkit-datetime-edit-fields-wrapper,
-  input[type="month"]::-webkit-datetime-edit-fields-wrapper {
+  input[type="month"]::-webkit-datetime-edit-fields-wrapper,
+  input[type="datetime-local"]::-webkit-datetime-edit-fields-wrapper {
     min-width: 0;
+    overflow: hidden;
+  }
+  input[type="date"]::-webkit-inner-spin-button,
+  input[type="date"]::-webkit-clear-button,
+  input[type="time"]::-webkit-inner-spin-button,
+  input[type="time"]::-webkit-clear-button,
+  input[type="month"]::-webkit-inner-spin-button,
+  input[type="month"]::-webkit-clear-button {
+    display: none;
+    -webkit-appearance: none;
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator,
+  input[type="month"]::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    position: absolute;
+    right: 0.65rem;
+    top: 50%;
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    padding: 0;
+    transform: translateY(-50%);
   }
 
   /*
@@ -225,23 +263,31 @@
 
   .hb-input[type="date"],
   .hb-input[type="time"],
-  .hb-input[type="datetime-local"] {
+  .hb-input[type="datetime-local"],
+  .hb-input[type="month"] {
     min-height: 2.75rem;
     width: 100%;
     max-width: 100%;
     min-width: 0;
+    overflow: hidden;
     -webkit-min-logical-width: 0;
   }
 
-  .hb-dialog .hb-input[type="date"],
-  .hb-dialog .hb-input[type="time"],
-  .hb-dialog .hb-input[type="datetime-local"],
-  .hb-dialog .hb-input[type="month"] {
-    display: block;
+  /* Grid 1fr shrinks below the date input's min-content width (iOS). */
+  .hb-date-wrap {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     width: 100%;
     max-width: 100%;
     min-width: 0;
-    box-sizing: border-box;
+    overflow: clip;
+  }
+
+  .hb-dialog form,
+  .hb-dialog label,
+  .hb-dialog .hb-date-wrap {
+    min-width: 0;
+    max-width: 100%;
   }
 
   /* Soft (secondary) button surface */
@@ -310,7 +356,7 @@
   /* Bottom sheet (mobile modals); .hb-dialog centers on md+ */
   .hb-sheet,
   .hb-dialog {
-    @apply fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[92dvh] w-full max-w-lg min-w-0 overflow-x-hidden overflow-y-auto rounded-t-3xl border border-b-0 border-slate-800 bg-slate-950 pb-[max(1rem,env(safe-area-inset-bottom))];
+    @apply fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[92dvh] w-full max-w-lg min-w-0 overflow-x-clip overflow-y-auto rounded-t-3xl border border-b-0 border-slate-800 bg-slate-950 pb-[max(1rem,env(safe-area-inset-bottom))];
     box-shadow: 0 -16px 48px -16px rgb(0 0 0 / 0.75);
     animation: hb-sheet-in 0.22s ease-out;
   }

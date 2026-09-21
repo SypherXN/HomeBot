@@ -35,13 +35,7 @@ public sealed class BackupStatsService
         }
 
         var files = Directory.EnumerateFiles(dir)
-            .Where(f =>
-            {
-                var name = Path.GetFileName(f);
-                return name.StartsWith("homebot-", StringComparison.OrdinalIgnoreCase) &&
-                       (name.EndsWith(".db", StringComparison.OrdinalIgnoreCase) ||
-                        name.EndsWith(".db.gpg", StringComparison.OrdinalIgnoreCase));
-            })
+            .Where(f => IsLocalBackupFileName(Path.GetFileName(f)))
             .Select(f => new FileInfo(f))
             .OrderByDescending(f => f.LastWriteTimeUtc)
             .ToList();
@@ -63,5 +57,27 @@ public sealed class BackupStatsService
                 "true",
                 StringComparison.OrdinalIgnoreCase),
         };
+    }
+
+    /// <summary>
+    /// Timestamped copies from backup-homebot-sqlite.sh (<c>homebot.db.2026-09-20-0331</c>)
+    /// plus manual names like <c>homebot-2026-05-03.db</c>. WAL/SHM sidecars are ignored.
+    /// </summary>
+    public static bool IsLocalBackupFileName(string? fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+            return false;
+
+        var name = fileName.Trim();
+        if (name.EndsWith("-wal", StringComparison.OrdinalIgnoreCase) ||
+            name.EndsWith("-shm", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (name.StartsWith("homebot.db.", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return name.StartsWith("homebot-", StringComparison.OrdinalIgnoreCase) &&
+               (name.EndsWith(".db", StringComparison.OrdinalIgnoreCase) ||
+                name.EndsWith(".db.gpg", StringComparison.OrdinalIgnoreCase));
     }
 }
