@@ -15,6 +15,7 @@ import {
 } from "../../api";
 import AccountSelect from "./AccountSelect";
 import CategorySelect from "./CategorySelect";
+import MerchantSuggestInput from "./MerchantSuggestInput";
 import TransferAmountFields from "./TransferAmountFields";
 import { BudgetExpenseShareEditor, BudgetReimbursementEditor } from "./BudgetShareEditors";
 import { DATE_FIELD_WRAP_CLASS, FORM_INPUT_CLASS } from "../../lib/formField";
@@ -333,18 +334,13 @@ export default function BudgetTransactionForm({
               })()}
             </div>
           )}
-          <input
+          <MerchantSuggestInput
             placeholder="Where you bought it (e.g. Costco)"
             value={formMerchant}
-            onChange={(e) => setFormMerchant(e.target.value)}
-            list="budget-merchant-suggestions"
+            onChange={setFormMerchant}
+            suggestions={merchants}
             className="w-full hb-input px-3 py-2 text-slate-100"
           />
-          <datalist id="budget-merchant-suggestions">
-            {merchants.map((m) => (
-              <option key={m} value={m} />
-            ))}
-          </datalist>
         </div>
       ) : (
         <>
@@ -488,18 +484,13 @@ export default function BudgetTransactionForm({
               )}
             </>
           )}
-          <input
+          <MerchantSuggestInput
             placeholder="Merchant"
             value={formMerchant}
-            onChange={(e) => setFormMerchant(e.target.value)}
-            list="budget-merchant-suggestions"
+            onChange={setFormMerchant}
+            suggestions={merchants}
             className="w-full hb-input px-3 py-2 text-slate-100"
           />
-          <datalist id="budget-merchant-suggestions">
-            {merchants.map((m) => (
-              <option key={m} value={m} />
-            ))}
-          </datalist>
           <div className="flex items-center gap-2">
             <input
               ref={receiptInputRef}

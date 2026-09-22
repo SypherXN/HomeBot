@@ -8,6 +8,8 @@ import { DATE_FIELD_WRAP_CLASS, FORM_INPUT_CLASS } from "../../lib/formField";
 import { transferReceivedAmount } from "../../lib/budgetTransfer";
 import AccountSelect from "./AccountSelect";
 import CategorySelect from "./CategorySelect";
+import MerchantSuggestInput from "./MerchantSuggestInput";
+import { useMerchantSuggestions } from "../../hooks/useMerchantSuggestions";
 import TransferAmountFields from "./TransferAmountFields";
 import { BudgetExpenseShareEditor, BudgetReimbursementEditor } from "./BudgetShareEditors";
 import {
@@ -59,6 +61,7 @@ export default function BudgetTransactionEditModal({
   const [spender, setSpender] = useState("");
   const [txDate, setTxDate] = useState("");
   const [merchant, setMerchant] = useState("");
+  const { merchants } = useMerchantSuggestions(token, merchant);
   const [receiptUrl, setReceiptUrl] = useState("");
   const [note, setNote] = useState("");
   const [tags, setTags] = useState("");
@@ -285,9 +288,10 @@ export default function BudgetTransactionEditModal({
               placeholder={incomeLike ? "Checking or savings" : "Account (default)"}
             />
           )}
-          <input
+          <MerchantSuggestInput
             value={merchant}
-            onChange={(e) => setMerchant(e.target.value)}
+            onChange={setMerchant}
+            suggestions={merchants}
             placeholder="Merchant"
             className="w-full hb-input px-3 py-2 text-slate-100"
           />

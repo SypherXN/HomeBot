@@ -3,6 +3,7 @@ import { defaultTransactionDateForMonth } from "../../lib/budgetTransactionDate"
 import { isDepositAccount } from "../../lib/budgetMoney";
 import AccountSelect from "./AccountSelect";
 import CategorySelect from "./CategorySelect";
+import MerchantSuggestInput from "./MerchantSuggestInput";
 import { postBudgetTransaction, type BudgetAccount, type BudgetCategory } from "../../api";
 import DiscordMemberSelect from "../../components/DiscordMemberSelect";
 import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster";
@@ -34,8 +35,6 @@ type Props = {
   /** Called after a prefill has been consumed. */
   onPrefillConsumed?: () => void;
 };
-
-const MERCHANT_DATALIST_ID = "budget-merchant-suggestions";
 
 /**
  * One-line add for the common case: amount, merchant, category.
@@ -180,18 +179,14 @@ export default function BudgetQuickAdd({
           onChange={(e) => setAmount(e.target.value)}
           className="w-24 hb-input px-3 py-2 text-slate-100"
         />
-        <input
+        <MerchantSuggestInput
+          rootClassName="min-w-0 flex-1"
           placeholder="Merchant"
           value={merchant}
-          onChange={(e) => setMerchant(e.target.value)}
-          list={MERCHANT_DATALIST_ID}
-          className="min-w-0 flex-1 hb-input px-3 py-2 text-slate-100"
+          onChange={setMerchant}
+          suggestions={merchants}
+          className="w-full hb-input px-3 py-2 text-slate-100"
         />
-        <datalist id={MERCHANT_DATALIST_ID}>
-          {merchants.map((m) => (
-            <option key={m} value={m} />
-          ))}
-        </datalist>
         <CategorySelect
           className="min-w-0 max-w-40"
           categories={categories}

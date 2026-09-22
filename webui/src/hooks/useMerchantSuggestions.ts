@@ -10,13 +10,13 @@ export type MerchantSuggestion = {
 
 type State = {
   rules: BudgetCategorizeRule[];
-  /** Distinct merchant names from recent history + rule tokens (for datalist). */
+  /** Distinct merchant names from recent history + rule tokens (for typeahead). */
   merchants: string[];
 };
 
 /**
  * Merchant intelligence for the add flows:
- * - datalist of previously seen merchants
+ * - typeahead of previously seen merchants
  * - category suggestion from categorize rules, falling back to the last
  *   transaction with a matching merchant.
  */
