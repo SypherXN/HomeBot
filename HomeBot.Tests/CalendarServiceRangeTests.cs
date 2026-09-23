@@ -95,18 +95,19 @@ public sealed class CalendarServiceRangeTests : IDisposable
     }
 
     [Fact]
-    public void Daily_recurrence_starts_no_earlier_than_stored_start()
+    public void Daily_recurrence_keeps_the_occurrence_before_the_stored_start()
     {
         _calendar.AddItem("Daily", "event", "2026-04-16 09:00", "", false, "", null, "", "", "", "daily", "UTC");
 
         var instances = _calendar.GetRange(
-            new DateTime(2026, 4, 15),
+            new DateTime(2026, 4, 14),
             new DateTime(2026, 4, 18),
             null);
 
-        Assert.Equal(2, instances.Count);
-        Assert.Equal("2026-04-16T09:00:00Z", instances[0].InstanceStartUtc);
-        Assert.Equal("2026-04-17T09:00:00Z", instances[1].InstanceStartUtc);
+        Assert.Equal(3, instances.Count);
+        Assert.Equal("2026-04-15T09:00:00Z", instances[0].InstanceStartUtc);
+        Assert.Equal("2026-04-16T09:00:00Z", instances[1].InstanceStartUtc);
+        Assert.Equal("2026-04-17T09:00:00Z", instances[2].InstanceStartUtc);
     }
 
     [Fact]
@@ -167,6 +168,29 @@ public sealed class CalendarServiceRangeTests : IDisposable
             Assert.True(chip.IsRecurringInstance);
             Assert.Equal("🔁 annual", chip.RecurrenceText);
         }
+    }
+
+    [Fact]
+    public void Yearly_recurrence_keeps_previous_occurrence_after_start_rolls_forward()
+    {
+        _calendar.AddItem("Kyle Tran Birthday", "event", "2027-09-23 07:00", "", true, "", null, "", "", "", "yearly", "UTC");
+
+        var thisYear = Assert.Single(_calendar.GetRange(
+            new DateTime(2026, 9, 1),
+            new DateTime(2026, 10, 1),
+            null));
+        Assert.Equal("2026-09-23T07:00:00Z", thisYear.InstanceStartUtc);
+
+        var nextYear = Assert.Single(_calendar.GetRange(
+            new DateTime(2027, 9, 1),
+            new DateTime(2027, 10, 1),
+            null));
+        Assert.Equal("2027-09-23T07:00:00Z", nextYear.InstanceStartUtc);
+
+        Assert.Empty(_calendar.GetRange(
+            new DateTime(2025, 9, 1),
+            new DateTime(2025, 10, 1),
+            null));
     }
 
     [Fact]

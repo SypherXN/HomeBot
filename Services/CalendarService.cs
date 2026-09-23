@@ -937,6 +937,20 @@ public class CalendarService
         return new DateTime(nextYear, anchorMonth, day);
     }
 
+    private static DateTime PreviousMonthlyOccurrenceDate(DateTime fromDate, int anchorDay)
+    {
+        var prev = fromDate.AddMonths(-1);
+        var day = Math.Min(anchorDay, DateTime.DaysInMonth(prev.Year, prev.Month));
+        return new DateTime(prev.Year, prev.Month, day);
+    }
+
+    private static DateTime PreviousYearlyOccurrenceDate(DateTime fromDate, int anchorMonth, int anchorDay)
+    {
+        var prevYear = fromDate.Year - 1;
+        var day = Math.Min(anchorDay, DateTime.DaysInMonth(prevYear, anchorMonth));
+        return new DateTime(prevYear, anchorMonth, day);
+    }
+
     /// <summary>
     /// Expands one recurring row into occurrences within the window. Handles daily/weekly/biweekly/
     /// monthly/yearly, optional weekday lists (weekly:MO,WE,…), and optional ;UNTIL=YYYYMMDD / ;COUNT=N bounds.
@@ -984,7 +998,10 @@ public class CalendarService
         {
             case "daily":
             {
-                var first = startLocalRow.Date > winStartDate ? startLocalRow.Date : winStartDate;
+                // Keep the occurrence just before the stored start. Reminders advance
+                // StartDateTime, and that previous day should stay on the calendar.
+                var earliest = startLocalRow.Date.AddDays(-1);
+                var first = winStartDate > earliest ? winStartDate : earliest;
                 for (var d = first; d <= winEndDateInclusive; d = d.AddDays(1))
                     Emit(d);
                 break;
@@ -992,9 +1009,10 @@ public class CalendarService
             case "weekly" when rule.Weekdays.Length == 0:
             {
                 var step = 7 * Math.Max(1, rule.Interval);
+                var earliest = startLocalRow.Date.AddDays(-step);
                 for (var d = winStartDate; d <= winEndDateInclusive; d = d.AddDays(1))
                 {
-                    if (d < startLocalRow.Date) continue;
+                    if (d < earliest) continue;
                     if ((d - startLocalRow.Date).Days % step != 0) continue;
                     Emit(d);
                 }
@@ -1003,14 +1021,19 @@ public class CalendarService
             case "weekly":
             {
                 // Multi-day weekly (and biweekly multi-day): emit on matching weekdays,
-                // stepping by the interval from the series start week.
+                // stepping by the interval from the series start week. Include one interval
+                // before the stored start so a rolled-forward series still shows.
                 var step = 7 * Math.Max(1, rule.Interval);
+                var earliest = startLocalRow.Date.AddDays(-step);
                 var anchorWeekStart = StartOfWeek(startLocalRow.Date);
                 for (var d = winStartDate; d <= winEndDateInclusive; d = d.AddDays(1))
                 {
-                    if (d < startLocalRow.Date) continue;
+                    if (d < earliest) continue;
                     var weeksSinceAnchor = (StartOfWeek(d) - anchorWeekStart).Days / 7;
-                    if (weeksSinceAnchor < 0 || (weeksSinceAnchor % rule.Interval) != 0) continue;
+                    if (weeksSinceAnchor < -rule.Interval) continue;
+                    var weekMod = weeksSinceAnchor % rule.Interval;
+                    if (weekMod < 0) weekMod += rule.Interval;
+                    if (weekMod != 0) continue;
                     if (!rule.Weekdays.Contains(d.DayOfWeek)) continue;
                     Emit(d);
                 }
@@ -1020,6 +1043,9 @@ public class CalendarService
             {
                 var anchorDay = startLocalRow.Day;
                 var cursor = startLocalRow.Date;
+                var previous = PreviousMonthlyOccurrenceDate(cursor, anchorDay);
+                if (previous >= winStartDate)
+                    cursor = previous;
                 while (cursor < winStartDate)
                     cursor = NextMonthlyOccurrenceDate(cursor, anchorDay);
                 while (cursor <= winEndDateInclusive)
@@ -1034,6 +1060,9 @@ public class CalendarService
                 var anchorMonth = startLocalRow.Month;
                 var anchorDay = startLocalRow.Day;
                 var cursor = startLocalRow.Date;
+                var previous = PreviousYearlyOccurrenceDate(cursor, anchorMonth, anchorDay);
+                if (previous >= winStartDate)
+                    cursor = previous;
                 while (cursor < winStartDate)
                     cursor = NextYearlyOccurrenceDate(cursor, anchorMonth, anchorDay);
                 while (cursor <= winEndDateInclusive)
