@@ -31,6 +31,8 @@ fi
 src="$APP_DIR/$db"
 if [[ -f "$src" ]]; then
   _cp "$src" "$BK_DIR/${db}.${stamp}"
+  # cp -a preserves the live DB mtime; mark the copied snapshot time instead.
+  touch "$BK_DIR/${db}.${stamp}"
 fi
 for ext in wal shm; do
   f="$APP_DIR/${db}-${ext}"

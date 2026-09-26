@@ -201,7 +201,6 @@ public partial class BudgetService
         using var conn = _db.GetConnection();
         conn.Open();
         using var tx = conn.BeginTransaction();
-        EnsureDepositAccount(conn, tx, fromAccountId, "Transfers");
         var cmd = conn.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText = @"
@@ -288,7 +287,6 @@ public partial class BudgetService
         {
             if (newFrom is null || newTo is null || newFrom == newTo)
                 throw new ArgumentException("Transfer requires two different accounts.");
-            EnsureDepositAccount(conn, tx, newFrom.Value, "Transfers");
         }
 
         if (IsIncomeLikeType(existing.Type) && applyAccountId && newFrom is { } incomeAcc)

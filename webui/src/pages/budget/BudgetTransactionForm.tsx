@@ -80,7 +80,7 @@ export default function BudgetTransactionForm({
   const [ocrStatus, setOcrStatus] = useState<string | null>(null);
   const activeAccounts = accounts.filter((a) => a.isActive !== false);
   const depositAccounts = activeAccounts.filter((a) => isDepositAccount(a.accountType));
-  const fromAccounts = formType === "transfer" || formType === "income" ? depositAccounts : activeAccounts;
+  const fromAccounts = formType === "income" ? depositAccounts : activeAccounts;
 
   async function scanReceipt(file: File) {
     setOcrBusy(true);
@@ -114,7 +114,7 @@ export default function BudgetTransactionForm({
   }, [month]);
 
   useEffect(() => {
-    if (formType !== "income" && formType !== "transfer") return;
+    if (formType !== "income") return;
     const selected = accounts.find((a) => String(a.id) === formAccountId);
     if (selected && !isDepositAccount(selected.accountType)) setFormAccountId("");
   }, [formType, formAccountId, accounts]);
@@ -227,7 +227,7 @@ export default function BudgetTransactionForm({
       <div className="flex gap-2">
         {typeButton("expense", "Expense", "bg-amber-700 text-white")}
         {typeButton("income", "Income", "bg-emerald-700 text-white")}
-        {depositAccounts.length >= 1 && activeAccounts.length >= 2 && typeButton("transfer", "Transfer", "bg-blue-700 text-white")}
+        {activeAccounts.length >= 2 && typeButton("transfer", "Transfer", "bg-blue-700 text-white")}
       </div>
       {formType !== "transfer" && (
         <input
@@ -266,7 +266,7 @@ export default function BudgetTransactionForm({
           </p>
           <div className="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
             <label className="block text-xs text-slate-400">
-              From (checking or savings)
+              From
               <AccountSelect
                 className="mt-1"
                 accounts={fromAccounts}

@@ -101,7 +101,7 @@ export default function BudgetTransactionEditModal({
         : [{ categoryId: "", spentByUserId: row.spentByUserId, amount: "" }]
     );
     let nextFrom = row.accountId != null ? String(row.accountId) : "";
-    if ((row.type === "income" || row.type === "reimbursement" || row.type === "transfer") && row.accountId != null) {
+    if ((row.type === "income" || row.type === "reimbursement") && row.accountId != null) {
       const fromAcc = accounts.find((a) => a.id === row.accountId);
       if (fromAcc && !isDepositAccount(fromAcc.accountType)) nextFrom = "";
     }
@@ -121,8 +121,7 @@ export default function BudgetTransactionEditModal({
   const activeAccounts = accounts.filter((a) => a.isActive !== false);
   const depositAccounts = activeAccounts.filter((a) => isDepositAccount(a.accountType));
   const incomeLike = isIncomeLikeType(row.type);
-  const accountChoices =
-    incomeLike ? depositAccounts : row.type === "transfer" ? depositAccounts : activeAccounts;
+  const accountChoices = incomeLike ? depositAccounts : activeAccounts;
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -260,10 +259,10 @@ export default function BudgetTransactionEditModal({
                 From
                 <AccountSelect
                   className="mt-1"
-                  accounts={depositAccounts}
+                  accounts={activeAccounts}
                   value={accountId}
                   onChange={setAccountId}
-                  placeholder="From (checking or savings)"
+                  placeholder="From account"
                   required
                 />
               </label>

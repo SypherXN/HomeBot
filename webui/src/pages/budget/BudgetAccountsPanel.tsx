@@ -8,7 +8,6 @@ import {
   type BudgetAccount,
 } from "../../api";
 import { defaultTransactionDateForMonth } from "../../lib/budgetTransactionDate";
-import { isDepositAccount } from "../../lib/budgetMoney";
 import AccountReorderList from "./AccountReorderList";
 import AccountSelect from "./AccountSelect";
 import TransferAmountFields from "./TransferAmountFields";
@@ -76,7 +75,6 @@ export default function BudgetAccountsPanel({
   }, [month]);
 
   const activeAccounts = accounts.filter((a) => a.isActive !== false);
-  const depositAccounts = activeAccounts.filter((a) => isDepositAccount(a.accountType));
   const showOpeningWizard = activeAccounts.length > 0;
   const canReorder = Boolean(actor) && accounts.length > 1 && editId == null;
 
@@ -449,10 +447,10 @@ export default function BudgetAccountsPanel({
           <form onSubmit={(e) => void handleTransfer(e)} className="space-y-2 border-t border-slate-800 pt-3">
             <p className="text-xs font-medium text-slate-400">Transfer between accounts</p>
             <AccountSelect
-              accounts={depositAccounts}
+              accounts={activeAccounts}
               value={xferFrom}
               onChange={setXferFrom}
-              placeholder="From (checking or savings)"
+              placeholder="From"
               required
             />
             <AccountSelect
@@ -486,7 +484,7 @@ export default function BudgetAccountsPanel({
             />
             <button
               type="submit"
-              disabled={busy || depositAccounts.length < 1 || activeAccounts.length < 2}
+              disabled={busy || activeAccounts.length < 2}
               className="rounded bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-1 text-xs text-white disabled:opacity-50"
             >
               Record transfer

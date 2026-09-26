@@ -1,10 +1,15 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 
 /// <summary>
 /// Reads local SQLite backup directory stats for ops visibility (no rclone on every poll).
 /// </summary>
 public sealed class BackupStatsService
 {
+    private static readonly Regex BackupStamp = new(
+        @"(?<date>\d{4}-\d{2}-\d{2})(?:-(?<clock>\d{6}|\d{4}))?(?!\d)",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     public object GetLocalBackupStats()
     {
         var dir = Environment.GetEnvironmentVariable("HOMEBOT_BACKUP_DIR")?.Trim();
@@ -37,7 +42,7 @@ public sealed class BackupStatsService
         var files = Directory.EnumerateFiles(dir)
             .Where(f => IsLocalBackupFileName(Path.GetFileName(f)))
             .Select(f => new FileInfo(f))
-            .OrderByDescending(f => f.LastWriteTimeUtc)
+            .OrderByDescending(f => RecencyUtc(f.Name, f.LastWriteTimeUtc))
             .ToList();
 
         long totalBytes = files.Sum(f => f.Length);
@@ -49,7 +54,9 @@ public sealed class BackupStatsService
             exists = true,
             fileCount = files.Count,
             latestFile = latest?.Name,
-            latestModifiedUtc = latest?.LastWriteTimeUtc.ToString("o", CultureInfo.InvariantCulture),
+            latestModifiedUtc = latest is null
+                ? null
+                : RecencyUtc(latest.Name, latest.LastWriteTimeUtc).ToString("o", CultureInfo.InvariantCulture),
             totalBytes,
             gdriveEnabled,
             encryptBeforeUpload = string.Equals(
@@ -79,5 +86,37 @@ public sealed class BackupStatsService
         return name.StartsWith("homebot-", StringComparison.OrdinalIgnoreCase) &&
                (name.EndsWith(".db", StringComparison.OrdinalIgnoreCase) ||
                 name.EndsWith(".db.gpg", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Uses the snapshot filename stamp because cp -a preserves the live DB mtime.</summary>
+    public static DateTime RecencyUtc(string fileName, DateTime lastWriteTimeUtc) =>
+        TryParseBackupStampUtc(fileName) ?? lastWriteTimeUtc;
+
+    public static DateTime? TryParseBackupStampUtc(string? fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+            return null;
+
+        var match = BackupStamp.Match(fileName);
+        if (!match.Success)
+            return null;
+
+        var text = match.Groups["date"].Value;
+        var format = "yyyy-MM-dd";
+        var clock = match.Groups["clock"];
+        if (clock.Success)
+        {
+            text += "-" + clock.Value;
+            format += clock.Value.Length == 6 ? "-HHmmss" : "-HHmm";
+        }
+
+        return DateTime.TryParseExact(
+            text,
+            format,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+            out var parsed)
+            ? parsed
+            : null;
     }
 }

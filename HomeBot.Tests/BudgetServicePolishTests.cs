@@ -74,12 +74,19 @@ public sealed class BudgetServicePolishTests : IDisposable
     }
 
     [Fact]
-    public void Transfer_from_credit_is_rejected()
+    public void Transfers_support_credit_and_cash_accounts()
     {
         var checking = _budget.CreateAccount("Checking", "checking", "USD", null, Actor);
         var card = _budget.CreateAccount("Visa", "credit", "USD", 2000, Actor);
-        Assert.Throws<ArgumentException>(() =>
-            _budget.CreateTransfer("20", card, checking, "2026-03-01", "bad", Actor));
+        var cash = _budget.CreateAccount("Cash", "cash", "USD", null, Actor);
+
+        _budget.CreateTransfer("20", card, checking, "2026-03-01", "move", Actor);
+        _budget.CreateTransfer("25", cash, card, "2026-03-02", "repay", Actor);
+
+        var accounts = _budget.GetAccounts();
+        Assert.Equal(5, Assert.Single(accounts, a => a.Id == card).CurrentBalance);
+        Assert.Equal(20, Assert.Single(accounts, a => a.Id == checking).CurrentBalance);
+        Assert.Equal(-25, Assert.Single(accounts, a => a.Id == cash).CurrentBalance);
     }
 
     [Fact]
