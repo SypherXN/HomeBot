@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSubmitLock } from "../../lib/useSubmitLock";
 import {
   getBudgetAccounts,
   patchBudgetAccount,
@@ -53,6 +54,7 @@ export default function BudgetAccountsPanel({
   const [xferNote, setXferNote] = useState("");
   const [xferDate, setXferDate] = useState(() => defaultTransactionDateForMonth(month));
   const [busy, setBusy] = useState(false);
+  const transferSave = useSubmitLock();
   const [colorEditId, setColorEditId] = useState<number | null>(null);
   const [colorBusyId, setColorBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -124,27 +126,28 @@ export default function BudgetAccountsPanel({
       setError("Choose two different accounts.");
       return;
     }
-    setBusy(true);
     setError(null);
-    try {
-      await postBudgetTransfer(token, actor, {
-        amountInput: xferAmount.trim(),
-        toAmountInput: xferToAmount.trim() || undefined,
-        fromAccountId: Number(xferFrom),
-        toAccountId: Number(xferTo),
-        note: xferNote.trim() || undefined,
-        transactionDate: xferDate || undefined,
-      });
-      setXferAmount("");
-      setXferToAmount("");
-      setXferNote("");
-      await onSaved();
-      await reloadAccounts();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
+    const body = {
+      amountInput: xferAmount.trim(),
+      toAmountInput: xferToAmount.trim() || undefined,
+      fromAccountId: Number(xferFrom),
+      toAccountId: Number(xferTo),
+      note: xferNote.trim() || undefined,
+      transactionDate: xferDate || undefined,
+    };
+    await transferSave.run(async () => {
+      try {
+        await postBudgetTransfer(token, actor, body, transferSave.key(body));
+        transferSave.rotate();
+        setXferAmount("");
+        setXferToAmount("");
+        setXferNote("");
+        await onSaved();
+        await reloadAccounts();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    });
   }
 
   async function handleArchive(id: number) {
@@ -484,7 +487,7 @@ export default function BudgetAccountsPanel({
             />
             <button
               type="submit"
-              disabled={busy || activeAccounts.length < 2}
+              disabled={busy || transferSave.busy || activeAccounts.length < 2}
               className="rounded bg-gradient-to-r from-blue-600 to-blue-700 px-3 py-1 text-xs text-white disabled:opacity-50"
             >
               Record transfer

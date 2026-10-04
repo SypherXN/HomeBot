@@ -634,7 +634,14 @@ public partial class BudgetService
         return ok;
     }
 
-    public int MarkBillPaid(int billId, string amountInput, ulong spentByUserId, ulong actor)
+    public int MarkBillPaid(
+        int billId,
+        string amountInput,
+        ulong spentByUserId,
+        ulong actor,
+        string? submitKey = null,
+        bool collapseAccidentalDuplicate = false,
+        Action<bool>? createdCallback = null)
     {
         var bills = GetBills(false);
         var bill = bills.FirstOrDefault(b => b.Id == billId)
@@ -654,7 +661,10 @@ public partial class BudgetService
             1,
             null,
             null,
-            actor);
+            actor,
+            submitKey: submitKey,
+            collapseAccidentalDuplicate: collapseAccidentalDuplicate,
+            createdCallback: createdCallback);
     }
 
     // ——— Exchange rates ———

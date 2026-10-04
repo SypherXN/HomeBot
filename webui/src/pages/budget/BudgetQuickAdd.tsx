@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useSubmitLock } from "../../lib/useSubmitLock";
 import { defaultTransactionDateForMonth } from "../../lib/budgetTransactionDate";
 import { isDepositAccount } from "../../lib/budgetMoney";
 import AccountSelect from "./AccountSelect";
@@ -61,7 +62,7 @@ export default function BudgetQuickAdd({
   const [accountId, setAccountId] = useState("");
   const [note, setNote] = useState("");
   const [date, setDate] = useState(() => defaultTransactionDateForMonth(month));
-  const [busy, setBusy] = useState(false);
+  const save = useSubmitLock();
   const [error, setError] = useState<string | null>(null);
   const [chargeOthers, setChargeOthers] = useState(false);
   const [shareDrafts, setShareDrafts] = useState<ShareChargeDraft[]>(() => [emptyShareChargeDraft()]);
@@ -88,57 +89,56 @@ export default function BudgetQuickAdd({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!actor || !spender || !amount.trim()) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const total = Number(amount) || 0;
-      let shareCharges = undefined as ReturnType<typeof toShareChargeInputs> | undefined;
-      let sharePayments = undefined as ReturnType<typeof toSharePaymentInputs> | undefined;
-      if (type === "expense" && chargeOthers) {
-        const err = shareChargeError(total, shareDrafts);
-        if (err) {
-          setError(err);
-          setBusy(false);
-          return;
-        }
-        shareCharges = toShareChargeInputs(shareDrafts);
+    const total = Number(amount) || 0;
+    let shareCharges = undefined as ReturnType<typeof toShareChargeInputs> | undefined;
+    let sharePayments = undefined as ReturnType<typeof toSharePaymentInputs> | undefined;
+    if (type === "expense" && chargeOthers) {
+      const err = shareChargeError(total, shareDrafts);
+      if (err) {
+        setError(err);
+        return;
       }
-      if (type === "income" && isReimbursement) {
-        const err = sharePaymentError(total, paymentDrafts);
-        if (err) {
-          setError(err);
-          setBusy(false);
-          return;
-        }
-        sharePayments = toSharePaymentInputs(paymentDrafts);
-      }
-      await postBudgetTransaction(token, actor, {
-        type: type === "income" && isReimbursement ? "reimbursement" : type,
-        amountInput: amount.trim(),
-        categoryId: categoryId ? Number(categoryId) : undefined,
-        spentByUserId: spender,
-        merchant: merchant.trim() || undefined,
-        note: note.trim() || undefined,
-        accountId: accountId ? Number(accountId) : undefined,
-        transactionDate: date || undefined,
-        shareCharges,
-        sharePayments,
-      });
-      setAmount("");
-      setMerchant("");
-      setCategoryId("");
-      setNote("");
-      setExpanded(false);
-      setChargeOthers(false);
-      setShareDrafts([emptyShareChargeDraft()]);
-      setIsReimbursement(false);
-      setPaymentDrafts([]);
-      await onSaved();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
+      shareCharges = toShareChargeInputs(shareDrafts);
     }
+    if (type === "income" && isReimbursement) {
+      const err = sharePaymentError(total, paymentDrafts);
+      if (err) {
+        setError(err);
+        return;
+      }
+      sharePayments = toSharePaymentInputs(paymentDrafts);
+    }
+    setError(null);
+    const body = {
+      type: type === "income" && isReimbursement ? "reimbursement" : type,
+      amountInput: amount.trim(),
+      categoryId: categoryId ? Number(categoryId) : undefined,
+      spentByUserId: spender,
+      merchant: merchant.trim() || undefined,
+      note: note.trim() || undefined,
+      accountId: accountId ? Number(accountId) : undefined,
+      transactionDate: date || undefined,
+      shareCharges,
+      sharePayments,
+    };
+    await save.run(async () => {
+      try {
+        await postBudgetTransaction(token, actor, body, save.key(body));
+        save.rotate();
+        setAmount("");
+        setMerchant("");
+        setCategoryId("");
+        setNote("");
+        setExpanded(false);
+        setChargeOthers(false);
+        setShareDrafts([emptyShareChargeDraft()]);
+        setIsReimbursement(false);
+        setPaymentDrafts([]);
+        await onSaved();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    });
   }
 
   if (!actor) {
@@ -197,7 +197,7 @@ export default function BudgetQuickAdd({
         <button
           type="submit"
           disabled={
-            busy ||
+            save.busy ||
             !spender ||
             !amount.trim() ||
             (type === "income" &&
@@ -205,7 +205,7 @@ export default function BudgetQuickAdd({
           }
           className="shrink-0 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
         >
-          {busy ? "Adding…" : "Add"}
+          {save.busy ? "Adding…" : "Add"}
         </button>
         <button
           type="button"

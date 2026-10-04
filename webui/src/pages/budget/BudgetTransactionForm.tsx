@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useSubmitLock } from "../../lib/useSubmitLock";
 import DiscordMemberSelect from "../../components/DiscordMemberSelect";
 import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster";
 import { memberPickerLabel } from "../../lib/memberDisplay";
@@ -73,6 +74,7 @@ export default function BudgetTransactionForm({
   const [isReimbursement, setIsReimbursement] = useState(false);
   const [paymentDrafts, setPaymentDrafts] = useState<SharePaymentDraft[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
+  const save = useSubmitLock();
 
   const { merchants, suggestion } = useMerchantSuggestions(token, formMerchant);
   const receiptInputRef = useRef<HTMLInputElement | null>(null);
@@ -134,82 +136,94 @@ export default function BudgetTransactionForm({
 
     if (formType === "transfer") {
       if (!formAccountId || !transferToId || formAccountId === transferToId) return;
-      await postBudgetTransfer(token, actor, {
-        amountInput: formAmount.trim(),
-        toAmountInput: formToAmount.trim() || undefined,
-        fromAccountId: Number(formAccountId),
-        toAccountId: Number(transferToId),
-        transactionDate: formDate || undefined,
-        note: formNote || undefined,
-        merchant: formMerchant.trim() || undefined,
-      });
-    } else {
-      if (!formSpender) return;
-      let splitPayload: BudgetSplitInput[] | undefined;
-      if (useSplits && formType === "expense") {
-        splitPayload = splits
-          .filter((s) => s.amount.trim())
-          .map((s) => ({
-            categoryId: s.categoryId ? Number(s.categoryId) : null,
-            spentByUserId: s.spentByUserId || formSpender,
-            amount: Number(s.amount) || 0,
-          }));
-        if (splitPayload.length === 0) splitPayload = undefined;
-      }
-
-      let shareCharges = undefined as ReturnType<typeof toShareChargeInputs> | undefined;
-      let sharePayments = undefined as ReturnType<typeof toSharePaymentInputs> | undefined;
-      if (formType === "expense" && chargeOthers) {
-        const err = shareChargeError(total, shareDrafts);
-        if (err) {
-          setFormError(err);
-          return;
-        }
-        shareCharges = toShareChargeInputs(shareDrafts);
-      }
-      if (formType === "income" && isReimbursement) {
-        const err = sharePaymentError(total, paymentDrafts);
-        if (err) {
-          setFormError(err);
-          return;
-        }
-        sharePayments = toSharePaymentInputs(paymentDrafts);
-      }
-
-      await postBudgetTransaction(token, actor, {
-        type: formType === "income" && isReimbursement ? "reimbursement" : formType,
-        amountInput: formAmount.trim(),
-        categoryId: !useSplits && formCategoryId ? Number(formCategoryId) : undefined,
-        spentByUserId: formSpender,
-        note: formNote || undefined,
-        receiptUrl: formReceiptUrl.trim() || undefined,
-        merchant: formMerchant || undefined,
-        tags: formTags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
-        splits: splitPayload,
-        currency: formCurrency.trim() || "USD",
-        accountId: formAccountId ? Number(formAccountId) : undefined,
-        transactionDate: formDate || undefined,
-        shareCharges,
-        sharePayments,
-      });
+    } else if (!formSpender) {
+      return;
     }
 
-    setFormAmount("");
-    setFormToAmount("");
-    setFormNote("");
-    setFormReceiptUrl("");
-    setFormMerchant("");
-    setFormTags("");
-    setUseSplits(false);
-    setSplits([{ categoryId: "", spentByUserId: formSpender, amount: "" }]);
-    setChargeOthers(false);
-    setShareDrafts([emptyShareChargeDraft()]);
-    setIsReimbursement(false);
-    setPaymentDrafts([]);
-    await onSaved();
+    let splitPayload: BudgetSplitInput[] | undefined;
+    if (formType !== "transfer" && useSplits && formType === "expense") {
+      splitPayload = splits
+        .filter((s) => s.amount.trim())
+        .map((s) => ({
+          categoryId: s.categoryId ? Number(s.categoryId) : null,
+          spentByUserId: s.spentByUserId || formSpender,
+          amount: Number(s.amount) || 0,
+        }));
+      if (splitPayload.length === 0) splitPayload = undefined;
+    }
+
+    let shareCharges = undefined as ReturnType<typeof toShareChargeInputs> | undefined;
+    let sharePayments = undefined as ReturnType<typeof toSharePaymentInputs> | undefined;
+    if (formType === "expense" && chargeOthers) {
+      const err = shareChargeError(total, shareDrafts);
+      if (err) {
+        setFormError(err);
+        return;
+      }
+      shareCharges = toShareChargeInputs(shareDrafts);
+    }
+    if (formType === "income" && isReimbursement) {
+      const err = sharePaymentError(total, paymentDrafts);
+      if (err) {
+        setFormError(err);
+        return;
+      }
+      sharePayments = toSharePaymentInputs(paymentDrafts);
+    }
+
+    const transferBody = {
+      amountInput: formAmount.trim(),
+      toAmountInput: formToAmount.trim() || undefined,
+      fromAccountId: Number(formAccountId),
+      toAccountId: Number(transferToId),
+      transactionDate: formDate || undefined,
+      note: formNote || undefined,
+      merchant: formMerchant.trim() || undefined,
+    };
+    const transactionBody = {
+      type: formType === "income" && isReimbursement ? "reimbursement" : formType,
+      amountInput: formAmount.trim(),
+      categoryId: !useSplits && formCategoryId ? Number(formCategoryId) : undefined,
+      spentByUserId: formSpender,
+      note: formNote || undefined,
+      receiptUrl: formReceiptUrl.trim() || undefined,
+      merchant: formMerchant || undefined,
+      tags: formTags
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean),
+      splits: splitPayload,
+      currency: formCurrency.trim() || "USD",
+      accountId: formAccountId ? Number(formAccountId) : undefined,
+      transactionDate: formDate || undefined,
+      shareCharges,
+      sharePayments,
+    };
+    await save.run(async () => {
+      try {
+        if (formType === "transfer") {
+          await postBudgetTransfer(token, actor, transferBody, save.key(transferBody));
+        } else {
+          await postBudgetTransaction(token, actor, transactionBody, save.key(transactionBody));
+        }
+        save.rotate();
+        setFormAmount("");
+        setFormToAmount("");
+        setFormNote("");
+        setFormReceiptUrl("");
+        setFormMerchant("");
+        setFormTags("");
+        setUseSplits(false);
+        setSplits([{ categoryId: "", spentByUserId: formSpender, amount: "" }]);
+        setChargeOthers(false);
+        setShareDrafts([emptyShareChargeDraft()]);
+        setIsReimbursement(false);
+        setPaymentDrafts([]);
+        await onSaved();
+      } catch (err) {
+        setFormError(err instanceof Error ? err.message : String(err));
+      }
+    });
   }
 
   const typeButton = (id: "expense" | "income" | "transfer", label: string, activeClass: string) => (
@@ -551,6 +565,7 @@ export default function BudgetTransactionForm({
       <button
         type="submit"
         disabled={
+          save.busy ||
           !actor ||
           !formAmount.trim() ||
           (formType === "transfer"
@@ -560,7 +575,7 @@ export default function BudgetTransactionForm({
         }
         className="w-full rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 py-2 font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
       >
-        {formType === "transfer" ? "Transfer" : "Save"}
+        {save.busy ? "Saving…" : formType === "transfer" ? "Transfer" : "Save"}
       </button>
     </form>
   );

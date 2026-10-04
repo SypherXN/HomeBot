@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { postBudgetBillPay, type BudgetBill } from "../../api";
+import { useSubmitLock } from "../../lib/useSubmitLock";
 import { formatMoney, ordinal } from "../../lib/budgetMoney";
 import { titleCase } from "../../lib/titleCase";
 
@@ -56,6 +57,7 @@ export default function BudgetUpcomingBills({
   const skippedSet = useMemo(() => new Set(skippedIds), [skippedIds]);
   const upcoming = useMemo(() => upcomingBills(bills), [bills]);
   const [payingId, setPayingId] = useState<number | null>(null);
+  const payLock = useSubmitLock();
   const [skipBusyId, setSkipBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,20 +68,24 @@ export default function BudgetUpcomingBills({
 
   async function pay(bill: BudgetBill) {
     if (!actor) return;
-    setPayingId(bill.id);
-    setError(null);
-    try {
-      await postBudgetBillPay(token, actor, bill.id, {
-        amountInput: String(bill.amountEstimate),
-        spentByUserId: actor,
-      });
-      onToast(`Paid ${titleCase(bill.name)} $${formatMoney(bill.amountEstimate)}`);
-      await onSaved();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setPayingId(null);
-    }
+    await payLock.run(async () => {
+      setPayingId(bill.id);
+      setError(null);
+      try {
+        const body = {
+          amountInput: String(bill.amountEstimate),
+          spentByUserId: actor,
+        };
+        await postBudgetBillPay(token, actor, bill.id, body, payLock.key(body));
+        payLock.rotate();
+        onToast(`Paid ${titleCase(bill.name)} $${formatMoney(bill.amountEstimate)}`);
+        await onSaved();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setPayingId(null);
+      }
+    });
   }
 
   async function toggleSkip(billId: number, skip: boolean) {
@@ -145,7 +151,7 @@ export default function BudgetUpcomingBills({
                 </button>
                 <button
                   type="button"
-                  disabled={payingId === bill.id}
+                  disabled={payLock.busy || payingId === bill.id}
                   onClick={() => void pay(bill)}
                   className="rounded-lg border border-emerald-700/60 bg-emerald-950/40 px-3 py-1 text-xs text-emerald-100 hover:bg-emerald-950/70 disabled:opacity-50"
                 >

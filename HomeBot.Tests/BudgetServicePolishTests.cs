@@ -482,4 +482,79 @@ public sealed class BudgetServicePolishTests : IDisposable
 
         Assert.Equal(reversed, _budget.GetAccounts().Select(a => a.Id).ToList());
     }
+
+    [Fact]
+    public void CreateTransaction_collapses_accidental_duplicate_and_keeps_balance()
+    {
+        var checking = _budget.CreateAccount("Checking", "checking", "USD", null, Actor);
+        var catId = _budget.CreateCategory("Food", null, null, "household", false, Actor);
+
+        var first = AddExpense(checking, catId, "12.50", "Cafe", collapse: true);
+        var second = AddExpense(checking, catId, "12.50", "Cafe", collapse: true);
+        var different = AddExpense(checking, catId, "12.50", "Other", collapse: true);
+
+        Assert.Equal(first, second);
+        Assert.NotEqual(first, different);
+        Assert.Equal(2, _budget.GetTransactions(0, "2026-03").TotalCount);
+        Assert.Equal(-25, Assert.Single(_budget.GetAccounts(), a => a.Id == checking).CurrentBalance);
+    }
+
+    [Fact]
+    public void CreateTransaction_reuses_submit_key_without_a_second_row()
+    {
+        var checking = _budget.CreateAccount("Checking", "checking", "USD", null, Actor);
+        var catId = _budget.CreateCategory("Food", null, null, "household", false, Actor);
+
+        var first = AddExpense(checking, catId, "8", "Cafe", submitKey: "click-1");
+        var replay = AddExpense(checking, catId, "9", "Cafe", submitKey: "click-1");
+
+        Assert.Equal(first, replay);
+        Assert.Equal(1, _budget.GetTransactions(0, "2026-03").TotalCount);
+        Assert.Equal(-8, Assert.Single(_budget.GetAccounts(), a => a.Id == checking).CurrentBalance);
+    }
+
+    [Fact]
+    public void CreateTransfer_collapses_accidental_duplicate()
+    {
+        var checking = _budget.CreateAccount("Checking", "checking", "USD", null, Actor);
+        var savings = _budget.CreateAccount("Savings", "savings", "USD", null, Actor);
+
+        var first = _budget.CreateTransfer(
+            "40", checking, savings, "2026-03-01", "move", Actor, collapseAccidentalDuplicate: true);
+        var second = _budget.CreateTransfer(
+            "40", checking, savings, "2026-03-01", "move", Actor, collapseAccidentalDuplicate: true);
+
+        Assert.Equal(first, second);
+        var accounts = _budget.GetAccounts();
+        Assert.Equal(-40, Assert.Single(accounts, a => a.Id == checking).CurrentBalance);
+        Assert.Equal(40, Assert.Single(accounts, a => a.Id == savings).CurrentBalance);
+    }
+
+    private int AddExpense(
+        int accountId,
+        int categoryId,
+        string amount,
+        string merchant,
+        string? submitKey = null,
+        bool collapse = false)
+    {
+        return _budget.CreateTransaction(
+            "expense",
+            amount,
+            categoryId,
+            Actor,
+            "2026-03-01",
+            null,
+            null,
+            merchant,
+            accountId,
+            false,
+            "USD",
+            1,
+            null,
+            null,
+            Actor,
+            submitKey: submitKey,
+            collapseAccidentalDuplicate: collapse);
+    }
 }

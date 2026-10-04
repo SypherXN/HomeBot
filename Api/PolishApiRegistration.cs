@@ -108,6 +108,7 @@ public static class WebhooksApiRegistration
                 body.SpentByUserId = actor;
 
             var budget = root.GetRequiredService<BudgetService>();
+            var created = true;
             var id = budget.CreateTransaction(
                 body.Type ?? "expense",
                 body.AmountInput,
@@ -123,11 +124,17 @@ public static class WebhooksApiRegistration
                 body.ExchangeRateToHome <= 0 ? 1 : body.ExchangeRateToHome,
                 body.Splits,
                 body.Tags,
-                actor);
+                actor,
+                submitKey: BudgetApiRegistration.IdempotencyKey(http),
+                collapseAccidentalDuplicate: true,
+                createdCallback: value => created = value);
 
-            await root.GetRequiredService<IDiscordChannelNotifier>().NotifyFeatureChannelAsync(
-                "budget",
-                $"💳 **Budget** (webhook): logged expense #{id}");
+            if (created)
+            {
+                await root.GetRequiredService<IDiscordChannelNotifier>().NotifyFeatureChannelAsync(
+                    "budget",
+                    $"💳 **Budget** (webhook): logged expense #{id}");
+            }
             return Results.Ok(new { ok = true, id });
         });
     }

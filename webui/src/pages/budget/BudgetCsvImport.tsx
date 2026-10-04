@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { postBudgetImportCsv } from "../../api";
+import { useSubmitLock } from "../../lib/useSubmitLock";
 
 type Props = {
   token: string;
@@ -117,7 +118,7 @@ export default function BudgetCsvImport({ token, actor, defaultSpender, onImport
   const [dataRows, setDataRows] = useState<string[][]>([]);
   const [mapping, setMapping] = useState<Partial<Record<ColumnKey, number>>>({});
   const [status, setStatus] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const save = useSubmitLock();
 
   const dupes = useMemo(() => duplicateWarnings(dataRows, mapping), [dataRows, mapping]);
 
@@ -154,26 +155,25 @@ export default function BudgetCsvImport({ token, actor, defaultSpender, onImport
       setStatus("Map at least Date and Amount columns.");
       return;
     }
-    setBusy(true);
     setStatus(null);
-    try {
-      const csv = buildHomeBotCsv(dataRows, mapping, defaultSpender);
-      const blob = new Blob([csv], { type: "text/csv" });
-      const mappedFile = new File([blob], "mapped-import.csv", { type: "text/csv" });
-      const res = await postBudgetImportCsv(token, actor, mappedFile, defaultSpender);
-      setStatus(
-        `Imported ${res.imported} row(s). Uncategorized items may need review in the Ledger.`
-      );
-      setFile(null);
-      setHeaders([]);
-      setDataRows([]);
-      setMapping({});
-      await onImported();
-    } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
+    await save.run(async () => {
+      try {
+        const csv = buildHomeBotCsv(dataRows, mapping, defaultSpender);
+        const blob = new Blob([csv], { type: "text/csv" });
+        const mappedFile = new File([blob], "mapped-import.csv", { type: "text/csv" });
+        const res = await postBudgetImportCsv(token, actor, mappedFile, defaultSpender);
+        setStatus(
+          `Imported ${res.imported} row(s). Uncategorized items may need review in the Ledger.`
+        );
+        setFile(null);
+        setHeaders([]);
+        setDataRows([]);
+        setMapping({});
+        await onImported();
+      } catch (e) {
+        setStatus(e instanceof Error ? e.message : String(e));
+      }
+    });
   }
 
   return (
@@ -228,11 +228,11 @@ export default function BudgetCsvImport({ token, actor, defaultSpender, onImport
 
       <button
         type="button"
-        disabled={!file || busy || !actor || mapping.amount == null || mapping.date == null}
+        disabled={!file || save.busy || !actor || mapping.amount == null || mapping.date == null}
         onClick={() => void handleImport()}
         className="mt-2 rounded bg-slate-700 px-3 py-1 text-sm text-white disabled:opacity-50"
       >
-        {busy ? "Importing…" : "Import"}
+        {save.busy ? "Importing…" : "Import"}
       </button>
       {status && <p className="mt-2 text-xs text-slate-400">{status}</p>}
     </div>

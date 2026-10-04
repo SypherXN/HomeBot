@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
@@ -88,6 +89,71 @@ public partial class BudgetService
     private static double EffectiveAmount(BudgetTransactionListItemModel t) =>
         t.Splits.Count > 0 ? t.Splits.Sum(s => s.Amount) : t.Amount;
 
+    /// <summary>Identical web submits with no idempotency key (a double click on an older page) collapse for this long.</summary>
+    private const int AccidentalDuplicateSeconds = 8;
+
+    private readonly object _recentDuplicateGate = new();
+    private readonly ConcurrentDictionary<string, (int Id, long Ticks)> _submitResults = new();
+    private readonly ConcurrentDictionary<string, (int Id, long Ticks)> _recentCreates = new();
+
+    private static bool IsSubmitKey(string? submitKey)
+    {
+        if (string.IsNullOrWhiteSpace(submitKey)) return false;
+        var key = submitKey.Trim();
+        return key.Length is > 0 and <= 80 && !key.Contains('\n') && !key.Contains('\r');
+    }
+
+    private bool TryRecentSubmit(string submitKey, out int id)
+    {
+        if (_submitResults.TryGetValue(submitKey, out var hit) &&
+            DateTime.UtcNow.Ticks - hit.Ticks <= TimeSpan.FromHours(1).Ticks)
+        {
+            id = hit.Id;
+            return true;
+        }
+
+        id = 0;
+        return false;
+    }
+
+    private void RememberSubmit(string submitKey, int id)
+    {
+        var now = DateTime.UtcNow.Ticks;
+        _submitResults[submitKey] = (id, now);
+        if (_submitResults.Count <= 256) return;
+        foreach (var entry in _submitResults)
+        {
+            if (now - entry.Value.Ticks > TimeSpan.FromHours(1).Ticks)
+                _submitResults.TryRemove(entry.Key, out _);
+        }
+    }
+
+    /// <summary>One insert per idempotency key. A retry after the response was lost returns the same id.</summary>
+    private int WithDuplicateGuard(string? submitKey, Action<bool>? createdCallback, Func<(int Id, bool Created)> insert)
+    {
+        var key = IsSubmitKey(submitKey) ? submitKey!.Trim() : null;
+        if (key != null && TryRecentSubmit(key, out var existing))
+        {
+            createdCallback?.Invoke(false);
+            return existing;
+        }
+
+        lock (_recentDuplicateGate)
+        {
+            if (key != null && TryRecentSubmit(key, out existing))
+            {
+                createdCallback?.Invoke(false);
+                return existing;
+            }
+
+            var (id, created) = insert();
+            if (key != null)
+                RememberSubmit(key, id);
+            createdCallback?.Invoke(created);
+            return id;
+        }
+    }
+
     public int CreateTransaction(
         string type,
         string amountInput,
@@ -105,8 +171,53 @@ public partial class BudgetService
         List<string>? tags,
         ulong actor,
         List<BudgetShareChargeInput>? shareCharges = null,
-        List<BudgetSharePaymentInput>? sharePayments = null)
+        List<BudgetSharePaymentInput>? sharePayments = null,
+        string? submitKey = null,
+        bool collapseAccidentalDuplicate = false,
+        Action<bool>? createdCallback = null)
     {
+        if (!IsSubmitKey(submitKey) && !collapseAccidentalDuplicate)
+        {
+            var id = InsertTransaction(
+                type, amountInput, categoryId, spentByUserId, transactionDate, note, receiptUrl, merchant,
+                accountId, isPending, currency, exchangeRateToHome, splits, tags, actor, shareCharges, sharePayments,
+                collapseRecent: false, out var created);
+            createdCallback?.Invoke(created);
+            return id;
+        }
+
+        return WithDuplicateGuard(submitKey, createdCallback, () =>
+        {
+            var id = InsertTransaction(
+                type, amountInput, categoryId, spentByUserId, transactionDate, note, receiptUrl, merchant,
+                accountId, isPending, currency, exchangeRateToHome, splits, tags, actor, shareCharges, sharePayments,
+                collapseRecent: collapseAccidentalDuplicate, out var created);
+            return (id, created);
+        });
+    }
+
+    private int InsertTransaction(
+        string type,
+        string amountInput,
+        int? categoryId,
+        ulong spentByUserId,
+        string transactionDate,
+        string? note,
+        string? receiptUrl,
+        string? merchant,
+        int? accountId,
+        bool isPending,
+        string currency,
+        double exchangeRateToHome,
+        List<BudgetTransactionSplitModel>? splits,
+        List<string>? tags,
+        ulong actor,
+        List<BudgetShareChargeInput>? shareCharges,
+        List<BudgetSharePaymentInput>? sharePayments,
+        bool collapseRecent,
+        out bool created)
+    {
+        created = false;
         var amount = EvaluateAmount(amountInput);
         if (amount <= 0 && type != "transfer")
             throw new ArgumentException("Amount must be positive.");
@@ -142,6 +253,18 @@ public partial class BudgetService
         if (!categoryId.HasValue)
             categoryId = ResolveCategoryFromRules(merchant, note);
 
+        var storedCurrency = string.IsNullOrWhiteSpace(currency) ? "USD" : currency.Trim().ToUpperInvariant();
+        var storedRate = exchangeRateToHome <= 0 ? 1 : exchangeRateToHome;
+        string? fingerprint = null;
+        if (collapseRecent)
+        {
+            fingerprint = TransactionFingerprint(
+                type, amount, amountInput, categoryId, spentByUserId, accId, note, receiptUrl, merchant,
+                transactionDate, isPending, storedCurrency, storedRate, splits, tags, shareCharges, sharePayments);
+            if (MatchRecent(fingerprint) is int recentId)
+                return recentId;
+        }
+
         var cmd = conn.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText = @"
@@ -176,9 +299,12 @@ public partial class BudgetService
 
         ApplyAccountDelta(conn, tx, accId, type, amount, null);
         tx.Commit();
+        if (fingerprint != null)
+            RememberRecent(fingerprint, id);
 
         _undo.LogAction(actor, "create", "budget", id, "");
         Audit(actor, "transaction", id, "create");
+        created = true;
         return id;
     }
 
@@ -190,7 +316,10 @@ public partial class BudgetService
         string? note,
         ulong actor,
         string? toAmountInput = null,
-        string? merchant = null)
+        string? merchant = null,
+        string? submitKey = null,
+        bool collapseAccidentalDuplicate = false,
+        Action<bool>? createdCallback = null)
     {
         var amount = EvaluateAmount(amountInput);
         if (amount <= 0)
@@ -198,31 +327,155 @@ public partial class BudgetService
         var toAmount = ResolveTransferReceivedAmount(amount, toAmountInput);
         if (fromAccountId == toAccountId)
             throw new ArgumentException("Transfer requires two different accounts.");
-        using var conn = _db.GetConnection();
-        conn.Open();
-        using var tx = conn.BeginTransaction();
-        var cmd = conn.CreateCommand();
-        cmd.Transaction = tx;
-        cmd.CommandText = @"
-            INSERT INTO BudgetTransactions
-            (Type, Amount, AmountInput, SpentByUserId, AccountId, TransferToAccountId, TransferToAmount, Note, Merchant, TransactionDate)
-            VALUES ('transfer', $amt, $input, $user, $from, $to, $toAmt, $note, $merchant, $date)";
-        cmd.Parameters.AddWithValue("$amt", amount);
-        cmd.Parameters.AddWithValue("$input", amountInput);
-        cmd.Parameters.AddWithValue("$user", (long)actor);
-        cmd.Parameters.AddWithValue("$from", fromAccountId);
-        cmd.Parameters.AddWithValue("$to", toAccountId);
-        cmd.Parameters.AddWithValue("$toAmt", toAmount);
-        cmd.Parameters.AddWithValue("$note", (object?)note ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$merchant", string.IsNullOrWhiteSpace(merchant) ? DBNull.Value : merchant.Trim());
-        cmd.Parameters.AddWithValue("$date", transactionDate);
-        cmd.ExecuteNonQuery();
-        var id = ReadLastId(conn);
-        ApplyAccountDelta(conn, tx, fromAccountId, "transfer_out", amount, toAccountId);
-        ApplyAccountDelta(conn, tx, toAccountId, "transfer_in", toAmount, fromAccountId);
-        tx.Commit();
-        Audit(actor, "transaction", id, "transfer");
-        return id;
+
+        int Insert()
+        {
+            using var conn = _db.GetConnection();
+            conn.Open();
+            using var tx = conn.BeginTransaction();
+            var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = @"
+                INSERT INTO BudgetTransactions
+                (Type, Amount, AmountInput, SpentByUserId, AccountId, TransferToAccountId, TransferToAmount, Note, Merchant, TransactionDate)
+                VALUES ('transfer', $amt, $input, $user, $from, $to, $toAmt, $note, $merchant, $date)";
+            cmd.Parameters.AddWithValue("$amt", amount);
+            cmd.Parameters.AddWithValue("$input", amountInput);
+            cmd.Parameters.AddWithValue("$user", (long)actor);
+            cmd.Parameters.AddWithValue("$from", fromAccountId);
+            cmd.Parameters.AddWithValue("$to", toAccountId);
+            cmd.Parameters.AddWithValue("$toAmt", toAmount);
+            cmd.Parameters.AddWithValue("$note", (object?)note ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$merchant", string.IsNullOrWhiteSpace(merchant) ? DBNull.Value : merchant.Trim());
+            cmd.Parameters.AddWithValue("$date", transactionDate);
+            cmd.ExecuteNonQuery();
+            var id = ReadLastId(conn);
+            ApplyAccountDelta(conn, tx, fromAccountId, "transfer_out", amount, toAccountId);
+            ApplyAccountDelta(conn, tx, toAccountId, "transfer_in", toAmount, fromAccountId);
+            tx.Commit();
+            Audit(actor, "transaction", id, "transfer");
+            return id;
+        }
+
+        if (!IsSubmitKey(submitKey) && !collapseAccidentalDuplicate)
+        {
+            var id = Insert();
+            createdCallback?.Invoke(true);
+            return id;
+        }
+
+        var fingerprint = TransferFingerprint(
+            amount, amountInput, toAmount, fromAccountId, toAccountId, transactionDate, note, merchant, actor);
+        return WithDuplicateGuard(submitKey, createdCallback, () =>
+        {
+            if (collapseAccidentalDuplicate && MatchRecent(fingerprint) is int recentId)
+                return (recentId, false);
+            var id = Insert();
+            if (collapseAccidentalDuplicate)
+                RememberRecent(fingerprint, id);
+            return (id, true);
+        });
+    }
+
+    private int? MatchRecent(string fingerprint)
+    {
+        if (_recentCreates.TryGetValue(fingerprint, out var hit) &&
+            DateTime.UtcNow.Ticks - hit.Ticks <= TimeSpan.FromSeconds(AccidentalDuplicateSeconds).Ticks)
+            return hit.Id;
+        return null;
+    }
+
+    private void RememberRecent(string fingerprint, int id)
+    {
+        var now = DateTime.UtcNow.Ticks;
+        _recentCreates[fingerprint] = (id, now);
+        if (_recentCreates.Count <= 64) return;
+        var window = TimeSpan.FromSeconds(AccidentalDuplicateSeconds).Ticks;
+        foreach (var entry in _recentCreates)
+        {
+            if (now - entry.Value.Ticks > window)
+                _recentCreates.TryRemove(entry.Key, out _);
+        }
+    }
+
+    private static string TransactionFingerprint(
+        string type,
+        double amount,
+        string amountInput,
+        int? categoryId,
+        ulong spentByUserId,
+        int accountId,
+        string? note,
+        string? receiptUrl,
+        string? merchant,
+        string transactionDate,
+        bool isPending,
+        string currency,
+        double exchangeRate,
+        List<BudgetTransactionSplitModel>? splits,
+        List<string>? tags,
+        List<BudgetShareChargeInput>? shareCharges,
+        List<BudgetSharePaymentInput>? sharePayments)
+    {
+        var culture = CultureInfo.InvariantCulture;
+        var splitText = splits == null
+            ? ""
+            : string.Join(";", splits.Select(s =>
+                $"{s.CategoryId}:{s.SpentByUserId}:{s.Amount.ToString("0.00", culture)}"));
+        var tagText = tags == null
+            ? ""
+            : string.Join(";", tags.Select(t => t.Trim()).Where(t => t.Length > 0).OrderBy(t => t, StringComparer.OrdinalIgnoreCase));
+        var chargeText = shareCharges == null
+            ? ""
+            : string.Join(";", shareCharges.Select(c =>
+                $"{c.OwedByUserId}:{c.OwedByLabel}:{c.Amount.ToString("0.00", culture)}"));
+        var payText = sharePayments == null
+            ? ""
+            : string.Join(";", sharePayments.Select(p =>
+                $"{p.ChargeId}:{p.Amount.ToString("0.00", culture)}"));
+        return string.Join("|",
+            type.Trim().ToLowerInvariant(),
+            amount.ToString("0.00", culture),
+            amountInput.Trim(),
+            categoryId?.ToString(culture) ?? "",
+            spentByUserId.ToString(culture),
+            accountId.ToString(culture),
+            (note ?? "").Trim(),
+            (receiptUrl ?? "").Trim(),
+            (merchant ?? "").Trim(),
+            transactionDate.Trim(),
+            isPending ? "1" : "0",
+            currency,
+            exchangeRate.ToString("0.####", culture),
+            splitText,
+            tagText,
+            chargeText,
+            payText);
+    }
+
+    private static string TransferFingerprint(
+        double amount,
+        string amountInput,
+        double toAmount,
+        int fromAccountId,
+        int toAccountId,
+        string transactionDate,
+        string? note,
+        string? merchant,
+        ulong actor)
+    {
+        var culture = CultureInfo.InvariantCulture;
+        return string.Join("|",
+            "transfer",
+            amount.ToString("0.00", culture),
+            amountInput.Trim(),
+            toAmount.ToString("0.00", culture),
+            fromAccountId.ToString(culture),
+            toAccountId.ToString(culture),
+            transactionDate.Trim(),
+            (note ?? "").Trim(),
+            (merchant ?? "").Trim(),
+            actor.ToString(culture));
     }
 
     public bool UpdateTransaction(

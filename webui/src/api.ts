@@ -21,6 +21,7 @@ export type ApiJsonOptions = {
   token?: string;
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
+  headers?: Record<string, string>;
   signal?: AbortSignal;
   /** @internal */ _authRetry?: boolean;
 };
@@ -95,6 +96,9 @@ export async function apiJson<T>(path: string, options: ApiJsonOptions = {}): Pr
   const method = options.method ?? "GET";
   if (options.body !== undefined) {
     headers["Content-Type"] = "application/json";
+  }
+  if (options.headers) {
+    Object.assign(headers, options.headers);
   }
 
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
@@ -1697,6 +1701,24 @@ export function deleteBudgetCategory(token: string, actorUserId: string, id: num
   return apiJson<unknown>(path, { token, method: "DELETE" });
 }
 
+const budgetWriteFlights = new Map<string, Promise<unknown>>();
+
+/** Parallel identical budget writes share one request. A later write is a new request. */
+function shareBudgetWrite<T>(key: string, run: () => Promise<T>): Promise<T> {
+  const existing = budgetWriteFlights.get(key) as Promise<T> | undefined;
+  if (existing) return existing;
+  const pending = run().finally(() => {
+    if (budgetWriteFlights.get(key) === pending) budgetWriteFlights.delete(key);
+  });
+  budgetWriteFlights.set(key, pending);
+  return pending;
+}
+
+function idempotencyHeaders(submitKey?: string): Record<string, string> | undefined {
+  const key = submitKey?.trim();
+  return key ? { "Idempotency-Key": key } : undefined;
+}
+
 export function postBudgetTransaction(
   token: string,
   actorUserId: string,
@@ -1715,7 +1737,8 @@ export function postBudgetTransaction(
     currency?: string;
     shareCharges?: BudgetShareChargeInput[];
     sharePayments?: BudgetSharePaymentInput[];
-  }
+  },
+  submitKey?: string
 ) {
   const path = mergeQuery("/api/budget/transactions", { actorUserId });
   const spentBy = jsonSnowflakeDigits(body.spentByUserId) ?? body.spentByUserId;
@@ -1729,11 +1752,16 @@ export function postBudgetTransaction(
     ...c,
     owedByUserId: c.owedByUserId ? (jsonSnowflakeDigits(c.owedByUserId) ?? c.owedByUserId) : c.owedByUserId,
   }));
-  return apiJson<{ id: number }>(path, {
-    token,
-    method: "POST",
-    body: { ...body, spentByUserId: spentBy, splits, shareCharges },
-  });
+  const payload = { ...body, spentByUserId: spentBy, splits, shareCharges };
+  const flightKey = `tx:${actorUserId}:${submitKey?.trim() || JSON.stringify(payload)}`;
+  return shareBudgetWrite(flightKey, () =>
+    apiJson<{ id: number }>(path, {
+      token,
+      method: "POST",
+      headers: idempotencyHeaders(submitKey),
+      body: payload,
+    })
+  );
 }
 
 export function patchBudgetTransaction(
@@ -2011,10 +2039,19 @@ export function postBudgetTransfer(
     note?: string;
     merchant?: string;
     toAmountInput?: string;
-  }
+  },
+  submitKey?: string
 ) {
   const path = mergeQuery("/api/budget/transfers", { actorUserId });
-  return apiJson<{ id: number }>(path, { token, method: "POST", body });
+  const flightKey = `xfer:${actorUserId}:${submitKey?.trim() || JSON.stringify(body)}`;
+  return shareBudgetWrite(flightKey, () =>
+    apiJson<{ id: number }>(path, {
+      token,
+      method: "POST",
+      headers: idempotencyHeaders(submitKey),
+      body,
+    })
+  );
 }
 
 export type BudgetIncomePlan = {
@@ -2139,17 +2176,23 @@ export function postBudgetBillPay(
   token: string,
   actorUserId: string,
   billId: number,
-  body: { amountInput: string; spentByUserId?: string }
+  body: { amountInput: string; spentByUserId?: string },
+  submitKey?: string
 ) {
   const path = mergeQuery(`/api/budget/bills/${billId}/pay`, { actorUserId });
   const spentBy = body.spentByUserId
     ? (jsonSnowflakeDigits(body.spentByUserId) ?? body.spentByUserId)
     : undefined;
-  return apiJson<{ transactionId: number }>(path, {
-    token,
-    method: "POST",
-    body: { amountInput: body.amountInput, spentByUserId: spentBy ?? "0" },
-  });
+  const payload = { amountInput: body.amountInput, spentByUserId: spentBy ?? "0" };
+  const flightKey = `bill:${actorUserId}:${billId}:${submitKey?.trim() || JSON.stringify(payload)}`;
+  return shareBudgetWrite(flightKey, () =>
+    apiJson<{ transactionId: number }>(path, {
+      token,
+      method: "POST",
+      headers: idempotencyHeaders(submitKey),
+      body: payload,
+    })
+  );
 }
 
 export function postBudgetRecurring(

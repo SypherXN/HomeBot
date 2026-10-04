@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSubmitLock } from "../../lib/useSubmitLock";
 import DiscordMemberSelect from "../../components/DiscordMemberSelect";
 import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster";
 import {
@@ -60,6 +61,7 @@ export default function BudgetBillsRecurring({
   const [recCategory, setRecCategory] = useState("");
   const [recAccount, setRecAccount] = useState("");
   const [payBillId, setPayBillId] = useState<number | null>(null);
+  const payLock = useSubmitLock();
   const [payAmount, setPayAmount] = useState("");
 
   const [editBillId, setEditBillId] = useState<number | null>(null);
@@ -222,15 +224,20 @@ export default function BudgetBillsRecurring({
                                 />
                                 <button
                                   type="button"
-                                  className="text-xs text-emerald-400"
-                                  onClick={async () => {
-                                    await postBudgetBillPay(token, actor, b.id, {
-                                      amountInput: payAmount.trim() || String(b.amountEstimate),
-                                      spentByUserId: defaultSpender,
-                                    });
-                                    setPayBillId(null);
-                                    await onSaved();
-                                  }}
+                                  className="text-xs text-emerald-400 disabled:opacity-50"
+                                  disabled={payLock.busy}
+                                  onClick={() =>
+                                    void payLock.run(async () => {
+                                      const body = {
+                                        amountInput: payAmount.trim() || String(b.amountEstimate),
+                                        spentByUserId: defaultSpender,
+                                      };
+                                      await postBudgetBillPay(token, actor, b.id, body, payLock.key(body));
+                                      payLock.rotate();
+                                      setPayBillId(null);
+                                      await onSaved();
+                                    })
+                                  }
                                 >
                                   Confirm
                                 </button>

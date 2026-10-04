@@ -206,6 +206,7 @@ public static class BudgetApiRegistration
             var txType = body.Type ?? "expense";
             try
             {
+                var created = true;
                 var id = svc.CreateTransaction(
                     txType,
                     body.AmountInput,
@@ -223,13 +224,19 @@ public static class BudgetApiRegistration
                     body.Tags,
                     actor,
                     body.ShareCharges,
-                    body.SharePayments);
-                var notifyType = txType;
-                if (body.SharePayments is { Count: > 0 } &&
-                    txType.Equals("income", StringComparison.OrdinalIgnoreCase))
-                    notifyType = "reimbursement";
-                await BudgetApiDiscordNotify.TransactionCreatedAsync(
-                    root, svc, notifyType, body.AmountInput, body.CategoryId, body.SpentByUserId);
+                    body.SharePayments,
+                    IdempotencyKey(http),
+                    collapseAccidentalDuplicate: true,
+                    createdCallback: value => created = value);
+                if (created)
+                {
+                    var notifyType = txType;
+                    if (body.SharePayments is { Count: > 0 } &&
+                        txType.Equals("income", StringComparison.OrdinalIgnoreCase))
+                        notifyType = "reimbursement";
+                    await BudgetApiDiscordNotify.TransactionCreatedAsync(
+                        root, svc, notifyType, body.AmountInput, body.CategoryId, body.SpentByUserId);
+                }
                 return Results.Created($"/api/budget/transactions/{id}", new { id });
             }
             catch (ArgumentException ex)
@@ -247,6 +254,7 @@ public static class BudgetApiRegistration
             var svc = root.GetRequiredService<BudgetService>();
             try
             {
+                var created = true;
                 var id = svc.CreateTransfer(
                     body.AmountInput,
                     body.FromAccountId,
@@ -255,9 +263,15 @@ public static class BudgetApiRegistration
                     body.Note,
                     actor,
                     body.ToAmountInput,
-                    body.Merchant);
-                await BudgetApiDiscordNotify.TransferCreatedAsync(
-                    root, svc, body.AmountInput, body.FromAccountId, body.ToAccountId, actor, body.ToAmountInput);
+                    body.Merchant,
+                    IdempotencyKey(http),
+                    collapseAccidentalDuplicate: true,
+                    value => created = value);
+                if (created)
+                {
+                    await BudgetApiDiscordNotify.TransferCreatedAsync(
+                        root, svc, body.AmountInput, body.FromAccountId, body.ToAccountId, actor, body.ToAmountInput);
+                }
                 return Results.Created($"/api/budget/transactions/{id}", new { id });
             }
             catch (ArgumentException ex)
@@ -552,8 +566,17 @@ public static class BudgetApiRegistration
                 return ApiResults.BadRequest("amountInput required.", "missing_amount");
             var svc = root.GetRequiredService<BudgetService>();
             var spender = body.SpentByUserId != 0 ? body.SpentByUserId : actor;
-            var txId = svc.MarkBillPaid(id, body.AmountInput, spender, actor);
-            await BudgetApiDiscordNotify.BillPaidAsync(root, svc, id, body.AmountInput, spender);
+            var created = true;
+            var txId = svc.MarkBillPaid(
+                id,
+                body.AmountInput,
+                spender,
+                actor,
+                IdempotencyKey(http),
+                collapseAccidentalDuplicate: true,
+                value => created = value);
+            if (created)
+                await BudgetApiDiscordNotify.BillPaidAsync(root, svc, id, body.AmountInput, spender);
             return Results.Ok(new { transactionId = txId });
         });
 
@@ -660,6 +683,14 @@ public static class BudgetApiRegistration
             root.GetRequiredService<BudgetService>().DismissNotification(body.Key.Trim());
             return Results.Ok(new { ok = true });
         });
+    }
+
+    internal static string? IdempotencyKey(HttpRequest http)
+    {
+        if (!http.Headers.TryGetValue("Idempotency-Key", out var value))
+            return null;
+        var key = value.ToString().Trim();
+        return key.Length == 0 ? null : key;
     }
 }
 
