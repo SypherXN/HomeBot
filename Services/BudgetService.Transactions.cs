@@ -5,6 +5,38 @@ using Microsoft.Data.Sqlite;
 
 public partial class BudgetService
 {
+    /// <summary>Distinct merchants across all history, newest first, with their last known category.</summary>
+    public List<BudgetMerchantModel> GetMerchants()
+    {
+        using var conn = _db.GetConnection();
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT t.Merchant, c.Id, c.Name
+            FROM BudgetTransactions t
+            LEFT JOIN BudgetCategories c ON c.Id = t.CategoryId
+            WHERE t.Merchant IS NOT NULL
+            ORDER BY t.TransactionDate DESC, t.Id DESC";
+        using var reader = cmd.ExecuteReader();
+        var merchants = new Dictionary<string, BudgetMerchantModel>(StringComparer.OrdinalIgnoreCase);
+        while (reader.Read())
+        {
+            var name = reader.GetString(0).Trim();
+            if (name.Length == 0) continue;
+            if (!merchants.TryGetValue(name, out var merchant))
+            {
+                merchant = new BudgetMerchantModel { Merchant = name };
+                merchants.Add(name, merchant);
+            }
+            if (merchant.CategoryId == null && !reader.IsDBNull(1))
+            {
+                merchant.CategoryId = reader.GetInt32(1);
+                merchant.CategoryName = reader.GetString(2);
+            }
+        }
+        return merchants.Values.ToList();
+    }
+
     public PagedResult<BudgetTransactionListItemModel> GetTransactions(
         int page = 0,
         string? month = null,

@@ -31,6 +31,7 @@ export default function MerchantSuggestInput({
 
   const matches = filterMerchants(suggestions, value);
   const show = open && matches.length > 0;
+  const selectedIndex = Math.min(activeIndex, Math.max(0, matches.length - 1));
 
   function updatePos() {
     const el = rootRef.current;
@@ -60,9 +61,9 @@ export default function MerchantSuggestInput({
 
   useEffect(() => {
     if (!show) return;
-    const el = document.getElementById(`${listId}-opt-${activeIndex}`);
+    const el = document.getElementById(`${listId}-opt-${selectedIndex}`);
     el?.scrollIntoView({ block: "nearest" });
-  }, [activeIndex, show, listId]);
+  }, [selectedIndex, show, listId]);
 
   useEffect(() => {
     if (!show) return;
@@ -106,7 +107,7 @@ export default function MerchantSuggestInput({
       }
       setActiveIndex((i) => Math.max(0, i - 1));
     } else if (e.key === "Enter" && show) {
-      const row = matches[activeIndex];
+      const row = matches[selectedIndex];
       if (!row) return;
       e.preventDefault();
       pick(row);
@@ -129,9 +130,9 @@ export default function MerchantSuggestInput({
                     type="button"
                     role="option"
                     id={`${listId}-opt-${i}`}
-                    aria-selected={i === activeIndex}
+                    aria-selected={i === selectedIndex}
                     className={`block w-full truncate px-3 py-2 text-left text-sm ${
-                      i === activeIndex ? "bg-slate-800 text-white" : "text-slate-200 hover:bg-slate-800/70"
+                      i === selectedIndex ? "bg-slate-800 text-white" : "text-slate-200 hover:bg-slate-800/70"
                     }`}
                     onMouseDown={(e) => e.preventDefault()}
                     onMouseEnter={() => setActiveIndex(i)}
@@ -155,8 +156,10 @@ export default function MerchantSuggestInput({
         placeholder={placeholder}
         autoComplete="off"
         role="combobox"
+        aria-label={placeholder}
         aria-expanded={show}
         aria-controls={show ? listId : undefined}
+        aria-activedescendant={show ? `${listId}-opt-${selectedIndex}` : undefined}
         aria-autocomplete="list"
         className={className}
         onChange={(e) => {

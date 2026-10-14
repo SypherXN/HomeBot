@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { getBudgetCategorizeRules, getBudgetTransactions, type BudgetCategorizeRule } from "../api";
+import { useEffect, useMemo, useState } from "react";
+import { getBudgetCategorizeRules, getBudgetMerchants, type BudgetCategorizeRule, type BudgetMerchant } from "../api";
 
 export type MerchantSuggestion = {
   categoryId: number;
@@ -9,9 +9,9 @@ export type MerchantSuggestion = {
 };
 
 type State = {
+  loadedFor: string;
   rules: BudgetCategorizeRule[];
-  /** Distinct merchant names from recent history + rule tokens (for typeahead). */
-  merchants: string[];
+  history: BudgetMerchant[];
 };
 
 /**
@@ -22,30 +22,21 @@ type State = {
  */
 export function useMerchantSuggestions(token: string, merchant: string) {
   const tok = token.trim();
-  const [state, setState] = useState<State>({ rules: [], merchants: [] });
-  const [suggestion, setSuggestion] = useState<MerchantSuggestion | null>(null);
-  const [checking, setChecking] = useState(false);
-  const lastLookupKey = useRef("");
+  const [state, setState] = useState<State>({ loadedFor: "", rules: [], history: [] });
 
   useEffect(() => {
     if (!tok) return;
     let cancelled = false;
     void (async () => {
-      const [rulesRes, recent] = await Promise.all([
+      const [rulesRes, history] = await Promise.all([
         getBudgetCategorizeRules(tok).catch(() => ({ rules: [] as BudgetCategorizeRule[] })),
-        getBudgetTransactions(tok, 0, {}).catch(() => null),
+        getBudgetMerchants(tok).catch(() => [] as BudgetMerchant[]),
       ]);
       if (cancelled) return;
-      const merchants = new Set<string>();
-      for (const t of recent?.items ?? []) {
-        if (t.merchant?.trim()) merchants.add(t.merchant.trim());
-      }
-      for (const r of rulesRes.rules) {
-        if (r.isActive && r.matchContains.trim()) merchants.add(r.matchContains.trim());
-      }
       setState({
-        rules: [...rulesRes.rules.filter((r) => r.isActive)].sort((a, b) => b.priority - a.priority),
-        merchants: [...merchants].sort((a, b) => a.localeCompare(b)).slice(0, 60),
+        loadedFor: tok,
+        rules: rulesRes.rules.filter((r) => r.isActive && r.matchField === "merchant").sort((a, b) => b.priority - a.priority),
+        history,
       });
     })();
     return () => {
@@ -53,7 +44,13 @@ export function useMerchantSuggestions(token: string, merchant: string) {
     };
   }, [tok]);
 
-  const ruleMatch = useMemo((): MerchantSuggestion | null => {
+  const merchants = useMemo(
+    () => state.loadedFor === tok && tok ? state.history.map((entry) => entry.merchant) : [],
+    [state, tok]
+  );
+
+  const suggestion = useMemo((): MerchantSuggestion | null => {
+    if (!tok || state.loadedFor !== tok) return null;
     const m = merchant.trim().toLowerCase();
     if (m.length < 2) return null;
     for (const r of state.rules) {
@@ -62,44 +59,11 @@ export function useMerchantSuggestions(token: string, merchant: string) {
         return { categoryId: r.categoryId, categoryName: r.categoryName, source: "rule" };
       }
     }
-    return null;
-  }, [merchant, state.rules]);
+    const hit = state.history.find((entry) => entry.merchant.trim().toLowerCase() === m);
+    return hit?.categoryId != null && hit.categoryName
+      ? { categoryId: hit.categoryId, categoryName: hit.categoryName, source: "last" }
+      : null;
+  }, [merchant, state, tok]);
 
-  useEffect(() => {
-    if (ruleMatch) {
-      setSuggestion(ruleMatch);
-      setChecking(false);
-      return;
-    }
-    const m = merchant.trim();
-    if (!tok || m.length < 3) {
-      setSuggestion(null);
-      setChecking(false);
-      return;
-    }
-    const key = `${tok}:${m.toLowerCase()}`;
-    if (lastLookupKey.current === key) return;
-    setChecking(true);
-    const handle = setTimeout(() => {
-      void (async () => {
-        try {
-          const res = await getBudgetTransactions(tok, 0, { merchant: m });
-          const hit = res.items.find((t) => t.categoryId != null && t.categoryName);
-          lastLookupKey.current = key;
-          setSuggestion(
-            hit && hit.categoryId != null && hit.categoryName
-              ? { categoryId: hit.categoryId, categoryName: hit.categoryName, source: "last" }
-              : null
-          );
-        } catch {
-          setSuggestion(null);
-        } finally {
-          setChecking(false);
-        }
-      })();
-    }, 350);
-    return () => clearTimeout(handle);
-  }, [tok, merchant, ruleMatch]);
-
-  return { merchants: state.merchants, suggestion, checking };
+  return { merchants, suggestion, checking: Boolean(tok) && state.loadedFor !== tok };
 }

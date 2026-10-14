@@ -37,6 +37,13 @@ public sealed class BudgetTransactionSplitModel
     public double Amount { get; set; }
 }
 
+public sealed class BudgetMerchantModel
+{
+    public string Merchant { get; set; } = "";
+    public int? CategoryId { get; set; }
+    public string? CategoryName { get; set; }
+}
+
 public sealed class BudgetTransactionListItemModel
 {
     public int Id { get; set; }

@@ -87,6 +87,47 @@ public sealed class BudgetApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Merchant_suggestions_include_all_history_and_last_known_categories()
+    {
+        var categoryResponse = await _client.PostAsJsonAsync(
+            $"/api/budget/categories?actorUserId={Actor}",
+            new { name = "Groceries", visibility = "household" });
+        categoryResponse.EnsureSuccessStatusCode();
+        var category = await categoryResponse.Content.ReadFromJsonAsync<Dictionary<string, int>>();
+        var categoryId = category!["id"];
+
+        async Task Add(string? merchant, int? catId, string date)
+        {
+            var response = await _client.PostAsJsonAsync(
+                $"/api/budget/transactions?actorUserId={Actor}",
+                new { type = "expense", amountInput = "1", categoryId = catId,
+                    spentByUserId = Actor.ToString(), transactionDate = date, merchant });
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        }
+
+        // Older months and more than a ledger page / the former 60-name cap.
+        for (var i = 0; i < 65; i++)
+            await Add($"Past merchant {i}", null, "2020-01-15");
+        await Add(" Costco ", categoryId, "2020-02-01");
+        await Add("COSTCO", null, "2020-03-01");
+        await Add(" ", null, "2020-04-01");
+        await Add(null, null, "2020-05-01");
+
+        var merchants = await _client.GetFromJsonAsync<List<BudgetMerchantModel>>("/api/budget/merchants");
+        Assert.NotNull(merchants);
+        Assert.Equal(66, merchants.Count);
+        Assert.Equal("COSTCO", merchants[0].Merchant);
+        Assert.Equal(categoryId, merchants[0].CategoryId);
+        Assert.Equal("Groceries", merchants[0].CategoryName);
+        Assert.Contains(merchants, m => m.Merchant == "Past merchant 0");
+        Assert.Contains(merchants, m => m.Merchant == "Past merchant 64");
+
+        _client.DefaultRequestHeaders.Authorization = null;
+        var unauthorized = await _client.GetAsync("/api/budget/merchants");
+        Assert.Equal(HttpStatusCode.Unauthorized, unauthorized.StatusCode);
+    }
+
+    [Fact]
     public void Schema_migrations_are_idempotent()
     {
         var path = Path.Combine(Path.GetTempPath(), $"homebot_mig_test_{Guid.NewGuid():N}.db");

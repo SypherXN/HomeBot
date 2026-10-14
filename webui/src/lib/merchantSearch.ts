@@ -1,17 +1,20 @@
-/** Case-insensitive merchant matches. Empty query returns nothing so the menu stays closed until the user types. */
+function searchKey(value: string): string {
+  return value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+/** Prefix matches first, then fragments; ignore case, accents and punctuation. */
 export function filterMerchants(merchants: string[], query: string, limit = 8): string[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return [];
+  const q = searchKey(query);
+  if (!q || limit <= 0) return [];
   const out: string[] = [];
   const seen = new Set<string>();
   for (const raw of merchants) {
     const name = raw.trim();
     if (!name) continue;
-    const key = name.toLowerCase();
+    const key = searchKey(name);
     if (seen.has(key) || !key.includes(q)) continue;
     seen.add(key);
     out.push(name);
-    if (out.length >= limit) break;
   }
-  return out;
+  return out.sort((a, b) => Number(searchKey(b).startsWith(q)) - Number(searchKey(a).startsWith(q))).slice(0, limit);
 }

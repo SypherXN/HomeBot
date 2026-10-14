@@ -23,6 +23,8 @@ public static class BudgetApiRegistration
 
         app.MapGet("/api/budget/tags", () => Results.Ok(root.GetRequiredService<BudgetService>().GetAllTags()));
 
+        app.MapGet("/api/budget/merchants", () => Results.Ok(root.GetRequiredService<BudgetService>().GetMerchants()));
+
         app.MapGet("/api/budget/transactions", (HttpRequest request) =>
         {
             var svc = root.GetRequiredService<BudgetService>();

@@ -1646,6 +1646,16 @@ export function getBudgetTags(token: string) {
   return apiJson<string[]>("/api/budget/tags", { token });
 }
 
+export type BudgetMerchant = {
+  merchant: string;
+  categoryId: number | null;
+  categoryName: string | null;
+};
+
+export function getBudgetMerchants(token: string) {
+  return apiJson<BudgetMerchant[]>("/api/budget/merchants", { token });
+}
+
 export function getBudgetSummaryMonth(
   token: string,
   month: string,

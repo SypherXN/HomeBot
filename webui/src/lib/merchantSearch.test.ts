@@ -16,4 +16,14 @@ describe("filterMerchants", () => {
   it("skips blanks and duplicate names", () => {
     expect(filterMerchants(["", "  ", "Costco", "costco"], "cost")).toEqual(["Costco"]);
   });
+
+  it("matches from the first letter and ranks prefixes before fragments", () => {
+    expect(filterMerchants(["The Coffee Shop", "Costco", "Coffee Shop"], "c", 2)).toEqual(["Costco", "Coffee Shop"]);
+  });
+
+  it("ignores punctuation and accents while keeping the saved spelling", () => {
+    expect(filterMerchants(["H-E-B", "HEB", "Café"], "heb")).toEqual(["H-E-B"]);
+    expect(filterMerchants(["Café"], "cafe")).toEqual(["Café"]);
+    expect(filterMerchants(list, "---")).toEqual([]);
+  });
 });
