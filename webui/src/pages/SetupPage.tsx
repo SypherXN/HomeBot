@@ -6,7 +6,6 @@ import {
   postAuthDiscordCompleteBootstrap,
   postAuthDiscordCompleteRegister,
   postAuthDiscordStart,
-  postAuthRegister,
   type AuthDiscordStatus,
 } from "../api";
 
@@ -18,7 +17,6 @@ export default function SetupPage() {
   const [password, setPassword] = useState("");
   const [discordUserId, setDiscordUserId] = useState("");
   const [setupToken, setSetupToken] = useState("");
-  const [inviteToken, setInviteToken] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -119,26 +117,6 @@ export default function SetupPage() {
       };
       if (setupToken.trim()) body.setupToken = setupToken.trim();
       const r = await postAuthBootstrap(body);
-      setMessage(r.message);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const submitInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setMessage(null);
-    setBusy(true);
-    try {
-      const r = await postAuthRegister({
-        inviteToken: inviteToken.trim(),
-        username: username.trim(),
-        password,
-        discordUserId: discordUserId.trim(),
-      });
       setMessage(r.message);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -352,56 +330,26 @@ export default function SetupPage() {
           </button>
         </form>
       ) : (
-        <form onSubmit={submitInvite} className="space-y-4">
-          <p className="text-sm text-slate-400">
-            Requires <code className="text-slate-300">HOMEBOT_WEB_INVITE_TOKEN</code> on the server.
+        <div className="space-y-3 text-sm text-slate-400">
+          <p>Pasting a Discord user ID is not accepted.</p>
+          <p>
+            Use <strong className="font-medium text-slate-200">Discord verify</strong> and choose{" "}
+            <strong className="font-medium text-slate-200">Additional member</strong>. The account is created only after{" "}
+            <code className="text-slate-300">/webui-verify</code> links the code to that Discord user.
           </p>
-          <div>
-            <label className="block text-sm font-medium text-slate-300">Invite token</label>
-            <input
-              value={inviteToken}
-              onChange={(e) => setInviteToken(e.target.value)}
-              type="password"
-              autoComplete="off"
-              className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-300">Username</label>
-            <input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoComplete="username"
-              className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-300">Password (8+ characters)</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="new-password"
-              className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-300">Discord user id</label>
-            <input
-              value={discordUserId}
-              onChange={(e) => setDiscordUserId(e.target.value)}
-              inputMode="numeric"
-              className="mt-1 w-full hb-input px-3 py-2 text-slate-100"
-            />
-          </div>
           <button
-            type="submit"
-            disabled={busy}
-            className="rounded-md bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
+            type="button"
+            onClick={() => {
+              setTab("discord");
+              setDiscIntent("register");
+              setError(null);
+              setMessage(null);
+            }}
+            className="rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
           >
-            {busy ? "Creating…" : "Register"}
+            Continue with Discord verify
           </button>
-        </form>
+        </div>
       )}
 
       {error ? (

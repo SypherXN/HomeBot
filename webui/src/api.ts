@@ -1378,7 +1378,7 @@ export function postAuthRegister(body: {
   inviteToken: string;
   username: string;
   password: string;
-  discordUserId: string;
+  sessionId: string;
 }) {
   return apiJson<{ ok: boolean; message: string }>("/api/auth/register", { method: "POST", body });
 }

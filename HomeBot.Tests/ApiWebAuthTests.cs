@@ -3,6 +3,8 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Data.Sqlite;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -200,7 +202,7 @@ public sealed class ApiWebAuthTests : IDisposable
     }
 
     [Fact]
-    public async Task Register_with_invite_adds_second_user()
+    public async Task Register_with_pasted_discord_id_is_rejected()
     {
         Environment.SetEnvironmentVariable("HOMEBOT_WEB_INVITE_TOKEN", "household-invite-secret");
 
@@ -221,16 +223,135 @@ public sealed class ApiWebAuthTests : IDisposable
                     password = "password1y",
                     discordUserId = "200003"
                 });
-            Assert.Equal(HttpStatusCode.OK, reg.StatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest, reg.StatusCode);
+            var denied = await reg.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("discord_unverified", denied.GetProperty("code").GetString());
 
             var login = await naked.PostAsJsonAsync(
                 "/api/auth/login",
                 new { username = "bob", password = "password1y" });
-            Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, login.StatusCode);
         }
         finally
         {
             Environment.SetEnvironmentVariable("HOMEBOT_WEB_INVITE_TOKEN", null);
+        }
+    }
+
+    [Fact]
+    public async Task Register_with_verified_session_and_invite_adds_second_user()
+    {
+        Environment.SetEnvironmentVariable("HOMEBOT_WEB_INVITE_TOKEN", "household-invite-secret");
+        try
+        {
+            using var naked = _app.GetTestClient();
+            var boot = await naked.PostAsJsonAsync(
+                "/api/auth/bootstrap",
+                new { username = "owner2", password = "password1x", discordUserId = "210002" });
+            Assert.Equal(HttpStatusCode.OK, boot.StatusCode);
+
+            var start = await naked.PostAsJsonAsync("/api/auth/discord/start", new { intent = "register" });
+            Assert.Equal(HttpStatusCode.OK, start.StatusCode);
+            var startDoc = await start.Content.ReadFromJsonAsync<JsonElement>();
+            var verifySvc = _services.GetRequiredService<WebAuthDiscordVerificationService>();
+            Assert.Contains("Linked", verifySvc.TryVerifyInDiscord(startDoc.GetProperty("code").GetString()!, 210_003u), StringComparison.Ordinal);
+
+            var reg = await naked.PostAsJsonAsync(
+                "/api/auth/register",
+                new
+                {
+                    inviteToken = "household-invite-secret",
+                    username = "cara",
+                    password = "password1y",
+                    sessionId = startDoc.GetProperty("sessionId").GetString()
+                });
+            Assert.Equal(HttpStatusCode.OK, reg.StatusCode);
+
+            var login = await naked.PostAsJsonAsync("/api/auth/login", new { username = "cara", password = "password1y" });
+            Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+            var loginDoc = await login.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("210003", loginDoc.GetProperty("discordUserId").GetString());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("HOMEBOT_WEB_INVITE_TOKEN", null);
+        }
+    }
+
+    [Fact]
+    public async Task Duplicate_normalized_discord_id_is_rejected()
+    {
+        var auth = _services.GetRequiredService<WebAuthService>();
+        Assert.Null(auth.TryInsertWebUser("one", "password1x", "300001"));
+        var dup = auth.TryInsertWebUser("two", "password1x", "000300001");
+        Assert.NotNull(dup);
+        var ctx = new DefaultHttpContext { RequestServices = _app.Services };
+        ctx.Response.Body = new MemoryStream();
+        await dup!.ExecuteAsync(ctx);
+        Assert.Equal(409, ctx.Response.StatusCode);
+        ctx.Response.Body.Position = 0;
+        using var json = await JsonDocument.ParseAsync(ctx.Response.Body);
+        Assert.Equal("discord_identity_taken", json.RootElement.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public void Unverified_and_inactive_accounts_are_not_admin()
+    {
+        var previous = Environment.GetEnvironmentVariable("HOMEBOT_WEB_ADMIN_DISCORD_IDS");
+        Environment.SetEnvironmentVariable("HOMEBOT_WEB_ADMIN_DISCORD_IDS", "424242");
+        try
+        {
+            var auth = _services.GetRequiredService<WebAuthService>();
+            Assert.Null(auth.TryCreateFirstUser("sneaky", "password1x", "424242", null));
+            Assert.False(auth.IsAdmin("sneaky", "424242"));
+            Assert.NotNull(auth.TryIssueJwtForWebUserByDiscordId("424242"));
+            Assert.False(auth.IsAdmin("sneaky", "424242"));
+            Assert.NotNull(auth.TryIssueJwtForWebUserByDiscordId("424242", markDiscordVerified: true));
+            Assert.True(auth.IsAdmin("sneaky", "424242"));
+            Assert.Null(auth.TryDeactivateUser("sneaky"));
+            Assert.False(auth.IsAdmin("sneaky", "424242"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("HOMEBOT_WEB_ADMIN_DISCORD_IDS", previous);
+        }
+    }
+
+    [Fact]
+    public void Duplicate_discord_ids_block_preflight_without_deleting_rows()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"homebot_dupe_{Guid.NewGuid():N}.db");
+        try
+        {
+            using (var conn = new SqliteConnection($"Data Source={path}"))
+            {
+                conn.Open();
+                using var create = conn.CreateCommand();
+                create.CommandText = @"
+                    CREATE TABLE WebUsers (
+                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        Username TEXT NOT NULL,
+                        PasswordHash TEXT NOT NULL,
+                        DiscordUserId TEXT NOT NULL);
+                    INSERT INTO WebUsers (Username, PasswordHash, DiscordUserId) VALUES ('a', 'x', '100');
+                    INSERT INTO WebUsers (Username, PasswordHash, DiscordUserId) VALUES ('b', 'x', '000100');";
+                create.ExecuteNonQuery();
+
+                var ex = Assert.Throws<InvalidOperationException>(() =>
+                    DatabaseSchemaMigrations.RejectDuplicateWebDiscordIdentities(conn));
+                Assert.Contains("015_web_verified_identity", ex.Message, StringComparison.Ordinal);
+                Assert.Contains("No accounts were changed or deleted", ex.Message, StringComparison.Ordinal);
+
+                using var count = conn.CreateCommand();
+                count.CommandText = "SELECT COUNT(*) FROM WebUsers";
+                Assert.Equal(2, Convert.ToInt32(count.ExecuteScalar()));
+            }
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (File.Exists(path))
+                File.Delete(path);
         }
     }
 }

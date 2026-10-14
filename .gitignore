@@ -86,6 +86,7 @@ _NCrunch_*/
 
 # --- Local scratch ---
 .tmp/
+/plans/
 
 # --- Local SQLite backups (scripts may write here; never commit) ---
 backups/
@@ -93,8 +94,14 @@ backups/
 # --- Private operator-only docs (never push) ---
 PRIVATE_*.md
 
+# --- Local-only notes (ssh/VM details, credentials, personal notes; never push) ---
+.private/
+
 # --- Optional operator notes (tracked FEATURES.md + UBUNTU_DEPLOY.md are the main docs/) ---
 # docs/OPS.md
 
 # --- GitHub Pages CI (optional; self-hosters can add their own workflow or upload dist manually) ---
 .github/workflows/deploy-webui.yml
+
+# --- Local tool usage (never push) ---
+opencode-usage.json

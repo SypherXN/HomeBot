@@ -441,8 +441,30 @@ public static class DatabaseSchemaMigrations
                 SET TransferToAmount = Amount
                 WHERE Type = 'transfer' AND TransferToAmount IS NULL");
         }),
+        new SchemaMigrationRunner.Migration("015_web_verified_identity", conn =>
+        {
+            RejectDuplicateWebDiscordIdentities(conn);
+
+            SchemaMigrationRunner.TryAddColumn(conn,
+                "ALTER TABLE WebUsers ADD COLUMN DiscordVerified INTEGER NOT NULL DEFAULT 0");
+            SchemaMigrationRunner.Execute(conn, @"
+                CREATE UNIQUE INDEX IX_WebUsers_DiscordIdentity
+                ON WebUsers(ltrim(trim(DiscordUserId), '0'))");
+        }),
     };
 
+    internal static void RejectDuplicateWebDiscordIdentities(SqliteConnection conn)
+    {
+        using var duplicates = conn.CreateCommand();
+        duplicates.CommandText = @"
+            SELECT 1 FROM WebUsers
+            GROUP BY ltrim(trim(DiscordUserId), '0') HAVING COUNT(*) > 1 LIMIT 1";
+        if (duplicates.ExecuteScalar() != null)
+            throw new InvalidOperationException(
+                "Duplicate Discord identities in WebUsers block migration 015_web_verified_identity. " +
+                "Back up the database, audit the affected accounts, and assign each account its owner's " +
+                "verified unique Discord ID before restarting. No accounts were changed or deleted.");
+    }
     /// <summary>
     /// Older opening-balance saves inserted a new row each time. Keep the oldest
     /// transaction per account and remove extras so balances are not stacked.

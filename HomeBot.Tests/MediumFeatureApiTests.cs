@@ -108,6 +108,7 @@ public sealed class MediumFeatureApiTests : IDisposable
     {
         var auth = _services.GetRequiredService<WebAuthService>();
         auth.TryCreateFirstUser("adminuser", "password123", Actor.ToString(), null);
+        Assert.NotNull(auth.TryIssueJwtForWebUserByDiscordId(Actor.ToString(), markDiscordVerified: true));
         auth.TryInsertWebUser("memberuser", "password123", (Actor + 2).ToString());
 
         var memberLogin = await _client.PostAsJsonAsync(

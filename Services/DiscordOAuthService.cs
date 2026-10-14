@@ -100,7 +100,7 @@ public sealed class DiscordOAuthService
             return Results.Redirect($"{fe}/oauth/callback?oauth_error=token_exchange_failed");
         }
 
-        var login = _auth.TryIssueJwtForWebUserByDiscordId(discordId);
+        var login = _auth.TryIssueJwtForWebUserByDiscordId(discordId, markDiscordVerified: true);
         if (login is null)
         {
             return Results.Redirect(

@@ -64,7 +64,7 @@ public sealed class WebAuthService
     /// Inserts a web user after Discord-side verification (or tests).
     /// </summary>
     public IResult? TryInsertWebUser(string username, string password, string discordUserId) =>
-        TryInsertUser(username, password, discordUserId);
+        TryInsertUser(username, password, discordUserId, discordVerified: true);
 
     public IResult? TryRegisterInvited(string inviteToken, string username, string password, string discordUserId)
     {
@@ -74,7 +74,7 @@ public sealed class WebAuthService
         if (!ValidateInviteToken(inviteToken, out var inviteErr))
             return inviteErr;
 
-        return TryInsertUser(username, password, discordUserId);
+        return ApiResults.BadRequest("Invite registration cannot accept a Discord ID from the request. Finish a /webui-verify session and send that sessionId.", "discord_unverified");
     }
 
     public bool ValidateInviteToken(string inviteToken, out IResult? error)
@@ -218,27 +218,34 @@ public sealed class WebAuthService
 
     public bool IsAdmin(string username, string discordUserId)
     {
-        if (IsEnvAdminDiscordId(discordUserId))
-            return true;
+        if (!TryCanonicalDiscordId(discordUserId, out var did))
+            return false;
 
         using var conn = _db.GetConnection();
         conn.Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
             SELECT IsAdmin FROM WebUsers
-            WHERE Username = $u COLLATE NOCASE AND IsActive = 1";
+            WHERE Username = $u COLLATE NOCASE
+              AND IsActive = 1
+              AND DiscordVerified = 1
+              AND ltrim(trim(DiscordUserId), '0') = $d";
         cmd.Parameters.AddWithValue("$u", username.Trim());
+        cmd.Parameters.AddWithValue("$d", did);
         var o = cmd.ExecuteScalar();
-        return o != null && Convert.ToInt32(o, CultureInfo.InvariantCulture) == 1;
+        if (o == null)
+            return false;
+
+        return Convert.ToInt32(o, CultureInfo.InvariantCulture) == 1 || IsEnvAdminDiscordId(did);
     }
 
-    private static bool IsEnvAdminDiscordId(string discordUserId)
+    private static bool IsEnvAdminDiscordId(string canonicalDiscordUserId)
     {
         var raw = Environment.GetEnvironmentVariable("HOMEBOT_WEB_ADMIN_DISCORD_IDS");
         if (string.IsNullOrWhiteSpace(raw)) return false;
         foreach (var part in raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            if (string.Equals(part, discordUserId.Trim(), StringComparison.Ordinal))
+            if (TryCanonicalDiscordId(part, out var id) && id == canonicalDiscordUserId)
                 return true;
         }
 
@@ -309,21 +316,34 @@ public sealed class WebAuthService
     /// Issues the same session JWT shape as password login when a <see cref="WebUsers"/> row exists for the Discord id.
     /// Used by Discord OAuth after the user proves identity with Discord.
     /// </summary>
-    public (string AccessToken, string Username, string DiscordUserId)? TryIssueJwtForWebUserByDiscordId(string discordUserIdDigits)
+    public (string AccessToken, string Username, string DiscordUserId)? TryIssueJwtForWebUserByDiscordId(
+        string discordUserIdDigits,
+        bool markDiscordVerified = false)
     {
         var secret = ReadJwtSecret();
         if (!IsJwtSecretConfigured(secret))
             return null;
 
-        var d = discordUserIdDigits.Trim();
-        if (!ulong.TryParse(d, NumberStyles.Integer, CultureInfo.InvariantCulture, out var uid) || uid == 0)
+        if (!TryCanonicalDiscordId(discordUserIdDigits, out var d))
             return null;
 
         using var conn = _db.GetConnection();
         conn.Open();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT Username FROM WebUsers WHERE DiscordUserId = $d AND IsActive = 1";
         cmd.Parameters.AddWithValue("$d", d);
+        if (markDiscordVerified)
+        {
+            cmd.CommandText = @"
+                UPDATE WebUsers
+                SET DiscordVerified = 1
+                WHERE ltrim(trim(DiscordUserId), '0') = $d AND IsActive = 1";
+            if (cmd.ExecuteNonQuery() == 0)
+                return null;
+        }
+
+        cmd.CommandText = @"
+            SELECT Username FROM WebUsers
+            WHERE ltrim(trim(DiscordUserId), '0') = $d AND IsActive = 1";
         var o = cmd.ExecuteScalar();
         if (o is null)
             return null;
@@ -336,7 +356,7 @@ public sealed class WebAuthService
         return (token, username, d);
     }
 
-    private IResult? TryInsertUser(string username, string password, string discordUserId)
+    private IResult? TryInsertUser(string username, string password, string discordUserId, bool discordVerified = false)
     {
         var nameErr = ValidateUsername(username);
         if (nameErr != null)
@@ -346,7 +366,7 @@ public sealed class WebAuthService
         if (passErr != null)
             return ApiResults.Validation(passErr);
 
-        if (!ulong.TryParse(discordUserId.Trim(), CultureInfo.InvariantCulture, out var snowflake) || snowflake == 0)
+        if (!TryCanonicalDiscordId(discordUserId, out var canonical))
             return ApiResults.Validation("discordUserId must be a non-zero numeric Discord user id.");
 
         var hash = HashPassword(password);
@@ -355,25 +375,46 @@ public sealed class WebAuthService
         {
             using var conn = _db.GetConnection();
             conn.Open();
+            using (var existing = conn.CreateCommand())
+            {
+                existing.CommandText = @"
+                    SELECT 1 FROM WebUsers
+                    WHERE ltrim(trim(DiscordUserId), '0') = $d LIMIT 1";
+                existing.Parameters.AddWithValue("$d", canonical);
+                if (existing.ExecuteScalar() != null)
+                    return ApiResults.Conflict("That Discord account already has a web user.", "discord_identity_taken");
+            }
+
             var isFirst = CountUsersInConn(conn) == 0;
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
-                INSERT INTO WebUsers (Username, PasswordHash, DiscordUserId, IsAdmin)
-                VALUES ($u, $p, $d, $admin)";
+                INSERT INTO WebUsers (Username, PasswordHash, DiscordUserId, IsAdmin, DiscordVerified)
+                VALUES ($u, $p, $d, $admin, $verified)";
             cmd.Parameters.AddWithValue("$u", username.Trim());
             cmd.Parameters.AddWithValue("$p", hash);
-            cmd.Parameters.AddWithValue("$d", discordUserId.Trim());
+            cmd.Parameters.AddWithValue("$d", canonical);
+            cmd.Parameters.AddWithValue("$verified", discordVerified ? 1 : 0);
             cmd.Parameters.AddWithValue("$admin", isFirst ? 1 : 0);
             cmd.ExecuteNonQuery();
         }
-        catch (SqliteException ex) when (ex.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase))
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 19)
         {
+            if (ex.Message.Contains("IX_WebUsers_DiscordIdentity", StringComparison.Ordinal))
+                return ApiResults.Conflict("That Discord account already has a web user.", "discord_identity_taken");
             return ApiResults.Conflict("That username is already taken.", "username_taken");
         }
 
         return null;
     }
 
+    private static bool TryCanonicalDiscordId(string discordUserId, out string canonical)
+    {
+        canonical = "";
+        if (!ulong.TryParse(discordUserId.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) || id == 0)
+            return false;
+        canonical = id.ToString(CultureInfo.InvariantCulture);
+        return true;
+    }
     private static string? ValidateUsername(string username)
     {
         var t = username.Trim();

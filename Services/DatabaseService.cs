@@ -176,9 +176,6 @@ public class DatabaseService
 
         cmd.ExecuteNonQuery();
 
-        SchemaMigrationRunner.Run(conn, DatabaseSchemaMigrations.All, msg =>
-            Console.WriteLine($"[HomeBot DB] {msg}"));
-
         cmd.CommandText = @"
         CREATE TABLE IF NOT EXISTS WebUsers (
             Id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -241,6 +238,9 @@ public class DatabaseService
         CREATE INDEX IF NOT EXISTS IX_WebRefreshTokens_Username ON WebRefreshTokens(Username);";
 
         cmd.ExecuteNonQuery();
+
+        SchemaMigrationRunner.Run(conn, DatabaseSchemaMigrations.All, msg =>
+            Console.WriteLine($"[HomeBot DB] {msg}"));
     }
 
     /// <summary>

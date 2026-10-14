@@ -87,13 +87,15 @@ public static class HomeBotAuthApi
 
             var body = await http.ReadFromJsonAsync<RegisterBody>();
             if (body is null || string.IsNullOrWhiteSpace(body.InviteToken) || string.IsNullOrWhiteSpace(body.Username) ||
-                body.Password is null || string.IsNullOrWhiteSpace(body.DiscordUserId))
+                body.Password is null || string.IsNullOrWhiteSpace(body.SessionId))
             {
-                return ApiResults.Validation("inviteToken, username, password, and discordUserId are required.");
+                return ApiResults.BadRequest(
+                    "inviteToken, username, password, and sessionId are required. A discordUserId in this request is not accepted.",
+                    "discord_unverified");
             }
 
-            var auth = root.GetRequiredService<WebAuthService>();
-            var err = auth.TryRegisterInvited(body.InviteToken, body.Username, body.Password, body.DiscordUserId);
+            var verify = root.GetRequiredService<WebAuthDiscordVerificationService>();
+            var err = verify.TryCompleteInvitedRegister(body.SessionId, body.InviteToken, body.Username, body.Password);
             if (err != null)
                 return err;
 
@@ -289,7 +291,7 @@ public static class HomeBotAuthApi
         string DiscordUserId,
         string? SetupToken);
 
-    private sealed record RegisterBody(string InviteToken, string Username, string Password, string DiscordUserId);
+    private sealed record RegisterBody(string InviteToken, string Username, string Password, string SessionId);
 
     private sealed record DiscordStartBody(string Intent);
 

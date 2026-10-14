@@ -1280,8 +1280,9 @@ Restart HomeBot after editing **`.env`**.
 
 ### 11.4 Additional household members (later)
 
-- If **`HOMEBOT_WEB_INVITE_TOKEN`** is set in **`.env`**, use the **Manual · invite** tab on **`/setup`** with that token plus username, password, and Discord user id.
-- Otherwise use **Discord verify**, select **Additional member**, then the same code flow as the first user (**Get verification code** → **`/webui-verify`** → **Create account** → **Sign in**).
+- Use **Discord verify**, select **Additional member**, then the same code flow as the first user (**Get verification code** → **`/webui-verify`** → **Create account** → **Sign in**). Pasting a Discord user id is not accepted.
+- `POST /api/auth/register` accepts an invite token only with a completed `/webui-verify` session id. A Discord user id in that request is rejected.
+- Password login keeps working for an existing account. Admin routes work only after that account is active and its Discord binding has been verified, which happens on **Continue with Discord** or on verified registration. The static API token is unchanged.
 
 Details of every auth endpoint: **[README.md](../README.md)** and **[Section 19](#19-reference--every-environment-variable)**.
 

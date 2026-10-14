@@ -207,6 +207,24 @@ public sealed class WebAuthDiscordVerificationService
         return _auth.TryInsertWebUser(username, password, discord);
     }
 
+    public IResult? TryCompleteInvitedRegister(string sessionId, string inviteToken, string username, string password)
+    {
+        if (!WebAuthService.IsJwtSecretConfigured(WebAuthService.ReadJwtSecret()))
+            return ApiResults.BadRequest("HOMEBOT_WEB_JWT_SECRET (min 32 UTF-8 bytes) is required.", "jwt_not_configured");
+
+        if (_auth.CountUsers() == 0)
+            return ApiResults.BadRequest("Use bootstrap for the first account.", "register_needs_bootstrap");
+
+        if (!_auth.ValidateInviteToken(inviteToken, out var inviteErr))
+            return inviteErr;
+
+        var discord = ConsumeVerifiedSession(sessionId.Trim(), "register");
+        if (discord == null)
+            return ApiResults.BadRequest("Session not found, not verified in Discord, expired, or already used.", "verify_invalid");
+
+        return _auth.TryInsertWebUser(username, password, discord);
+    }
+
     private string? ConsumeVerifiedSession(string sessionId, string expectedIntent)
     {
         using var conn = _db.GetConnection();
