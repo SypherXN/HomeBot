@@ -96,6 +96,7 @@ PRIVATE_*.md
 
 # --- Local-only notes (ssh/VM details, credentials, personal notes; never push) ---
 .private/
+/ssh-info/
 
 # --- Optional operator notes (tracked FEATURES.md + UBUNTU_DEPLOY.md are the main docs/) ---
 # docs/OPS.md
