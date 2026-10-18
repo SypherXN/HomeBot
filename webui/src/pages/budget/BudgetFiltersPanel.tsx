@@ -1,6 +1,6 @@
 import DiscordMemberSelect from "../../components/DiscordMemberSelect";
 import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster";
-import type { BudgetCategory } from "../../api";
+import type { BudgetAccount, BudgetCategory } from "../../api";
 import CategorySelect from "./CategorySelect";
 
 export type BudgetFilters = {
@@ -9,6 +9,7 @@ export type BudgetFilters = {
   amountMin: string;
   amountMax: string;
   tag: string;
+  accountId: string;
 };
 
 type Props = {
@@ -19,6 +20,7 @@ type Props = {
   categoryFilter: string;
   onCategoryFilter: (v: string) => void;
   categories: BudgetCategory[];
+  accounts: BudgetAccount[];
   filters: BudgetFilters;
   onFiltersChange: (f: BudgetFilters) => void;
   allTags: string[];
@@ -34,6 +36,7 @@ export default function BudgetFiltersPanel({
   categoryFilter,
   onCategoryFilter,
   categories,
+  accounts,
   filters,
   onFiltersChange,
   allTags,
@@ -59,6 +62,21 @@ export default function BudgetFiltersPanel({
             onChange={onCategoryFilter}
             placeholder="All categories"
           />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-slate-400">Account</label>
+          <select
+            value={filters.accountId}
+            onChange={(e) => onFiltersChange({ ...filters, accountId: e.target.value })}
+            className="w-full hb-input px-3 py-2 text-sm text-slate-100"
+          >
+            <option value="">All accounts</option>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="mb-1 block text-xs text-slate-400">Merchant contains</label>

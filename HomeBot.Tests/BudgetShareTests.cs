@@ -197,31 +197,32 @@ public sealed class BudgetShareTests : IDisposable
     }
 
     [Fact]
-    public void Reimbursement_on_credit_is_rejected()
+    public void Reimbursement_on_credit_is_accepted()
     {
         var checking = _budget.CreateAccount("Checking", "checking", "USD", null, Actor);
         var card = _budget.CreateAccount("Visa", "credit", "USD", 2000, Actor);
         CreateExpense(checking, "20", "Dinner",
             new BudgetShareChargeInput { OwedByLabel = "Alex", Amount = 10 });
         var charge = Assert.Single(_budget.GetSharesOverview().Open);
-        Assert.Throws<ArgumentException>(() =>
-            _budget.CreateTransaction(
-                "reimbursement",
-                "10",
-                null,
-                Actor,
-                "2026-09-14",
-                null,
-                null,
-                null,
-                card,
-                false,
-                "USD",
-                1,
-                null,
-                null,
-                Actor,
-                sharePayments: new List<BudgetSharePaymentInput> { new() { ChargeId = charge.Id, Amount = 10 } }));
+        _budget.CreateTransaction(
+            "reimbursement",
+            "10",
+            null,
+            Actor,
+            "2026-09-14",
+            null,
+            null,
+            null,
+            card,
+            false,
+            "USD",
+            1,
+            null,
+            null,
+            Actor,
+            sharePayments: new List<BudgetSharePaymentInput> { new() { ChargeId = charge.Id, Amount = 10 } });
+
+        Assert.Equal(10, Assert.Single(_budget.GetAccounts(), a => a.Id == card).CurrentBalance);
     }
 
     [Fact]

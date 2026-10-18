@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useSubmitLock } from "../../lib/useSubmitLock";
 import { defaultTransactionDateForMonth } from "../../lib/budgetTransactionDate";
-import { isDepositAccount } from "../../lib/budgetMoney";
 import AccountSelect from "./AccountSelect";
 import CategorySelect from "./CategorySelect";
 import MerchantSuggestInput from "./MerchantSuggestInput";
@@ -80,12 +79,6 @@ export default function BudgetQuickAdd({
     onPrefillConsumed?.();
   }, [prefill, onPrefillConsumed]);
 
-  useEffect(() => {
-    if (type !== "income") return;
-    const selected = accounts.find((a) => String(a.id) === accountId);
-    if (selected && !isDepositAccount(selected.accountType)) setAccountId("");
-  }, [type, accountId, accounts]);
-
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!actor || !spender || !amount.trim()) return;
@@ -150,6 +143,7 @@ export default function BudgetQuickAdd({
   }
 
   const showSuggestion = suggestion && String(suggestion.categoryId) !== categoryId;
+  const activeAccounts = accounts.filter((a) => a.isActive !== false);
 
   return (
     <form onSubmit={(e) => void submit(e)} className="space-y-2">
@@ -196,13 +190,7 @@ export default function BudgetQuickAdd({
         />
         <button
           type="submit"
-          disabled={
-            save.busy ||
-            !spender ||
-            !amount.trim() ||
-            (type === "income" &&
-              accounts.every((a) => a.isActive === false || !isDepositAccount(a.accountType)))
-          }
+          disabled={save.busy || !spender || !amount.trim()}
           className="shrink-0 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2 text-sm font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
         >
           {save.busy ? "Adding…" : "Add"}
@@ -271,15 +259,13 @@ export default function BudgetQuickAdd({
             onPickUserId={setSpender}
             className="min-w-0"
           />
-          {accounts.filter((a) => a.isActive !== false && (type !== "income" || isDepositAccount(a.accountType))).length > 0 && (
+          {activeAccounts.length > 0 && (
             <AccountSelect
               className="min-w-0"
-              accounts={accounts.filter(
-                (a) => a.isActive !== false && (type !== "income" || isDepositAccount(a.accountType))
-              )}
+              accounts={activeAccounts}
               value={accountId}
               onChange={setAccountId}
-              placeholder={type === "income" ? "Checking or savings" : "Account (default)"}
+              placeholder="Account (default)"
               showBalance
             />
           )}

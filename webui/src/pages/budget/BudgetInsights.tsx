@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { BudgetEnvelope, BudgetNotificationItem, BudgetTransactionListItem } from "../../api";
+import Sheet from "../../components/Sheet";
 import { MONEY_TEXT, formatMoney } from "../../lib/budgetMoney";
 import { netExpenseAmount } from "../../lib/budgetShares";
 import { titleCase } from "../../lib/titleCase";
@@ -28,7 +29,8 @@ export default function BudgetInsights({
 }: Props) {
   const withTargets = envelopes.filter((e) => e.targetAmount > 0);
   const timePct = monthTimePct(month);
-  const topMerchants = useMemo(() => {
+  const [showAllMerchants, setShowAllMerchants] = useState(false);
+  const merchantRanking = useMemo(() => {
     const map = new Map<string, number>();
     for (const t of transactions) {
       if (t.type !== "expense") continue;
@@ -38,9 +40,9 @@ export default function BudgetInsights({
     }
     return [...map.entries()]
       .map(([merchant, total]) => ({ merchant, total }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 5);
+      .sort((a, b) => b.total - a.total);
   }, [transactions]);
+  const topMerchants = merchantRanking.slice(0, 5);
 
   const anomalies = useMemo(() => {
     const lines: string[] = [];
@@ -111,6 +113,39 @@ export default function BudgetInsights({
               </li>
             ))}
           </ul>
+          {merchantRanking.length > topMerchants.length && (
+            <button
+              type="button"
+              onClick={() => setShowAllMerchants(true)}
+              aria-label={`See all ${merchantRanking.length} merchants`}
+              className="mt-1 flex w-full items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+            >
+              See all {merchantRanking.length} merchants
+            </button>
+          )}
+          <Sheet
+            open={showAllMerchants}
+            title="Top merchants this month"
+            onClose={() => setShowAllMerchants(false)}
+          >
+            <ul className="space-y-1.5" aria-label="All merchants by spend">
+              {merchantRanking.map((m) => (
+                <li key={m.merchant}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onViewMerchant?.(m.merchant);
+                      setShowAllMerchants(false);
+                    }}
+                    className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm text-slate-300 hover:bg-slate-800/60"
+                  >
+                    <span className="truncate">{m.merchant}</span>
+                    <span className="shrink-0 text-amber-300">${formatMoney(m.total)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </Sheet>
         </div>
       )}
 

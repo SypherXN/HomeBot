@@ -1,22 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { isDepositAccount, isIncomeLikeType } from "./budgetMoney";
-
-describe("isDepositAccount", () => {
-  it("allows checking and savings", () => {
-    expect(isDepositAccount("checking")).toBe(true);
-    expect(isDepositAccount("savings")).toBe(true);
-    expect(isDepositAccount("Checking")).toBe(true);
-  });
-
-  it("rejects credit and cash", () => {
-    expect(isDepositAccount("credit")).toBe(false);
-    expect(isDepositAccount("cash")).toBe(false);
-    expect(isDepositAccount("")).toBe(false);
-  });
-});
+import { isIncomeLikeType } from "./budgetMoney";
 
 describe("isIncomeLikeType", () => {
-  it("treats reimbursements like income for deposit accounts", () => {
+  it("treats reimbursements like income", () => {
     expect(isIncomeLikeType("income")).toBe(true);
     expect(isIncomeLikeType("reimbursement")).toBe(true);
     expect(isIncomeLikeType("expense")).toBe(false);

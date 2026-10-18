@@ -90,26 +90,28 @@ public sealed class BudgetServicePolishTests : IDisposable
     }
 
     [Fact]
-    public void Income_on_credit_is_rejected()
+    public void Income_on_credit_is_accepted()
     {
         var card = _budget.CreateAccount("Visa", "credit", "USD", 2000, Actor);
-        Assert.Throws<ArgumentException>(() =>
-            _budget.CreateTransaction(
-                "income",
-                "100",
-                null,
-                Actor,
-                "2026-03-01",
-                null,
-                null,
-                null,
-                card,
-                false,
-                "USD",
-                1,
-                null,
-                null,
-                Actor));
+        _budget.CreateTransaction(
+            "income",
+            "100",
+            null,
+            Actor,
+            "2026-03-01",
+            null,
+            null,
+            null,
+            card,
+            false,
+            "USD",
+            1,
+            null,
+            null,
+            Actor);
+
+        var after = _budget.GetAccounts();
+        Assert.Equal(100, Assert.Single(after, a => a.Id == card).CurrentBalance);
     }
 
     [Fact]

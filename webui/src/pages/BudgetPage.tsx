@@ -121,6 +121,7 @@ const EMPTY_FILTERS: BudgetFilters = {
   amountMin: "",
   amountMax: "",
   tag: "",
+  accountId: "",
 };
 
 function currentMonth(): string {
@@ -156,7 +157,8 @@ function hasActiveFilters(f: BudgetFilters, spender: string, categoryId: number 
       f.noteContains.trim() ||
       f.amountMin.trim() ||
       f.amountMax.trim() ||
-      f.tag.trim()
+      f.tag.trim() ||
+      f.accountId.trim()
   );
 }
 
@@ -367,6 +369,7 @@ export default function BudgetPage() {
           amountMin: appliedFilters.amountMin || undefined,
           amountMax: appliedFilters.amountMax || undefined,
           tag: appliedFilters.tag || undefined,
+          accountId: appliedFilters.accountId || undefined,
         });
         setTxData(txs);
         setLedgerHasNext(txs.hasNext);
@@ -1101,6 +1104,7 @@ export default function BudgetPage() {
               setCategoryFilter(v ? Number(v) : null);
             }}
             categories={categories}
+            accounts={accounts}
             filters={filters}
             onFiltersChange={setFilters}
             allTags={allTags}

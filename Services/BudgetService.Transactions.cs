@@ -273,10 +273,8 @@ public partial class BudgetService
         int accId;
         if (isIncomeLike)
         {
-            var action = type.Equals("reimbursement", StringComparison.OrdinalIgnoreCase) ? "Reimbursement" : "Income";
-            accId = accountId ?? FindDefaultDepositAccountId(conn)
-                ?? throw new ArgumentException($"{action} must use a checking or savings account.");
-            EnsureDepositAccount(conn, tx, accId, action);
+            // Income/reimbursement may land in any account; prefer checking/savings when unspecified.
+            accId = accountId ?? FindDefaultDepositAccountId(conn) ?? GetDefaultAccountId(conn);
         }
         else
         {
@@ -573,9 +571,6 @@ public partial class BudgetService
             if (newFrom is null || newTo is null || newFrom == newTo)
                 throw new ArgumentException("Transfer requires two different accounts.");
         }
-
-        if (IsIncomeLikeType(existing.Type) && applyAccountId && newFrom is { } incomeAcc)
-            EnsureDepositAccount(conn, tx, incomeAcc, existing.Type.Equals("reimbursement", StringComparison.OrdinalIgnoreCase) ? "Reimbursement" : "Income");
 
         var nextType = existing.Type;
         if (applySharePayments && IsIncomeLikeType(existing.Type))

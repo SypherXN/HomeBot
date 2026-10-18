@@ -16,7 +16,6 @@ import {
 } from "../../api";
 import ColorSwatchPicker from "./ColorSwatchPicker";
 import AccountSelect from "./AccountSelect";
-import { isDepositAccount } from "../../lib/budgetMoney";
 
 function formatMoney(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -399,14 +398,7 @@ export default function BudgetBillsRecurring({
                       </div>
                       <select
                         value={editRecType}
-                        onChange={(e) => {
-                          const next = e.target.value;
-                          setEditRecType(next);
-                          if (next === "income") {
-                            const acc = accounts.find((a) => String(a.id) === editRecAccount);
-                            if (acc && !isDepositAccount(acc.accountType)) setEditRecAccount("");
-                          }
-                        }}
+                        onChange={(e) => setEditRecType(e.target.value)}
                         className="w-full hb-input px-2 py-1 text-slate-100"
                       >
                         <option value="expense">Expense</option>
@@ -426,14 +418,10 @@ export default function BudgetBillsRecurring({
                       </select>
                       {accounts.length > 0 && (
                         <AccountSelect
-                          accounts={accounts.filter(
-                            (a) =>
-                              a.isActive !== false &&
-                              (editRecType !== "income" || isDepositAccount(a.accountType))
-                          )}
+                          accounts={accounts.filter((a) => a.isActive !== false)}
                           value={editRecAccount}
                           onChange={setEditRecAccount}
-                          placeholder={editRecType === "income" ? "Checking or savings" : "Account (default)"}
+                          placeholder="Account (default)"
                         />
                       )}
                       <DiscordMemberSelect

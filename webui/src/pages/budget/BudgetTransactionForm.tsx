@@ -5,7 +5,7 @@ import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster"
 import { memberPickerLabel } from "../../lib/memberDisplay";
 import { useMerchantSuggestions } from "../../hooks/useMerchantSuggestions";
 import { defaultTransactionDateForMonth } from "../../lib/budgetTransactionDate";
-import { formatMoney, isDepositAccount } from "../../lib/budgetMoney";
+import { formatMoney } from "../../lib/budgetMoney";
 import { parseReceiptText } from "../../lib/receiptOcr";
 import {
   postBudgetTransaction,
@@ -81,8 +81,6 @@ export default function BudgetTransactionForm({
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrStatus, setOcrStatus] = useState<string | null>(null);
   const activeAccounts = accounts.filter((a) => a.isActive !== false);
-  const depositAccounts = activeAccounts.filter((a) => isDepositAccount(a.accountType));
-  const fromAccounts = formType === "income" ? depositAccounts : activeAccounts;
 
   async function scanReceipt(file: File) {
     setOcrBusy(true);
@@ -114,12 +112,6 @@ export default function BudgetTransactionForm({
   useEffect(() => {
     setFormDate(defaultTransactionDateForMonth(month));
   }, [month]);
-
-  useEffect(() => {
-    if (formType !== "income") return;
-    const selected = accounts.find((a) => String(a.id) === formAccountId);
-    if (selected && !isDepositAccount(selected.accountType)) setFormAccountId("");
-  }, [formType, formAccountId, accounts]);
 
   function addSplitRow() {
     setSplits((s) => [...s, { categoryId: "", spentByUserId: actor, amount: "" }]);
@@ -283,7 +275,7 @@ export default function BudgetTransactionForm({
               From
               <AccountSelect
                 className="mt-1"
-                accounts={fromAccounts}
+                accounts={activeAccounts}
                 value={formAccountId}
                 onChange={setFormAccountId}
                 placeholder="Choose account"
@@ -441,12 +433,12 @@ export default function BudgetTransactionForm({
               </button>
             </div>
           )}
-          {fromAccounts.length > 0 && (
+          {activeAccounts.length > 0 && (
             <AccountSelect
-              accounts={fromAccounts}
+              accounts={activeAccounts}
               value={formAccountId}
               onChange={setFormAccountId}
-              placeholder={formType === "income" ? "Checking or savings" : "Account (default)"}
+              placeholder="Account (default)"
               showBalance
             />
           )}
@@ -558,9 +550,6 @@ export default function BudgetTransactionForm({
         onChange={(e) => setFormNote(e.target.value)}
         className="w-full hb-input px-3 py-2 text-slate-100"
       />
-      {formType === "income" && depositAccounts.length === 0 && (
-        <p className="text-xs text-amber-300">Income needs a checking or savings account.</p>
-      )}
       {formError && <p className="text-sm text-rose-300">{formError}</p>}
       <button
         type="submit"
@@ -568,10 +557,7 @@ export default function BudgetTransactionForm({
           save.busy ||
           !actor ||
           !formAmount.trim() ||
-          (formType === "transfer"
-            ? !formAccountId || !transferToId
-            : !formSpender) ||
-          (formType === "income" && depositAccounts.length === 0)
+          (formType === "transfer" ? !formAccountId || !transferToId : !formSpender)
         }
         className="w-full rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 py-2 font-medium text-white hover:from-blue-500 hover:to-blue-600 disabled:opacity-50"
       >

@@ -3,7 +3,7 @@ import MemberIdField from "../../components/MemberIdField";
 import Sheet from "../../components/Sheet";
 import type { DiscordGuildRosterState } from "../../hooks/useDiscordGuildRoster";
 import { memberPickerLabel } from "../../lib/memberDisplay";
-import { isDepositAccount, isIncomeLikeType } from "../../lib/budgetMoney";
+import { isIncomeLikeType } from "../../lib/budgetMoney";
 import { DATE_FIELD_WRAP_CLASS, FORM_INPUT_CLASS } from "../../lib/formField";
 import { transferReceivedAmount } from "../../lib/budgetTransfer";
 import AccountSelect from "./AccountSelect";
@@ -100,12 +100,7 @@ export default function BudgetTransactionEditModal({
           }))
         : [{ categoryId: "", spentByUserId: row.spentByUserId, amount: "" }]
     );
-    let nextFrom = row.accountId != null ? String(row.accountId) : "";
-    if ((row.type === "income" || row.type === "reimbursement") && row.accountId != null) {
-      const fromAcc = accounts.find((a) => a.id === row.accountId);
-      if (fromAcc && !isDepositAccount(fromAcc.accountType)) nextFrom = "";
-    }
-    setAccountId(nextFrom);
+    setAccountId(row.accountId != null ? String(row.accountId) : "");
     setTransferToId(row.transferToAccountId != null ? String(row.transferToAccountId) : "");
     const hadCharges = (row.shareSummary?.charges.length ?? 0) > 0;
     setChargeOthers(hadCharges);
@@ -114,14 +109,12 @@ export default function BudgetTransactionEditModal({
     setIsReimbursement(row.type === "reimbursement" || payments.length > 0);
     setPaymentDrafts(payments.map((p) => ({ chargeId: p.chargeId, amount: String(p.amount) })));
     setError(null);
-  }, [open, row, accounts]);
+  }, [open, row]);
 
   if (!open || !row) return null;
 
   const activeAccounts = accounts.filter((a) => a.isActive !== false);
-  const depositAccounts = activeAccounts.filter((a) => isDepositAccount(a.accountType));
   const incomeLike = isIncomeLikeType(row.type);
-  const accountChoices = incomeLike ? depositAccounts : activeAccounts;
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -279,12 +272,12 @@ export default function BudgetTransactionEditModal({
               </label>
             </div>
           )}
-          {row.type !== "transfer" && accountChoices.length > 0 && (
+          {row.type !== "transfer" && activeAccounts.length > 0 && (
             <AccountSelect
-              accounts={accountChoices}
+              accounts={activeAccounts}
               value={accountId}
               onChange={setAccountId}
-              placeholder={incomeLike ? "Checking or savings" : "Account (default)"}
+              placeholder="Account (default)"
             />
           )}
           <MerchantSuggestInput

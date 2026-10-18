@@ -285,8 +285,6 @@ public partial class BudgetService
         var amount = EvaluateAmount(amountInput);
         using var conn = _db.GetConnection();
         conn.Open();
-        if (type.Equals("income", StringComparison.OrdinalIgnoreCase) && accountId is > 0)
-            EnsureDepositAccount(conn, null, accountId.Value, "Income");
         var cmd = conn.CreateCommand();
         cmd.CommandText = @"
             INSERT INTO BudgetRecurring
@@ -572,25 +570,6 @@ public partial class BudgetService
             cmd.Parameters.AddWithValue("$acc", DbAccountId(accountId));
         }
         if (sets.Count == 0) return false;
-
-        var nextType = type?.Trim().ToLowerInvariant();
-        int? nextAcc = applyAccountId ? accountId : null;
-        if (string.IsNullOrEmpty(nextType) || nextType is not ("expense" or "income") || !applyAccountId)
-        {
-            var read = conn.CreateCommand();
-            read.CommandText = "SELECT Type, AccountId FROM BudgetRecurring WHERE Id=$id";
-            read.Parameters.AddWithValue("$id", id);
-            using var reader = read.ExecuteReader();
-            if (reader.Read())
-            {
-                nextType = string.IsNullOrEmpty(nextType) || nextType is not ("expense" or "income")
-                    ? reader.GetString(0)
-                    : nextType;
-                nextAcc ??= reader.IsDBNull(1) ? null : reader.GetInt32(1);
-            }
-        }
-        if (string.Equals(nextType, "income", StringComparison.OrdinalIgnoreCase) && nextAcc is > 0)
-            EnsureDepositAccount(conn, null, nextAcc.Value, "Income");
 
         cmd.CommandText = $"UPDATE BudgetRecurring SET {string.Join(", ", sets)} WHERE Id=$id";
         cmd.Parameters.AddWithValue("$id", id);
