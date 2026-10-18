@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BudgetTransactionListItem } from "../../api";
 import BudgetInsights from "./BudgetInsights";
@@ -72,13 +72,10 @@ describe("BudgetInsights top merchants", () => {
     expect(screen.queryByRole("button", { name: /see all/i })).not.toBeInTheDocument();
   });
 
-  it("opens the full ranking descending in the shared sheet", () => {
+  it("expands the full ranking inline in descending order", () => {
     renderInsights(sevenMerchants);
     fireEvent.click(screen.getByRole("button", { name: "See all 7 merchants" }));
-    const dialog = screen.getByRole("dialog");
-    const rows = within(dialog)
-      .getByLabelText("All merchants by spend")
-      .querySelectorAll("button");
+    const rows = screen.getByLabelText("All merchants by spend").querySelectorAll("button");
     expect([...rows].map((r) => r.textContent)).toEqual([
       "Alpha$90.00",
       "Bravo$80.00",
@@ -90,13 +87,22 @@ describe("BudgetInsights top merchants", () => {
     ]);
   });
 
-  it("navigates to the ledger from a popup row and closes the sheet", () => {
+  it("collapses back to the top 5 with Show less", () => {
+    renderInsights(sevenMerchants);
+    fireEvent.click(screen.getByRole("button", { name: "See all 7 merchants" }));
+    expect(screen.getByText("Foxtrot")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show top merchants only" }));
+    expect(screen.queryByText("Foxtrot")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "See all 7 merchants" })).toBeInTheDocument();
+  });
+
+  it("navigates to the ledger from an expanded row without collapsing", () => {
     const onViewMerchant = vi.fn();
     renderInsights(sevenMerchants, onViewMerchant);
     fireEvent.click(screen.getByRole("button", { name: "See all 7 merchants" }));
-    fireEvent.click(within(screen.getByRole("dialog")).getByText("Golf"));
+    fireEvent.click(screen.getByText("Golf"));
     expect(onViewMerchant).toHaveBeenCalledWith("Golf");
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText("Foxtrot")).toBeInTheDocument();
   });
 
   it("shows no merchant section or affordance without expenses", () => {
